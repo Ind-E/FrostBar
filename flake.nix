@@ -49,6 +49,9 @@
             version = "0.1.0";
             src = self;
             cargoLock = {
+              outputHashes = {
+                "niri-ipc-25.5.1" = "";
+              };
               lockFile = ./Cargo.lock;
             };
           };

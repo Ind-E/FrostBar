@@ -1,14 +1,14 @@
+use std::sync::LazyLock;
 use iced::{
     Element, Length, Padding,
     widget::{MouseArea, container, stack, text},
 };
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
 extern crate starship_battery as battery;
 
-use crate::Message;
-static BATTERY_MANAGER: Lazy<Mutex<Result<battery::Manager, battery::Error>>> =
-    Lazy::new(|| Mutex::new(battery::Manager::new()));
+use crate::{Message, MouseEnterEvent};
+static BATTERY_MANAGER: LazyLock<Mutex<Result<battery::Manager, battery::Error>>> =
+    LazyLock::new(|| Mutex::new(battery::Manager::new()));
 
 #[derive(Debug, Clone)]
 pub struct BatteryInfo {
@@ -81,7 +81,7 @@ pub fn battery_icon<'a>(
 
     if charging {
         MouseArea::new(stack![
-            container(icon_widget).center_x(Length::Fill).id(id),
+            container(icon_widget).center_x(Length::Fill).id(id.clone()),
             container(text("󱐋").size(13))
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -92,8 +92,8 @@ pub fn battery_icon<'a>(
                     bottom: 0.0
                 })
         ])
-        .on_enter(Message::MouseEntered)
-        .on_exit(Message::MouseExited)
+        .on_enter(Message::MouseEntered(MouseEnterEvent::Tooltip(id.clone())))
+        .on_exit(Message::MouseExited(MouseEnterEvent::Tooltip(id)))
         .into()
     } else {
         icon_widget.into()

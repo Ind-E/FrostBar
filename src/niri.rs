@@ -1,39 +1,53 @@
 use color_eyre::eyre::bail;
 use iced::{
-    Border, Color, Element, Length, Theme,
+    Background, Border, Color, Element, Length, Theme,
     advanced::subscription,
     alignment::Horizontal,
     border::Radius,
     padding::top,
     widget::{
-        Column, Container, MouseArea,
+        Column, Container, Image, MouseArea, Svg,
         container::{self, StyleFn},
-        text,
+        image, svg, text,
     },
 };
+use itertools::Itertools;
 use niri_ipc::{Event, Request, socket::Socket};
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::{collections::HashMap, hash::Hash, path::PathBuf};
 use tokio::sync::{Mutex, mpsc};
 
-use crate::Message;
+use crate::{Message, MouseEnterEvent, style::tooltip_style};
 
 pub struct NiriEvents;
 
+#[derive(PartialEq, Eq)]
 pub struct Window<'a> {
     pub title: &'a Option<String>,
     pub id: &'a u64,
-    pub icon: Option<PathBuf>,
+    pub icon: Option<svg::Handle>,
 }
 
 impl<'a> Window<'a> {
     pub fn to_widget(&self) -> Element<'a, Message> {
-        MouseArea::new(if self.icon.is_some() {
-            text(self.id)
+        if let Some(icon) = &self.icon {
+            MouseArea::new(Svg::new(icon.clone()).height(28).width(28)).into()
         } else {
-            text(self.id)
-        })
-        .into()
+            MouseArea::new(text(self.id)).into()
+        }
+    }
+}
+
+impl<'a> PartialOrd for Window<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for Window<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
     }
 }
 
@@ -45,30 +59,31 @@ pub struct Workspace<'a> {
 }
 
 impl<'a> Workspace<'a> {
-    pub fn to_widget(&self) -> Element<'a, Message> {
+    pub fn to_widget(&self, hovered: bool) -> Element<'a, Message> {
         MouseArea::new(
             Container::new(
-                self.windows.iter().fold(
+                self.windows.iter().sorted().fold(
                     Column::new()
                         .align_x(Horizontal::Center)
+                        .spacing(5)
                         .push(text(self.idx - 1).size(20)),
                     |col, w| col.push(w.to_widget()),
                 ),
             )
-            .style(workspace_style(self.is_active))
+            .style(workspace_style(self.is_active, hovered))
             .padding(top(4).bottom(4))
             .width(Length::Fill)
             .align_x(Horizontal::Center),
         )
         .on_press(Message::WorkspaceClicked(*self.idx))
-        .on_enter(Message::MouseEntered)
-        .on_exit(Message::MouseExited)
+        .on_enter(Message::MouseEntered(MouseEnterEvent::Workspace(*self.idx)))
+        .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
         .into()
     }
 }
 
-fn workspace_style<'a>(active: &'a bool) -> StyleFn<'a, Theme> {
-    Box::new(|_| container::Style {
+fn workspace_style<'a>(active: &'a bool, hovered: bool) -> StyleFn<'a, Theme> {
+    Box::new(move |_| container::Style {
         border: Border {
             color: if *active {
                 Color::WHITE
@@ -78,6 +93,11 @@ fn workspace_style<'a>(active: &'a bool) -> StyleFn<'a, Theme> {
             width: 2.0,
             radius: Radius::new(12),
         },
+        background: Some(Background::Color(if hovered {
+            Color::from_rgba(0.8, 0.8, 0.8, 0.02)
+        } else {
+            Color::TRANSPARENT
+        })),
         ..Default::default()
     })
 }
