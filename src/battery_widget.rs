@@ -48,7 +48,10 @@ fn err(e: &battery::Error) -> Message {
     Message::ErrorMessage(e.to_string())
 }
 
-pub fn battery_icon<'a>(info: Option<&Vec<BatteryInfo>>) -> Element<'a, Message> {
+pub fn battery_icon<'a>(
+    info: Option<&Vec<BatteryInfo>>,
+    id: container::Id,
+) -> Element<'a, Message> {
     if info.is_none() {
         return stack![].into();
     }
@@ -78,7 +81,7 @@ pub fn battery_icon<'a>(info: Option<&Vec<BatteryInfo>>) -> Element<'a, Message>
 
     if charging {
         MouseArea::new(stack![
-            container(icon_widget).center_x(Length::Fill),
+            container(icon_widget).center_x(Length::Fill).id(id),
             container(text("󱐋").size(13))
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -90,7 +93,7 @@ pub fn battery_icon<'a>(info: Option<&Vec<BatteryInfo>>) -> Element<'a, Message>
                 })
         ])
         .on_enter(Message::MouseEntered)
-        // .on_exit(Message::MouseExited)
+        .on_exit(Message::MouseExited)
         .into()
     } else {
         icon_widget.into()

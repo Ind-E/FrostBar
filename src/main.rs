@@ -1,40 +1,60 @@
+use bimap::BiMap;
 use chrono::{DateTime, Local};
 use iced::{
-    Alignment, Background, Border, Color, Element, Event, Font, Length, Subscription, Task, Theme,
-    advanced::mouse,
+    Background, Border, Color, Element, Event, Font, Length, Rectangle, Subscription, Task, Theme,
+    advanced::{mouse, subscription},
+    alignment::{Horizontal, Vertical},
     border::{rounded, top_right},
     event,
     font::{Family, Weight},
     padding::top,
     time::{self, Duration},
-    widget::{column, container, text},
+    widget::{
+        Column, Container, Text, column,
+        container::{self, StyleFn},
+        stack, text,
+    },
     window::Id,
 };
 use iced_layershell::{
     actions::IcedNewPopupSettings,
     build_pattern::{MainSettings, daemon},
-    reexport::{Anchor, KeyboardInteractivity, NewLayerShellSettings},
+    reexport::{Anchor, KeyboardInteractivity},
     settings::{LayerShellSettings, StartMode},
     to_layer_message,
 };
-use std::collections::HashMap;
+use itertools::Itertools;
+use niri_ipc::Request;
+use std::sync::Arc;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use iced_runtime::{Action, task, window::Action as WindowAction};
-use tokio::time::Instant;
+use tokio::{
+    sync::{
+        Mutex,
+        mpsc::{self, Sender},
+    },
+    time::Instant,
+};
 
 use crate::{
     battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
+    niri::{IpcError, NiriEvents, NiriState, Window, Workspace, run_niri_request_handler},
+    tooltip::{Hidden, Tooltip, TooltipState},
     utils::align_clock,
 };
 
 extern crate starship_battery as battery;
 
 mod battery_widget;
+mod niri;
+mod tooltip;
 mod utils;
 
 const BAR_WIDTH: u32 = 45;
 const GAPS: i32 = 3;
-const ANIMATION_DURATION: Duration = Duration::from_millis(200);
+const ANIMATION_DURATION: Duration = Duration::from_millis(175);
 
 const FIRA_CODE_BYTES: &[u8] = include_bytes!("../fonts/FiraCodeNerdFontMono-Medium.ttf");
 const FIRA_CODE: Font = Font {
@@ -42,117 +62,6 @@ const FIRA_CODE: Font = Font {
     weight: Weight::Medium,
     ..Font::DEFAULT
 };
-
-#[derive(Clone, Copy)]
-struct Tooltip<State: TooltipMarkerState> {
-    id: Id,
-    state: State,
-}
-
-#[derive(Clone)]
-struct Hidden;
-#[derive(Clone)]
-struct AnimatingIn {
-    content: String,
-    start: Instant,
-}
-#[derive(Clone)]
-struct AnimatingOut {
-    content: String,
-    start: Instant,
-}
-#[derive(Clone)]
-struct Visible {
-    content: String,
-}
-
-impl Tooltip<Hidden> {
-    fn animate_in(self, content: String) -> Tooltip<AnimatingIn> {
-        Tooltip {
-            id: self.id,
-            state: AnimatingIn {
-                content,
-                start: Instant::now(),
-            },
-        }
-    }
-}
-
-impl Tooltip<AnimatingIn> {
-    fn to_visible(self) -> Tooltip<Visible> {
-        Tooltip {
-            id: self.id,
-            state: Visible {
-                content: self.state.content,
-            },
-        }
-    }
-
-    fn animate_out(self) -> Tooltip<AnimatingOut> {
-        Tooltip {
-            id: self.id,
-            state: AnimatingOut {
-                content: self.state.content,
-                start: Instant::now(),
-            },
-        }
-    }
-}
-
-impl Tooltip<Visible> {
-    fn animate_out(self) -> Tooltip<AnimatingOut> {
-        Tooltip {
-            id: self.id,
-            state: AnimatingOut {
-                content: self.state.content,
-                start: Instant::now(),
-            },
-        }
-    }
-}
-
-impl Tooltip<AnimatingOut> {
-    fn animate_in(self) -> Tooltip<AnimatingIn> {
-        Tooltip {
-            id: self.id,
-            state: AnimatingIn {
-                content: self.state.content,
-                start: Instant::now(),
-            },
-        }
-    }
-
-    fn to_hidden(self) -> Tooltip<Hidden> {
-        Tooltip {
-            id: self.id,
-            state: Hidden {},
-        }
-    }
-}
-
-trait TooltipMarkerState {}
-impl TooltipMarkerState for Hidden {}
-impl TooltipMarkerState for AnimatingIn {}
-impl TooltipMarkerState for AnimatingOut {}
-impl TooltipMarkerState for Visible {}
-
-enum TooltipState {
-    Hidden(Tooltip<Hidden>),
-    AnimatingIn(Tooltip<AnimatingIn>),
-    Visible(Tooltip<Visible>),
-    AnimatingOut(Tooltip<AnimatingOut>),
-}
-
-impl TooltipState {
-    fn id(&self) -> Id {
-        match self {
-            TooltipState::Hidden(t) => t.id,
-            TooltipState::AnimatingIn(t) => t.id,
-            TooltipState::Visible(t) => t.id,
-            TooltipState::AnimatingOut(t) => t.id,
-        }
-    }
-}
 
 #[tokio::main]
 pub async fn main() -> Result<(), iced_layershell::Error> {
@@ -185,28 +94,42 @@ fn rounded_corners(_theme: &Theme) -> container::Style {
     }
 }
 
-fn tooltip_style(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
+fn tooltip_style<'a>(opacity: f32) -> StyleFn<'a, Theme> {
+    Box::new(move |_| container::Style {
+        background: Some(Background::Color(Color::from_rgba(
+            0.0,
+            0.0,
+            0.0,
+            opacity * 0.8,
+        ))),
         border: Border {
             radius: top_right(12).bottom_right(12),
+            width: 0.928,
             ..Default::default()
         },
         ..Default::default()
-    }
+    })
 }
 
 struct Bar {
     time: DateTime<Local>,
     clock_aligned: bool,
     battery_info: Option<Vec<BatteryInfo>>,
-    tooltip_state: TooltipState,
-    ids: HashMap<Id, WindowType>,
+    tooltip_state: HashMap<container::Id, TooltipState>,
+    ids: BiMap<container::Id, ItemsWithTooltips>,
+    niri_state: NiriState,
+    niri_request_sender: Sender<Request>,
 }
 
-#[derive(Clone)]
-enum WindowType {
-    BatteryTooltip,
+#[derive(Debug, EnumIter, Hash, Eq, PartialEq, Clone)]
+enum ItemsWithTooltips {
+    Battery,
+}
+
+#[derive(Debug, Clone)]
+enum MouseEnterEvent {
+    Workspace(u8),
+    Tooltip(ItemsWithTooltips),
 }
 
 #[to_layer_message(multi)]
@@ -218,8 +141,13 @@ enum Message {
     BatteryUpdate(Vec<BatteryInfo>),
     ErrorMessage(String),
     AnimationTick(Instant),
-    MouseEntered,
-    MouseExited,
+    MouseEntered(MouseEnterEvent),
+    MouseExited(MouseEnterEvent),
+    MouseExitedBar,
+    TooltipMeasured(Option<Rectangle>),
+    NiriEvent(Result<niri_ipc::Event, IpcError>),
+    WorkspaceClicked(u8),
+    NoOp,
 }
 
 impl Bar {
@@ -228,6 +156,20 @@ impl Bar {
             Message::BatteryUpdate(info) => Some(info),
             _ => unreachable!(),
         };
+
+        let mut ids = BiMap::new();
+
+        for item in ItemsWithTooltips::iter() {
+            ids.insert(container::Id::unique(), item);
+        }
+
+        let (request_tx, request_rx) = mpsc::channel(32);
+        let request_socket = match niri_ipc::socket::Socket::connect() {
+            Ok(sock) => Arc::new(Mutex::new(sock)),
+            Err(e) => panic!("Failed to create niri request socket: {}", e),
+        };
+
+        tokio::spawn(run_niri_request_handler(request_rx, request_socket));
         (
             Self {
                 clock_aligned: false,
@@ -237,15 +179,15 @@ impl Bar {
                     id: Id::unique(),
                     state: Hidden,
                 }),
-                ids: HashMap::new(),
+                ids,
+                niri_state: NiriState::default(),
+                niri_request_sender: request_tx,
             },
             align_clock(),
         )
     }
 
-    fn remove_id(&mut self, id: Id) {
-        self.ids.remove(&id);
-    }
+    fn remove_id(&mut self, _id: Id) {}
 
     fn namespace(&self) -> String {
         String::from("Iced Bar")
@@ -269,6 +211,7 @@ impl Bar {
                     .map(|_| Message::AnimationTick(Instant::now())),
             )
         }
+        subscriptions.push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
         Subscription::batch(subscriptions)
     }
 
@@ -276,7 +219,7 @@ impl Bar {
         match message {
             Message::IcedEvent(event) => {
                 if let Event::Mouse(mouse::Event::CursorLeft) = event {
-                    return Task::done(Message::MouseExited);
+                    return Task::done(Message::MouseExitedBar);
                 }
                 // println!("{event:?}");
                 Task::none()
@@ -293,6 +236,23 @@ impl Bar {
             Message::BatteryUpdate(info) => {
                 self.battery_info = Some(info);
                 Task::none()
+            }
+            Message::NiriEvent(event) => {
+                println!("{:?}", event);
+                if let Ok(event) = event {
+                    self.niri_state.on_event(event);
+                }
+
+                Task::none()
+            }
+            Message::WorkspaceClicked(idx) => {
+                let sender = self.niri_request_sender.clone();
+                let request = niri_ipc::Request::Action(niri_ipc::Action::FocusWorkspace {
+                    reference: niri_ipc::WorkspaceReferenceArg::Index(idx),
+                });
+                Task::perform(async move { sender.send(request).await.ok() }, |_| {
+                    Message::NoOp
+                })
             }
             Message::MouseEntered => {
                 let tooltip_content: String = if let Some(info) = &self.battery_info {
@@ -312,13 +272,13 @@ impl Bar {
                     "No Battery Info".to_string()
                 };
 
-                let task = Task::done(Message::NewPopUp {
-                    settings: IcedNewPopupSettings {
-                        size: (100, 50),
-                        position: (BAR_WIDTH as i32 - GAPS as i32 - 1, 0),
-                    },
-                    id: self.tooltip_state.id(),
-                });
+                let task = container::visible_bounds(
+                    self.ids
+                        .get_by_right(&ItemsWithTooltips::Battery)
+                        .unwrap()
+                        .clone(),
+                )
+                .map(Message::TooltipMeasured);
 
                 match &self.tooltip_state {
                     TooltipState::Hidden(tooltip) => {
@@ -333,6 +293,9 @@ impl Bar {
                     _ => {}
                 };
 
+                Task::none()
+            }
+            Message::MouseExitedBar => {
                 Task::none()
             }
             Message::MouseExited => {
@@ -372,34 +335,129 @@ impl Bar {
                 }
                 Task::none()
             }
+            Message::TooltipMeasured(rect) => {
+                if let Some(rect) = rect {
+                    Task::done(Message::NewPopUp {
+                        settings: IcedNewPopupSettings {
+                            size: (400, 300),
+                            position: (
+                                BAR_WIDTH as i32 - GAPS as i32 - 1,
+                                (rect.y - rect.width / 4.0) as i32,
+                            ),
+                        },
+                        id: self.tooltip_state.id(),
+                    })
+                } else {
+                    Task::none()
+                }
+            }
             Message::ErrorMessage(msg) => {
                 eprintln!("{}", msg);
                 Task::none()
             }
+            Message::NoOp => Task::none(),
             _ => unreachable!(),
         }
     }
 
     fn view(&self, id: Id) -> Element<Message> {
         if id == self.tooltip_state.id() {
-            container(column![text("󱄅").size(32)])
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(tooltip_style)
-                .into()
+            let progress = self.tooltip_state.progress();
+            Container::new(
+                self.tooltip_state
+                    .content()
+                    .lines()
+                    .map(|line| {
+                        Container::new(
+                            Text::new(line)
+                                .size(16)
+                                // .color(Color::from_rgba(1.0, 1.0, 1.0, progress))
+                                .line_height(text::LineHeight::Relative(1.0))
+                                .shaping(text::Shaping::Basic)
+                                .wrapping(text::Wrapping::None),
+                        )
+                        .width(Length::Fill)
+                        .height(Length::Fixed(16.0))
+                        .clip(true)
+                    })
+                    .fold(Column::new(), |col, text| col.push(text)),
+            )
+            .style(tooltip_style(1.0))
+            .padding(7)
+            .width(progress * 250.0)
+            .clip(true)
+            .into()
         } else {
             let time: String = self.time.format("%H\n%M").to_string();
 
-            let center = column![
-                text("󱄅").size(32),
-                battery_icon(self.battery_info.as_ref()),
-                text(time).size(16)
-            ]
-            .align_x(Alignment::Center)
+            let top_section = Container::new(
+                column![
+                    text("󱄅").size(32),
+                    battery_icon(
+                        self.battery_info.as_ref(),
+                        self.ids
+                            .get_by_right(&ItemsWithTooltips::Battery)
+                            .unwrap()
+                            .clone()
+                    ),
+                    text(time).size(16)
+                ]
+                .align_x(Horizontal::Center),
+            )
             .width(Length::Fill)
-            .height(Length::Fill);
+            .height(Length::Fill)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Top);
 
-            container(column![center].width(Length::Fill))
+            let ws = self
+                .niri_state
+                .workspaces
+                .iter()
+                .sorted_by_key(|(_, ws)| ws.idx)
+                .map(|(_, ws)| Workspace {
+                    output: &ws.output,
+                    idx: &ws.idx,
+                    is_active: &ws.is_active,
+                    windows: self
+                        .niri_state
+                        .windows
+                        .iter()
+                        .filter_map(|(_, w)| {
+                            (w.workspace_id == Some(ws.id)).then(|| Window {
+                                title: &w.title,
+                                id: &w.id,
+                                icon: None,
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                })
+                .fold(Column::new(), |col, ws| col.push(ws.to_widget()))
+                .align_x(Horizontal::Center)
+                .spacing(12);
+
+            let middle_section = Container::new(ws)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center);
+
+            let bottom_section = Container::new(
+                column![
+                    text("󱄅").size(32),
+                    text("󱄅").size(32),
+                    text("󱄅").size(32),
+                    text("󱄅").size(32),
+                ]
+                .align_x(Horizontal::Center),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Bottom);
+
+            let layout = stack![top_section, middle_section, bottom_section];
+
+            Container::new(layout)
                 .width(Length::Fixed(BAR_WIDTH as f32 - GAPS as f32))
                 .height(Length::Fill)
                 .padding(top(GAPS as f32).bottom(GAPS as f32))
