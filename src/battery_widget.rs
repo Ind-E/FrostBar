@@ -1,8 +1,8 @@
-use std::sync::LazyLock;
 use iced::{
     Element, Length, Padding,
     widget::{MouseArea, container, stack, text},
 };
+use std::sync::LazyLock;
 use std::sync::Mutex;
 extern crate starship_battery as battery;
 

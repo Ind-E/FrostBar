@@ -7,7 +7,7 @@ use iced::{
     font::{Family, Weight},
     padding::top,
     time::{self, Duration},
-    widget::{Column, Container, Text, column, container, stack, text},
+    widget::{Column, Container, Text, canvas, column, container, stack, text},
     window::Id,
 };
 use iced_layershell::{
@@ -22,9 +22,7 @@ use niri_ipc::Request;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use strum_macros::EnumIter;
 
-use iced_runtime::{Action, task, window::Action as WindowAction};
 use tokio::{
     sync::{
         Mutex,
@@ -35,7 +33,9 @@ use tokio::{
 
 use crate::{
     battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
+    cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
     icon_cache::IconCache,
+    mpris::MprisUpdate,
     niri::{IpcError, NiriEvents, NiriState, Window, Workspace, run_niri_request_handler},
     style::{rounded_corners, tooltip_style},
     tooltip::{Hidden, Tooltip, TooltipState},
@@ -45,7 +45,9 @@ use crate::{
 extern crate starship_battery as battery;
 
 mod battery_widget;
+mod cava;
 mod icon_cache;
+mod mpris;
 mod niri;
 mod style;
 mod tooltip;
@@ -55,12 +57,13 @@ const BAR_WIDTH: u32 = 45;
 const GAPS: i32 = 3;
 const ANIMATION_DURATION: Duration = Duration::from_millis(175);
 
-const FIRA_CODE_BYTES: &[u8] = include_bytes!("../fonts/FiraCodeNerdFontMono-Medium.ttf");
+const FIRA_CODE_BYTES: &[u8] = include_bytes!("../assets/FiraCodeNerdFontMono-Medium.ttf");
 const FIRA_CODE: Font = Font {
     family: Family::Name("FiraCode Nerd Font Mono"),
     weight: Weight::Medium,
     ..Font::DEFAULT
 };
+
 static ICON_CACHE: LazyLock<std::sync::Mutex<IconCache>> =
     LazyLock::new(|| std::sync::Mutex::new(IconCache::new()));
 
@@ -92,16 +95,10 @@ struct Bar {
     clock_aligned: bool,
     battery_info: (container::Id, Option<Vec<BatteryInfo>>),
     tooltips: HashMap<container::Id, TooltipState>,
-    tooltip_windows: HashMap<Id, container::Id>,
     niri_state: NiriState,
     niri_request_sender: Sender<Request>,
     hovered_workspace_index: Option<u8>,
-    icon_cache: IconCache,
-}
-
-#[derive(Debug, EnumIter, Hash, Eq, PartialEq, Clone)]
-enum ItemsWithTooltips {
-    Battery,
+    cava_visualizer: CavaVisualizer,
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +122,8 @@ enum Message {
     TooltipMeasured(container::Id, Option<Rectangle>),
     NiriEvent(Result<niri_ipc::Event, IpcError>),
     WorkspaceClicked(u8),
+    CavaUpdate(Result<String, CavaError>),
+    MprisUpdate(MprisUpdate),
     NoOp,
 }
 
@@ -149,8 +148,6 @@ impl Bar {
                 state: Hidden,
             }),
         );
-        let mut tooltip_windows = HashMap::new();
-        tooltip_windows.insert(battery_window_id, battery_id);
 
         let (request_tx, request_rx) = mpsc::channel(32);
         let request_socket = match niri_ipc::socket::Socket::connect() {
@@ -165,11 +162,13 @@ impl Bar {
                 time: Local::now(),
                 battery_info,
                 tooltips,
-                tooltip_windows,
                 niri_state: NiriState::default(),
                 niri_request_sender: request_tx,
                 hovered_workspace_index: None,
-                icon_cache: IconCache::new(),
+                cava_visualizer: CavaVisualizer {
+                    bars: vec![0; 10],
+                    cache: iced::widget::canvas::Cache::new(),
+                },
             },
             align_clock(),
         )
@@ -182,7 +181,7 @@ impl Bar {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let mut subscriptions: Vec<Subscription<Message>> = Vec::with_capacity(3);
+        let mut subscriptions: Vec<Subscription<Message>> = Vec::with_capacity(5);
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
         subscriptions.push(time::every(Duration::from_secs(1)).map(|_| fetch_battery_info()));
@@ -203,6 +202,12 @@ impl Bar {
             }
         }
         subscriptions.push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
+        subscriptions.push(
+            subscription::from_recipe(CavaEvents {
+                config_path: write_temp_cava_config().unwrap().display().to_string(),
+            })
+            .map(Message::CavaUpdate),
+        );
         Subscription::batch(subscriptions)
     }
 
@@ -258,7 +263,7 @@ impl Bar {
                                     format!(
                                         "Battery {}: {}% ({})",
                                         i + 1,
-                                        bat.percentage * 100.0,
+                                        (bat.percentage * 100.0).floor(),
                                         bat.state
                                     )
                                 })
@@ -341,9 +346,7 @@ impl Bar {
                         }
                         TooltipState::AnimatingOut(tooltip) => {
                             if now.duration_since(tooltip.state.start) >= ANIMATION_DURATION {
-                                let task = task::effect(Action::Window(WindowAction::Close(
-                                    tooltip.clone().id,
-                                )));
+                                let task = iced::window::close(tooltip.clone().id);
                                 *t = TooltipState::Hidden(tooltip.clone().to_hidden());
                                 return task;
                             }
@@ -372,6 +375,21 @@ impl Bar {
             }
             Message::ErrorMessage(msg) => {
                 eprintln!("{}", msg);
+                Task::none()
+            }
+            Message::CavaUpdate(update) => {
+                match update {
+                    Ok(line) => {
+                        self.cava_visualizer.bars = line
+                            .split(";")
+                            .map(|s| s.parse::<u8>().unwrap_or(0))
+                            .collect();
+                        self.cava_visualizer.cache.clear();
+                    }
+                    Err(e) => {
+                        eprintln!("{}", e);
+                    }
+                };
                 Task::none()
             }
             Message::NoOp => Task::none(),
@@ -407,17 +425,21 @@ impl Bar {
             )
             .style(tooltip_style(1.0))
             .padding(7)
-            .width(progress * 250.0)
+            .width(progress * 300.0)
             .clip(true)
             .into();
         }
         let time: String = self.time.format("%H\n%M").to_string();
+        let cava_visualizer = canvas(&self.cava_visualizer)
+            .width(Length::Fill)
+            .height(180);
 
         let top_section = Container::new(
             column![
                 text("󱄅").size(32),
                 battery_icon(self.battery_info.1.as_ref(), self.battery_info.0.clone()),
-                text(time).size(16)
+                text(time).size(16),
+                cava_visualizer,
             ]
             .align_x(Horizontal::Center),
         )

@@ -1,0 +1,11 @@
+[general]
+framerate = 30
+bars = 24
+
+[output]
+method = raw
+channels = stereo
+raw_target = /dev/stdout
+data_format = ascii
+ascii_max_range = 16
+bar_delimiter = 59

@@ -4,21 +4,20 @@ use iced::{
     advanced::subscription,
     alignment::Horizontal,
     border::Radius,
+    futures::Stream,
     padding::top,
     widget::{
-        Column, Container, Image, MouseArea, Svg,
+        Column, Container, MouseArea, Svg,
         container::{self, StyleFn},
-        image, svg, text,
+        svg, text,
     },
 };
 use itertools::Itertools;
 use niri_ipc::{Event, Request, socket::Socket};
-use std::cmp::Ordering;
-use std::sync::Arc;
-use std::{collections::HashMap, hash::Hash, path::PathBuf};
+use std::{cmp::Ordering, collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 use tokio::sync::{Mutex, mpsc};
 
-use crate::{Message, MouseEnterEvent, style::tooltip_style};
+use crate::{Message, MouseEnterEvent};
 
 pub struct NiriEvents;
 
@@ -32,7 +31,7 @@ pub struct Window<'a> {
 impl<'a> Window<'a> {
     pub fn to_widget(&self) -> Element<'a, Message> {
         if let Some(icon) = &self.icon {
-            MouseArea::new(Svg::new(icon.clone()).height(28).width(28)).into()
+            MouseArea::new(Svg::new(icon.clone()).height(24).width(24)).into()
         } else {
             MouseArea::new(text(self.id)).into()
         }
@@ -173,7 +172,15 @@ impl subscription::Recipe for NiriEvents {
     fn stream(
         self: Box<Self>,
         _input: subscription::EventStream,
-    ) -> iced_runtime::futures::BoxStream<Self::Output> {
+    ) -> Pin<
+        Box<
+            (
+                dyn Stream<Item = std::result::Result<niri_ipc::Event, IpcError>>
+                    + std::marker::Send
+                    + 'static
+            ),
+        >,
+    > {
         Box::pin(async_stream::stream! {
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 

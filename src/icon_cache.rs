@@ -8,11 +8,12 @@ use xdgkit::icon_finder;
 pub const DEFAULT_ICON: &str =
     "/usr/share/icons/Adwaita/16x16/apps/help-contents-symbolic.symbolic.png";
 
+//TODO: make this work with svg and (raster) image
+
 pub fn client_icon(app_id: &str) -> Result<PathBuf> {
     let mut paths = default_paths();
 
     let desktop_file = paths
-        // .iter()
         .find_map(|p| {
             let file = p.join(&format!("{}.desktop", app_id));
             if file.exists() { Some(file) } else { None }
@@ -30,6 +31,8 @@ pub fn client_icon(app_id: &str) -> Result<PathBuf> {
         .transpose()?
         .unwrap_or_else(|| icon_finder::find_icon("default-application".to_string(), 128, 1))
         .unwrap_or_else(|| PathBuf::from(DEFAULT_ICON));
+
+    println!("{:?}", desktop_file);
 
     Ok(desktop_file)
 }

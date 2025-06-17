@@ -4,20 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bimap = "0.6.3"
-chrono = "0.4.41"
-iced = { version = "0.13.1", features = ["tokio", "svg", "advanced", "image"] }
+chrono = { version = "0.4.41", default-features = false, features = ["std", "iana-time-zone", "js-sys", "wasmbind", "android-tzdata", "wasm-bindgen", "oldtime", "now", "clock", "alloc"] }
+iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg", "advanced", "canvas"] }
 iced_layershell = "0.13.7"
-iced_runtime = "0.13.2"
-starship-battery = "0.10.2"
-strum = "0.27.1"
-strum_macros = "0.27.1"
-tokio = { version = "1.45.1", features = ["time", "rt", "macros", "sync"] }
+iced_runtime = { version = "0.13.2", default-features = false }
+starship-battery = { version = "0.10.2", default-features = false }
+tokio = { version = "1.45.1", default-features = true, features = ["time", "macros", "sync"] }
 niri-ipc = {git = "https://github.com/YaLTeR/niri/", branch = "main"}
-tokio-stream = "0.1.17"
-async-stream = "0.3.6"
-thiserror = "2.0.12"
+thiserror = { version = "2.0.12", default-features = false }
 color-eyre = "0.6.5"
-itertools = "0.14.0"
-xdgkit = "3.2.5"
-freedesktop-desktop-entry = "0.7.13"
+itertools = { version = "0.14.0", default-features = false, features = ["use_alloc"] }
+xdgkit = { version = "3.2.5", default-features = false }
+freedesktop-desktop-entry = { version = "0.7.13", default-features = false }
+async-stream = { version = "0.3.6", default-features = false }
+url = "2.5.4"
+zbus = "5.7.1"
