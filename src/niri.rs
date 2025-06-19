@@ -7,9 +7,9 @@ use iced::{
     futures::Stream,
     padding::top,
     widget::{
-        Column, Container, MouseArea, Svg,
+        Column, Container, Image, MouseArea, Svg,
         container::{self, StyleFn},
-        svg, text,
+        text,
     },
 };
 use itertools::Itertools;
@@ -17,23 +17,33 @@ use niri_ipc::{Event, Request, socket::Socket};
 use std::{cmp::Ordering, collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 use tokio::sync::{Mutex, mpsc};
 
-use crate::{Message, MouseEnterEvent};
+use crate::{Message, MouseEnterEvent, icon_cache::Icon};
 
 pub struct NiriEvents;
 
-#[derive(PartialEq, Eq)]
+#[derive(Eq)]
 pub struct Window<'a> {
     pub title: &'a Option<String>,
     pub id: &'a u64,
-    pub icon: Option<svg::Handle>,
+    pub icon: Option<Icon>,
+}
+
+impl<'a> PartialEq for Window<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 impl<'a> Window<'a> {
     pub fn to_widget(&self) -> Element<'a, Message> {
-        if let Some(icon) = &self.icon {
-            MouseArea::new(Svg::new(icon.clone()).height(24).width(24)).into()
-        } else {
-            MouseArea::new(text(self.id)).into()
+        match &self.icon {
+            Some(Icon::Svg(handle)) => {
+                MouseArea::new(Svg::new(handle.clone()).height(24).width(24)).into()
+            }
+            Some(Icon::Raster(handle)) => {
+                MouseArea::new(Image::new(handle.clone()).height(24).width(24)).into()
+            }
+            Option::None => MouseArea::new(text(self.id)).into(),
         }
     }
 }
@@ -220,7 +230,6 @@ fn run_niri_listener(
         }
     }
 
-    eprintln!("Successfully subscribed to Niri event stream.");
     let mut read_event = sock.read_events();
 
     loop {

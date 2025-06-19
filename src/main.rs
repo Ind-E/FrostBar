@@ -19,13 +19,14 @@ use iced_layershell::{
 };
 use itertools::Itertools;
 use niri_ipc::Request;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::LazyLock;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use tokio::{
     sync::{
-        Mutex,
+        Mutex as TokioMutex,
         mpsc::{self, Sender},
     },
     time::Instant,
@@ -34,8 +35,8 @@ use tokio::{
 use crate::{
     battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
     cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
-    icon_cache::IconCache,
-    mpris::MprisUpdate,
+    icon_cache::{IconCache, MprisArtCache},
+    mpris::{MprisEvent, MprisListener, MprisPlayer},
     niri::{IpcError, NiriEvents, NiriState, Window, Workspace, run_niri_request_handler},
     style::{rounded_corners, tooltip_style},
     tooltip::{Hidden, Tooltip, TooltipState},
@@ -48,6 +49,7 @@ mod battery_widget;
 mod cava;
 mod icon_cache;
 mod mpris;
+mod mpris_player;
 mod niri;
 mod style;
 mod tooltip;
@@ -63,9 +65,6 @@ const FIRA_CODE: Font = Font {
     weight: Weight::Medium,
     ..Font::DEFAULT
 };
-
-static ICON_CACHE: LazyLock<std::sync::Mutex<IconCache>> =
-    LazyLock::new(|| std::sync::Mutex::new(IconCache::new()));
 
 #[tokio::main]
 pub async fn main() -> Result<(), iced_layershell::Error> {
@@ -99,6 +98,9 @@ struct Bar {
     niri_request_sender: Sender<Request>,
     hovered_workspace_index: Option<u8>,
     cava_visualizer: CavaVisualizer,
+    icon_cache: Arc<Mutex<IconCache>>,
+    mpris_art_cache: Arc<Mutex<MprisArtCache>>,
+    mpris_players: HashMap<String, MprisPlayer>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,7 +125,7 @@ enum Message {
     NiriEvent(Result<niri_ipc::Event, IpcError>),
     WorkspaceClicked(u8),
     CavaUpdate(Result<String, CavaError>),
-    MprisUpdate(MprisUpdate),
+    MprisEvent(MprisEvent),
     NoOp,
 }
 
@@ -151,7 +153,7 @@ impl Bar {
 
         let (request_tx, request_rx) = mpsc::channel(32);
         let request_socket = match niri_ipc::socket::Socket::connect() {
-            Ok(sock) => Arc::new(Mutex::new(sock)),
+            Ok(sock) => Arc::new(TokioMutex::new(sock)),
             Err(e) => panic!("Failed to create niri request socket: {}", e),
         };
 
@@ -169,6 +171,9 @@ impl Bar {
                     bars: vec![0; 10],
                     cache: iced::widget::canvas::Cache::new(),
                 },
+                icon_cache: Arc::new(Mutex::new(IconCache::new())),
+                mpris_art_cache: Arc::new(Mutex::new(MprisArtCache::new())),
+                mpris_players: HashMap::new(),
             },
             align_clock(),
         )
@@ -202,6 +207,7 @@ impl Bar {
             }
         }
         subscriptions.push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
+        subscriptions.push(subscription::from_recipe(MprisListener).map(Message::MprisEvent));
         subscriptions.push(
             subscription::from_recipe(CavaEvents {
                 config_path: write_temp_cava_config().unwrap().display().to_string(),
@@ -392,6 +398,43 @@ impl Bar {
                 };
                 Task::none()
             }
+            Message::MprisEvent(event) => {
+                match event {
+                    MprisEvent::PlayerAppeared {
+                        name,
+                        status,
+                        metadata,
+                    } => {
+                        let mut player = MprisPlayer::new(status);
+                        player
+                            .update_metadata(&metadata, &mut self.mpris_art_cache.lock().unwrap());
+                        self.mpris_players.insert(name, player);
+                    }
+                    MprisEvent::PlayerVanished { name } => {
+                        self.mpris_players.remove(&name);
+                    }
+                    MprisEvent::PlaybackStatusChanged {
+                        player_name,
+                        status,
+                    } => {
+                        if let Some(player) = self.mpris_players.get_mut(&player_name) {
+                            player.status = status;
+                        }
+                    }
+                    MprisEvent::MetadataChanged {
+                        player_name,
+                        metadata,
+                    } => {
+                        if let Some(player) = self.mpris_players.get_mut(&player_name) {
+                            player.update_metadata(
+                                &metadata,
+                                &mut self.mpris_art_cache.lock().unwrap(),
+                            );
+                        }
+                    }
+                }
+                Task::none()
+            }
             Message::NoOp => Task::none(),
             _ => unreachable!(),
         }
@@ -432,7 +475,13 @@ impl Bar {
         let time: String = self.time.format("%H\n%M").to_string();
         let cava_visualizer = canvas(&self.cava_visualizer)
             .width(Length::Fill)
-            .height(180);
+            .height(150);
+        let mpris_art = self
+            .mpris_players
+            .values()
+            .fold(Column::new().spacing(5).padding(5), |col, player| {
+                col.push(player.to_widget())
+            });
 
         let top_section = Container::new(
             column![
@@ -440,6 +489,7 @@ impl Bar {
                 battery_icon(self.battery_info.1.as_ref(), self.battery_info.0.clone()),
                 text(time).size(16),
                 cava_visualizer,
+                mpris_art,
             ]
             .align_x(Horizontal::Center),
         )
@@ -466,7 +516,7 @@ impl Bar {
                             title: &w.title,
                             id: &w.id,
                             icon: w.app_id.as_ref().and_then(|app_id| {
-                                ICON_CACHE.lock().unwrap().get_icon(app_id).clone()
+                                self.icon_cache.lock().unwrap().get_icon(app_id).clone()
                             }),
                         })
                     })

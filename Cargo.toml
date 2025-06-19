@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = { version = "0.4.41", default-features = false, features = ["std", "iana-time-zone", "js-sys", "wasmbind", "android-tzdata", "wasm-bindgen", "oldtime", "now", "clock", "alloc"] }
-iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg", "advanced", "canvas"] }
+iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg", "advanced", "canvas", "image"] }
 iced_layershell = "0.13.7"
 iced_runtime = { version = "0.13.2", default-features = false }
 starship-battery = { version = "0.10.2", default-features = false }
@@ -19,3 +19,5 @@ freedesktop-desktop-entry = { version = "0.7.13", default-features = false }
 async-stream = { version = "0.3.6", default-features = false }
 url = "2.5.4"
 zbus = "5.7.1"
+base64 = "0.22.1"
+futures-util = "0.3.31"

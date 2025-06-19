@@ -1,16 +1,25 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use base64::Engine;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
+use base64::engine::general_purpose;
 use color_eyre::{Result, eyre::Context};
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
-use iced::widget::svg;
+use iced::widget::{image, svg};
 use xdgkit::icon_finder;
 
 pub const DEFAULT_ICON: &str =
     "/usr/share/icons/Adwaita/16x16/apps/help-contents-symbolic.symbolic.png";
 
-//TODO: make this work with svg and (raster) image
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Icon {
+    Svg(svg::Handle),
+    Raster(image::Handle),
+}
 
-pub fn client_icon(app_id: &str) -> Result<PathBuf> {
+pub fn client_icon_path(app_id: &str) -> Result<PathBuf> {
     let mut paths = default_paths();
 
     let desktop_file = paths
@@ -32,13 +41,23 @@ pub fn client_icon(app_id: &str) -> Result<PathBuf> {
         .unwrap_or_else(|| icon_finder::find_icon("default-application".to_string(), 128, 1))
         .unwrap_or_else(|| PathBuf::from(DEFAULT_ICON));
 
-    println!("{:?}", desktop_file);
-
+    // println!("{:?}", desktop_file);
     Ok(desktop_file)
 }
 
 pub struct IconCache {
-    inner: BTreeMap<String, Option<svg::Handle>>,
+    inner: BTreeMap<String, Option<Icon>>,
+}
+
+fn load_icon_from_path(path: &Path) -> Option<Icon> {
+    match path.extension().and_then(|s| s.to_str()) {
+        Some("svg") => Some(Icon::Svg(svg::Handle::from_path(&path))),
+        Some("png") | Some("jpg") => Some(Icon::Raster(image::Handle::from_path(&path))),
+        _ => {
+            eprintln!("Warning: Unrecognized or missing icon extension at path: {path:?}");
+            None
+        }
+    }
 }
 
 impl IconCache {
@@ -48,16 +67,42 @@ impl IconCache {
         }
     }
 
-    pub fn get_icon(&mut self, app_id: &str) -> &Option<svg::Handle> {
-        if !self.inner.contains_key(app_id) {
-            let handle_option = client_icon(app_id)
-                .map(svg::Handle::from_path)
-                .map_err(|e| eprintln!("Failed to get icon for {app_id}: {e}"))
-                .ok();
+    pub fn get_icon(&mut self, app_id: &str) -> &Option<Icon> {
+        self.inner.entry(app_id.to_string()).or_insert_with(|| {
+            client_icon_path(app_id)
+                .ok()
+                .and_then(|path| load_icon_from_path(&path))
+        })
+    }
+}
 
-            self.inner.insert(app_id.to_string(), handle_option);
+pub struct MprisArtCache {
+    inner: BTreeMap<String, Option<image::Handle>>,
+}
+
+impl MprisArtCache {
+    pub fn new() -> Self {
+        Self {
+            inner: BTreeMap::new(),
         }
+    }
 
-        &self.inner[app_id]
+    pub fn get_art(&mut self, art_url: &str) -> &Option<image::Handle> {
+        self.inner.entry(art_url.to_string()).or_insert_with(|| {
+            if let Some(url) = art_url.strip_prefix("data:image/jpeg;base64,") {
+                let image_bytes = match general_purpose::STANDARD.decode(url) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        eprintln!("{e}");
+                        return None;
+                    }
+                };
+                Some(image::Handle::from_bytes(image_bytes))
+            } else if let Some(url) = art_url.strip_prefix("file://") {
+                Some(image::Handle::from_path(url))
+            } else {
+                None
+            }
+        })
     }
 }

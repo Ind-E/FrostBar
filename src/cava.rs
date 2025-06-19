@@ -11,6 +11,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
     #[error("Cava command failed to start: {0}")]
