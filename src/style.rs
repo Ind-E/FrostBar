@@ -1,7 +1,10 @@
 use iced::{
     Background, Border, Color, Theme,
-    border::{rounded, top_right},
-    widget::container,
+    border::{self, rounded, top_right},
+    widget::{
+        container,
+        scrollable::{self, Rail, Scroller, Status},
+    },
 };
 
 pub fn rounded_corners(_theme: &Theme) -> container::Style {
@@ -27,4 +30,22 @@ pub fn tooltip_style<'a>(opacity: f32) -> container::StyleFn<'a, Theme> {
         },
         ..Default::default()
     })
+}
+
+pub fn no_rail(_theme: &Theme, _status: Status) -> scrollable::Style {
+    let no_rail = Rail {
+        background: None,
+        border: border::rounded(0),
+        scroller: Scroller {
+            color: Color::TRANSPARENT,
+            border: border::rounded(0),
+        },
+    };
+
+    scrollable::Style {
+        container: container::Style::default(),
+        vertical_rail: no_rail,
+        horizontal_rail: no_rail,
+        gap: None,
+    }
 }

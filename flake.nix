@@ -76,6 +76,8 @@
                 lldb
                 pkg-config
 
+                alsa-lib
+                pipewire
                 expat
                 fontconfig
                 freetype

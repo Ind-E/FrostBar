@@ -5,9 +5,12 @@ use iced::{
     alignment::{Horizontal, Vertical},
     event,
     font::{Family, Weight},
+    mouse::ScrollDelta,
     padding::top,
     time::{self, Duration},
-    widget::{Column, Container, Text, canvas, column, container, stack, text},
+    widget::{
+        Column, Container, MouseArea, Scrollable, Text, canvas, column, container, stack, text,
+    },
     window::Id,
 };
 use iced_layershell::{
@@ -19,12 +22,13 @@ use iced_layershell::{
 };
 use itertools::Itertools;
 use niri_ipc::Request;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use system_tray::client::ActivateRequest;
+use zbus::Connection;
 
 use tokio::{
+    process::Command as TokioCommand,
     sync::{
         Mutex as TokioMutex,
         mpsc::{self, Sender},
@@ -35,10 +39,12 @@ use tokio::{
 use crate::{
     battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
     cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
+    dbus_proxy::PlayerProxy,
     icon_cache::{IconCache, MprisArtCache},
     mpris::{MprisEvent, MprisListener, MprisPlayer},
     niri::{IpcError, NiriEvents, NiriState, Window, Workspace, run_niri_request_handler},
-    style::{rounded_corners, tooltip_style},
+    style::{no_rail, rounded_corners, tooltip_style},
+    systray::{SysTrayInteraction, SysTrayState, SysTraySubscription, create_client, to_widget},
     tooltip::{Hidden, Tooltip, TooltipState},
     utils::align_clock,
 };
@@ -47,17 +53,19 @@ extern crate starship_battery as battery;
 
 mod battery_widget;
 mod cava;
+mod dbus_proxy;
 mod icon_cache;
 mod mpris;
-mod mpris_player;
 mod niri;
 mod style;
+mod systray;
 mod tooltip;
 mod utils;
 
 const BAR_WIDTH: u32 = 45;
 const GAPS: i32 = 3;
 const ANIMATION_DURATION: Duration = Duration::from_millis(175);
+const VOLUME_PERCENT: i32 = 3;
 
 const FIRA_CODE_BYTES: &[u8] = include_bytes!("../assets/FiraCodeNerdFontMono-Medium.ttf");
 const FIRA_CODE: Font = Font {
@@ -101,17 +109,19 @@ struct Bar {
     icon_cache: Arc<Mutex<IconCache>>,
     mpris_art_cache: Arc<Mutex<MprisArtCache>>,
     mpris_players: HashMap<String, MprisPlayer>,
+    systray_state: SysTrayState,
+    systray_client: Option<Arc<system_tray::client::Client>>,
 }
 
 #[derive(Debug, Clone)]
-enum MouseEnterEvent {
+pub enum MouseEnterEvent {
     Workspace(u8),
     Tooltip(container::Id),
 }
 
 #[to_layer_message(multi)]
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     IcedEvent(Event),
     Tick(DateTime<Local>),
     AlignClock,
@@ -123,9 +133,17 @@ enum Message {
     MouseExitedBar,
     TooltipMeasured(container::Id, Option<Rectangle>),
     NiriEvent(Result<niri_ipc::Event, IpcError>),
-    WorkspaceClicked(u8),
+    FocusWorkspace(u8),
+    FocusWindow(u64),
     CavaUpdate(Result<String, CavaError>),
     MprisEvent(MprisEvent),
+    PlayPause(String),
+    NextSong(String),
+    StopPlayer(String),
+    ChangeVolume(i32),
+    SysTrayClientCreated(Arc<system_tray::client::Client>),
+    SysTrayEvent(system_tray::client::Event),
+    SysTrayInteraction(SysTrayInteraction),
     NoOp,
 }
 
@@ -158,6 +176,7 @@ impl Bar {
         };
 
         tokio::spawn(run_niri_request_handler(request_rx, request_socket));
+
         (
             Self {
                 clock_aligned: false,
@@ -174,8 +193,10 @@ impl Bar {
                 icon_cache: Arc::new(Mutex::new(IconCache::new())),
                 mpris_art_cache: Arc::new(Mutex::new(MprisArtCache::new())),
                 mpris_players: HashMap::new(),
+                systray_state: SysTrayState::new(),
+                systray_client: None,
             },
-            align_clock(),
+            Task::batch(vec![align_clock(), create_client()]),
         )
     }
 
@@ -214,6 +235,11 @@ impl Bar {
             })
             .map(Message::CavaUpdate),
         );
+        if let Some(client) = &self.systray_client {
+            subscriptions.push(subscription::from_recipe(SysTraySubscription {
+                client: Arc::clone(client),
+            }))
+        }
         Subscription::batch(subscriptions)
     }
 
@@ -247,11 +273,18 @@ impl Bar {
 
                 Task::none()
             }
-            Message::WorkspaceClicked(idx) => {
+            Message::FocusWorkspace(idx) => {
                 let sender = self.niri_request_sender.clone();
                 let request = niri_ipc::Request::Action(niri_ipc::Action::FocusWorkspace {
                     reference: niri_ipc::WorkspaceReferenceArg::Index(idx),
                 });
+                Task::perform(async move { sender.send(request).await.ok() }, |_| {
+                    Message::NoOp
+                })
+            }
+            Message::FocusWindow(id) => {
+                let sender = self.niri_request_sender.clone();
+                let request = niri_ipc::Request::Action(niri_ipc::Action::FocusWindow { id });
                 Task::perform(async move { sender.send(request).await.ok() }, |_| {
                     Message::NoOp
                 })
@@ -405,7 +438,7 @@ impl Bar {
                         status,
                         metadata,
                     } => {
-                        let mut player = MprisPlayer::new(status);
+                        let mut player = MprisPlayer::new(name.clone(), status);
                         player
                             .update_metadata(&metadata, &mut self.mpris_art_cache.lock().unwrap());
                         self.mpris_players.insert(name, player);
@@ -431,6 +464,82 @@ impl Bar {
                                 &mut self.mpris_art_cache.lock().unwrap(),
                             );
                         }
+                    }
+                }
+                Task::none()
+            }
+            Message::PlayPause(player) => Task::perform(
+                async {
+                    if let Ok(connection) = Connection::session().await {
+                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
+                            let _ = player.play_pause().await;
+                        };
+                    };
+                },
+                |_| Message::NoOp,
+            ),
+            Message::NextSong(player) => Task::perform(
+                async {
+                    if let Ok(connection) = Connection::session().await {
+                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
+                            let _ = player.next().await;
+                        };
+                    };
+                },
+                |_| Message::NoOp,
+            ),
+            Message::ChangeVolume(delta_percent) => {
+                let sign = if delta_percent >= 0 { "+" } else { "-" };
+                let value = delta_percent.abs();
+                Task::perform(
+                    async move {
+                        let _ = TokioCommand::new("wpctl")
+                            .args(&["set-volume", "@DEFAULT_SINK@", &format!("{value}%{sign}")])
+                            .output()
+                            .await;
+                    },
+                    |_| Message::NoOp,
+                )
+            }
+            Message::SysTrayClientCreated(client) => {
+                self.systray_state.init(client.items());
+                self.systray_client = Some(client);
+                Task::none()
+            }
+            Message::SysTrayEvent(event) => {
+                self.systray_state
+                    .on_event(event, &mut self.icon_cache.lock().unwrap());
+                Task::none()
+            }
+            Message::SysTrayInteraction(event) => {
+                match event {
+                    SysTrayInteraction::LeftClick(id) => {
+                        if let Some(tray) = self.systray_client.clone() {
+                            return Task::perform(
+                                async move {
+                                    match tray
+                                        .activate(ActivateRequest::Default {
+                                            address: id,
+                                            x: 0,
+                                            y: 0,
+                                        })
+                                        .await
+                                    {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("{e}"),
+                                    }
+                                },
+                                |_| Message::NoOp,
+                            );
+                        };
+                    }
+                    SysTrayInteraction::RightClick(id) => {
+                        // self.systray_state.items.get(&id).and_then(|item| {
+                        // if let Some(tray) = &self.systray_client {
+                        // tray.menu()
+                        // }
+                        // None
+                        // });
                     }
                 }
                 Task::none()
@@ -473,9 +582,29 @@ impl Bar {
             .into();
         }
         let time: String = self.time.format("%H\n%M").to_string();
-        let cava_visualizer = canvas(&self.cava_visualizer)
-            .width(Length::Fill)
-            .height(150);
+        let cava_visualizer = MouseArea::new(
+            canvas(&self.cava_visualizer)
+                .width(Length::Fill)
+                .height(130),
+        )
+        .on_scroll(|delta| {
+            Message::ChangeVolume(match delta {
+                ScrollDelta::Lines { x, y } => {
+                    if y > 0.0 || x < 0.0 {
+                        VOLUME_PERCENT
+                    } else {
+                        -VOLUME_PERCENT
+                    }
+                }
+                ScrollDelta::Pixels { x, y } => {
+                    if y > 0.0 || x < 0.0 {
+                        VOLUME_PERCENT
+                    } else {
+                        -VOLUME_PERCENT
+                    }
+                }
+            })
+        });
         let mpris_art = self
             .mpris_players
             .values()
@@ -528,25 +657,27 @@ impl Bar {
             .align_x(Horizontal::Center)
             .spacing(12);
 
-        let middle_section = Container::new(ws)
+        let middle_section = Container::new(
+            Scrollable::new(Container::new(ws).align_y(Vertical::Center))
+                .height(570)
+                .style(no_rail),
+        )
+        .center_y(Length::Fill);
+
+        let tray_items = self
+            .systray_state
+            .items
+            .iter()
+            .sorted_by_key(|(_, item)| &item.id)
+            .map(|(id, item)| to_widget(id, item, &mut self.icon_cache.lock().unwrap()))
+            .fold(Column::new(), |col, item| col.push(item))
+            .align_x(Horizontal::Center);
+
+        let bottom_section = Container::new(tray_items)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Horizontal::Center)
-            .align_y(Vertical::Center);
-
-        let bottom_section = Container::new(
-            column![
-                text("󱄅").size(32),
-                text("󱄅").size(32),
-                text("󱄅").size(32),
-                text("󱄅").size(32),
-            ]
-            .align_x(Horizontal::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Bottom);
+            .align_y(Vertical::Bottom);
 
         let layout = stack![top_section, middle_section, bottom_section];
 

@@ -2,12 +2,13 @@ use futures_util::stream::{Stream, StreamExt, select_all};
 use iced::{
     Element,
     advanced::subscription,
+    mouse::Interaction,
     widget::{Image, MouseArea, image, text},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
-use crate::{Message, icon_cache::MprisArtCache, mpris_player::PlayerProxy};
+use crate::{dbus_proxy::PlayerProxy, icon_cache::MprisArtCache, Message};
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 
@@ -35,6 +36,7 @@ pub enum MprisEvent {
 
 #[derive(Clone, Debug)]
 pub struct MprisPlayer {
+    pub name: String,
     pub status: String,
     pub artists: Option<String>,
     pub title: Option<String>,
@@ -63,11 +65,14 @@ impl MprisPlayer {
                         .unwrap(),
                 )
                 .clone();
+        } else {
+            self.art = None
         }
     }
 
-    pub fn new(status: String) -> Self {
+    pub fn new(name: String, status: String) -> Self {
         Self {
+            name,
             status,
             artists: None,
             title: None,
@@ -77,9 +82,17 @@ impl MprisPlayer {
 
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         if let Some(art) = &self.art {
-            MouseArea::new(Image::new(art)).into()
+            MouseArea::new(Image::new(art))
+                .on_release(Message::PlayPause(self.name.clone()))
+                .on_right_release(Message::NextSong(self.name.clone()))
+                .interaction(Interaction::Pointer)
+                .into()
         } else {
-            text("X").into()
+            MouseArea::new(text("󰜺").size(30))
+                .on_release(Message::PlayPause(self.name.clone()))
+                .on_right_release(Message::NextSong(self.name.clone()))
+                .interaction(Interaction::Pointer)
+                .into()
         }
     }
 }
@@ -101,7 +114,10 @@ impl subscription::Recipe for MprisListener {
 
             let connection = match Connection::session().await {
                 Ok(c) => c,
-                Err(_) => return,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return;
+                }
             };
 
             let dbus_proxy = Proxy::new(

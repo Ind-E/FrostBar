@@ -5,7 +5,8 @@ use iced::{
     alignment::Horizontal,
     border::Radius,
     futures::Stream,
-    padding::top,
+    mouse::Interaction,
+    padding::{left, top},
     widget::{
         Column, Container, Image, MouseArea, Svg,
         container::{self, StyleFn},
@@ -15,7 +16,7 @@ use iced::{
 use itertools::Itertools;
 use niri_ipc::{Event, Request, socket::Socket};
 use std::{cmp::Ordering, collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex as TokioMutex, mpsc};
 
 use crate::{Message, MouseEnterEvent, icon_cache::Icon};
 
@@ -38,10 +39,14 @@ impl<'a> Window<'a> {
     pub fn to_widget(&self) -> Element<'a, Message> {
         match &self.icon {
             Some(Icon::Svg(handle)) => {
-                MouseArea::new(Svg::new(handle.clone()).height(24).width(24)).into()
+                MouseArea::new(Svg::new(handle.clone()).height(24).width(24))
+                    .on_right_press(Message::FocusWindow(*self.id))
+                    .into()
             }
             Some(Icon::Raster(handle)) => {
-                MouseArea::new(Image::new(handle.clone()).height(24).width(24)).into()
+                MouseArea::new(Image::new(handle.clone()).height(24).width(24))
+                    .on_right_press(Message::FocusWindow(*self.id))
+                    .into()
             }
             Option::None => MouseArea::new(text(self.id)).into(),
         }
@@ -69,24 +74,28 @@ pub struct Workspace<'a> {
 
 impl<'a> Workspace<'a> {
     pub fn to_widget(&self, hovered: bool) -> Element<'a, Message> {
-        MouseArea::new(
-            Container::new(
-                self.windows.iter().sorted().fold(
-                    Column::new()
-                        .align_x(Horizontal::Center)
-                        .spacing(5)
-                        .push(text(self.idx - 1).size(20)),
-                    |col, w| col.push(w.to_widget()),
-                ),
+        Container::new(
+            MouseArea::new(
+                Container::new(
+                    self.windows.iter().sorted().fold(
+                        Column::new()
+                            .align_x(Horizontal::Center)
+                            .spacing(5)
+                            .push(text(self.idx - 1).size(20)),
+                        |col, w| col.push(w.to_widget()),
+                    ),
+                )
+                .style(workspace_style(self.is_active, hovered))
+                .padding(top(5).bottom(5))
+                .width(Length::Fill)
+                .align_x(Horizontal::Center),
             )
-            .style(workspace_style(self.is_active, hovered))
-            .padding(top(4).bottom(4))
-            .width(Length::Fill)
-            .align_x(Horizontal::Center),
+            .on_press(Message::FocusWorkspace(*self.idx))
+            .on_enter(Message::MouseEntered(MouseEnterEvent::Workspace(*self.idx)))
+            .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
+            .interaction(Interaction::Pointer),
         )
-        .on_press(Message::WorkspaceClicked(*self.idx))
-        .on_enter(Message::MouseEntered(MouseEnterEvent::Workspace(*self.idx)))
-        .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
+        .padding(left(2).right(2))
         .into()
     }
 }
@@ -103,7 +112,7 @@ fn workspace_style<'a>(active: &'a bool, hovered: bool) -> StyleFn<'a, Theme> {
             radius: Radius::new(12),
         },
         background: Some(Background::Color(if hovered {
-            Color::from_rgba(0.8, 0.8, 0.8, 0.02)
+            Color::from_rgba(0.8, 0.8, 0.8, 0.015)
         } else {
             Color::TRANSPARENT
         })),
@@ -251,7 +260,7 @@ fn run_niri_listener(
 
 pub async fn run_niri_request_handler(
     mut request_rx: mpsc::Receiver<Request>,
-    socket: Arc<Mutex<Socket>>,
+    socket: Arc<TokioMutex<Socket>>,
 ) {
     while let Some(request) = request_rx.recv().await {
         let mut sock = socket.lock().await;

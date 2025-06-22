@@ -1,13 +1,19 @@
 use base64::Engine;
+use freedesktop_icons::lookup;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+use system_tray::item::{IconPixmap, StatusNotifierItem};
 
 use base64::engine::general_purpose;
 use color_eyre::{Result, eyre::Context};
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
-use iced::widget::{image, svg};
+use iced::widget::{
+    Image,
+    image::{self, Handle},
+    svg,
+};
 use xdgkit::icon_finder;
 
 pub const DEFAULT_ICON: &str =
@@ -73,6 +79,29 @@ impl IconCache {
                 .ok()
                 .and_then(|path| load_icon_from_path(&path))
         })
+    }
+
+    pub fn get_tray_icon(&mut self, item: &StatusNotifierItem) -> &Option<Icon> {
+        if let Some(icon_name) = &item.icon_name {
+            self.inner.entry(icon_name.to_string()).or_insert_with(|| {
+                lookup(icon_name)
+                    .with_theme("Flat-Remix-Blue-Dark")
+                    .with_scale(2)
+                    .find()
+                    .and_then(|path| load_icon_from_path(&path))
+            })
+        } else if let Some(pixmaps) = &item.icon_pixmap {
+            self.inner.entry(item.id.to_string()).or_insert_with(|| {
+                let pixmap = pixmaps[0].clone();
+                Some(Icon::Raster(Handle::from_rgba(
+                    pixmap.width as u32,
+                    pixmap.height as u32,
+                    pixmap.pixels,
+                )))
+            })
+        } else {
+            &None
+        }
     }
 }
 

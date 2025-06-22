@@ -9,7 +9,7 @@ iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg
 iced_layershell = "0.13.7"
 iced_runtime = { version = "0.13.2", default-features = false }
 starship-battery = { version = "0.10.2", default-features = false }
-tokio = { version = "1.45.1", default-features = true, features = ["time", "macros", "sync"] }
+tokio = { version = "1.45.1", default-features = true, features = ["time", "macros", "sync", "process"] }
 niri-ipc = {git = "https://github.com/YaLTeR/niri/", branch = "main"}
 thiserror = { version = "2.0.12", default-features = false }
 color-eyre = "0.6.5"
@@ -21,3 +21,6 @@ url = "2.5.4"
 zbus = "5.7.1"
 base64 = "0.22.1"
 futures-util = "0.3.31"
+system-tray = "0.7.0"
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+freedesktop-icons = "0.4.0"
