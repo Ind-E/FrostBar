@@ -95,7 +95,6 @@ impl<'a> Workspace<'a> {
             .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
             .interaction(Interaction::Pointer),
         )
-        .padding(left(2).right(2))
         .into()
     }
 }

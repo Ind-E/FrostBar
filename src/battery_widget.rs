@@ -87,7 +87,7 @@ pub fn battery_icon<'a>(
                 .height(Length::Fill)
                 .padding(Padding {
                     top: 7.0,
-                    left: 30.0,
+                    left: 27.0,
                     right: 0.0,
                     bottom: 0.0
                 })

@@ -3,25 +3,25 @@ use tokio::time::Instant;
 
 use crate::ANIMATION_DURATION;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Tooltip<State: TooltipMarkerState> {
     pub id: Id,
     pub state: State,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Hidden;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AnimatingIn {
     content: String,
     pub start: Instant,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AnimatingOut {
     content: String,
     pub start: Instant,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Visible {
     content: String,
 }
@@ -96,6 +96,7 @@ impl TooltipMarkerState for AnimatingIn {}
 impl TooltipMarkerState for AnimatingOut {}
 impl TooltipMarkerState for Visible {}
 
+#[derive(Clone)]
 pub enum TooltipState {
     Hidden(Tooltip<Hidden>),
     AnimatingIn(Tooltip<AnimatingIn>),

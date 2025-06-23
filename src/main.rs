@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Color, Element, Event, Font, Length, Rectangle, Subscription, Task, Theme,
+    Background, Color, Element, Event, Font, Length, Rectangle, Subscription,
+    Task, Theme,
     advanced::{mouse, subscription},
     alignment::{Horizontal, Vertical},
     event,
@@ -9,14 +10,15 @@ use iced::{
     padding::top,
     time::{self, Duration},
     widget::{
-        Column, Container, MouseArea, Scrollable, Text, canvas, column, container, stack, text,
+        Column, Container, MouseArea, Scrollable, Text, canvas, column,
+        container, stack, text,
     },
     window::Id,
 };
 use iced_layershell::{
-    actions::IcedNewPopupSettings,
+    actions::{IcedNewMenuSettings, IcedNewPopupSettings, MenuDirection},
     build_pattern::{MainSettings, daemon},
-    reexport::{Anchor, KeyboardInteractivity},
+    reexport::{Anchor, KeyboardInteractivity, Layer},
     settings::{LayerShellSettings, StartMode},
     to_layer_message,
 };
@@ -42,9 +44,15 @@ use crate::{
     dbus_proxy::PlayerProxy,
     icon_cache::{IconCache, MprisArtCache},
     mpris::{MprisEvent, MprisListener, MprisPlayer},
-    niri::{IpcError, NiriEvents, NiriState, Window, Workspace, run_niri_request_handler},
+    niri::{
+        IpcError, NiriEvents, NiriState, Window, Workspace,
+        run_niri_request_handler,
+    },
     style::{no_rail, rounded_corners, tooltip_style},
-    systray::{SysTrayInteraction, SysTrayState, SysTraySubscription, create_client, to_widget},
+    systray::{
+        SysTrayInteraction, SysTrayState, SysTraySubscription, create_client,
+        to_widget,
+    },
     tooltip::{Hidden, Tooltip, TooltipState},
     utils::align_clock,
 };
@@ -63,11 +71,12 @@ mod tooltip;
 mod utils;
 
 const BAR_WIDTH: u32 = 45;
-const GAPS: i32 = 3;
+const GAPS: u16 = 3;
 const ANIMATION_DURATION: Duration = Duration::from_millis(175);
 const VOLUME_PERCENT: i32 = 3;
 
-const FIRA_CODE_BYTES: &[u8] = include_bytes!("../assets/FiraCodeNerdFontMono-Medium.ttf");
+const FIRA_CODE_BYTES: &[u8] =
+    include_bytes!("../assets/FiraCodeNerdFontMono-Medium.ttf");
 const FIRA_CODE: Font = Font {
     family: Family::Name("FiraCode Nerd Font Mono"),
     weight: Weight::Medium,
@@ -85,11 +94,11 @@ pub async fn main() -> Result<(), iced_layershell::Error> {
             default_font: FIRA_CODE,
             layer_settings: LayerShellSettings {
                 size: Some((BAR_WIDTH, 0)),
-                exclusive_zone: BAR_WIDTH as i32 - GAPS,
+                exclusive_zone: BAR_WIDTH as i32 - GAPS as i32,
                 anchor: Anchor::Left | Anchor::Top | Anchor::Bottom,
-                margin: (GAPS, 0, GAPS, GAPS),
                 keyboard_interactivity: KeyboardInteractivity::None,
                 start_mode: StartMode::Active,
+                layer: Layer::Top,
                 ..Default::default()
             },
             ..Default::default()
@@ -111,6 +120,8 @@ struct Bar {
     mpris_players: HashMap<String, MprisPlayer>,
     systray_state: SysTrayState,
     systray_client: Option<Arc<system_tray::client::Client>>,
+    systray_menu_id: Id,
+    systray_menu_open: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -144,6 +155,7 @@ pub enum Message {
     SysTrayClientCreated(Arc<system_tray::client::Client>),
     SysTrayEvent(system_tray::client::Event),
     SysTrayInteraction(SysTrayInteraction),
+    CloseSysTrayMenu,
     NoOp,
 }
 
@@ -195,6 +207,8 @@ impl Bar {
                 mpris_players: HashMap::new(),
                 systray_state: SysTrayState::new(),
                 systray_client: None,
+                systray_menu_id: Id::unique(),
+                systray_menu_open: false,
             },
             Task::batch(vec![align_clock(), create_client()]),
         )
@@ -210,15 +224,20 @@ impl Bar {
         let mut subscriptions: Vec<Subscription<Message>> = Vec::with_capacity(5);
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
-        subscriptions.push(time::every(Duration::from_secs(1)).map(|_| fetch_battery_info()));
+        subscriptions.push(
+            time::every(Duration::from_secs(1)).map(|_| fetch_battery_info()),
+        );
         if self.clock_aligned {
-            subscriptions
-                .push(time::every(Duration::from_secs(60)).map(|_| Message::Tick(Local::now())));
+            subscriptions.push(
+                time::every(Duration::from_secs(60))
+                    .map(|_| Message::Tick(Local::now())),
+            );
         }
         for tooltip in self.tooltips.values() {
             if matches!(
                 tooltip,
-                TooltipState::AnimatingIn { .. } | TooltipState::AnimatingOut { .. }
+                TooltipState::AnimatingIn { .. }
+                    | TooltipState::AnimatingOut { .. }
             ) {
                 subscriptions.push(
                     time::every(Duration::from_millis(1000 / 60))
@@ -227,11 +246,17 @@ impl Bar {
                 break;
             }
         }
-        subscriptions.push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
-        subscriptions.push(subscription::from_recipe(MprisListener).map(Message::MprisEvent));
+        subscriptions
+            .push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
+        subscriptions.push(
+            subscription::from_recipe(MprisListener).map(Message::MprisEvent),
+        );
         subscriptions.push(
             subscription::from_recipe(CavaEvents {
-                config_path: write_temp_cava_config().unwrap().display().to_string(),
+                config_path: write_temp_cava_config()
+                    .unwrap()
+                    .display()
+                    .to_string(),
             })
             .map(Message::CavaUpdate),
         );
@@ -275,19 +300,25 @@ impl Bar {
             }
             Message::FocusWorkspace(idx) => {
                 let sender = self.niri_request_sender.clone();
-                let request = niri_ipc::Request::Action(niri_ipc::Action::FocusWorkspace {
-                    reference: niri_ipc::WorkspaceReferenceArg::Index(idx),
-                });
-                Task::perform(async move { sender.send(request).await.ok() }, |_| {
-                    Message::NoOp
-                })
+                let request =
+                    niri_ipc::Request::Action(niri_ipc::Action::FocusWorkspace {
+                        reference: niri_ipc::WorkspaceReferenceArg::Index(idx),
+                    });
+                Task::perform(
+                    async move { sender.send(request).await.ok() },
+                    |_| Message::NoOp,
+                )
             }
             Message::FocusWindow(id) => {
                 let sender = self.niri_request_sender.clone();
-                let request = niri_ipc::Request::Action(niri_ipc::Action::FocusWindow { id });
-                Task::perform(async move { sender.send(request).await.ok() }, |_| {
-                    Message::NoOp
-                })
+                let request =
+                    niri_ipc::Request::Action(niri_ipc::Action::FocusWindow {
+                        id,
+                    });
+                Task::perform(
+                    async move { sender.send(request).await.ok() },
+                    |_| Message::NoOp,
+                )
             }
             Message::MouseEntered(event) => {
                 match event {
@@ -295,38 +326,19 @@ impl Bar {
                         self.hovered_workspace_index = Some(idx);
                     }
                     MouseEnterEvent::Tooltip(id) => {
-                        let tooltip_content: String = if let Some(info) = &self.battery_info.1 {
-                            info.iter()
-                                .enumerate()
-                                .map(|(i, bat)| {
-                                    format!(
-                                        "Battery {}: {}% ({})",
-                                        i + 1,
-                                        (bat.percentage * 100.0).floor(),
-                                        bat.state
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        } else {
-                            "No Battery Info".to_string()
-                        };
-
                         match &self.tooltips.get(&id).unwrap() {
-                            TooltipState::Hidden(tooltip) => {
-                                self.tooltips.insert(
-                                    id.clone(),
-                                    TooltipState::AnimatingIn(
-                                        tooltip.clone().animate_in(tooltip_content),
-                                    ),
-                                );
+                            TooltipState::Hidden(_) => {
                                 return container::visible_bounds(id.clone())
-                                    .map(move |rect| Message::TooltipMeasured(id.clone(), rect));
+                                    .map(move |rect| {
+                                        Message::TooltipMeasured(id.clone(), rect)
+                                    });
                             }
                             TooltipState::AnimatingOut(tooltip) => {
                                 self.tooltips.insert(
                                     id,
-                                    TooltipState::AnimatingIn(tooltip.clone().animate_in()),
+                                    TooltipState::AnimatingIn(
+                                        tooltip.clone().animate_in(),
+                                    ),
                                 );
                             }
                             _ => {}
@@ -339,10 +351,14 @@ impl Bar {
             Message::MouseExitedBar => {
                 self.tooltips.values_mut().for_each(|t| match t {
                     TooltipState::Visible(tooltip) => {
-                        *t = TooltipState::AnimatingOut(tooltip.clone().animate_out());
+                        *t = TooltipState::AnimatingOut(
+                            tooltip.clone().animate_out(),
+                        );
                     }
                     TooltipState::AnimatingIn(tooltip) => {
-                        *t = TooltipState::AnimatingOut(tooltip.clone().animate_out());
+                        *t = TooltipState::AnimatingOut(
+                            tooltip.clone().animate_out(),
+                        );
                     }
                     _ => {}
                 });
@@ -359,13 +375,17 @@ impl Bar {
                             TooltipState::Visible(tooltip) => {
                                 self.tooltips.insert(
                                     id,
-                                    TooltipState::AnimatingOut(tooltip.clone().animate_out()),
+                                    TooltipState::AnimatingOut(
+                                        tooltip.clone().animate_out(),
+                                    ),
                                 );
                             }
                             TooltipState::AnimatingIn(tooltip) => {
                                 self.tooltips.insert(
                                     id,
-                                    TooltipState::AnimatingOut(tooltip.clone().animate_out()),
+                                    TooltipState::AnimatingOut(
+                                        tooltip.clone().animate_out(),
+                                    ),
                                 );
                             }
                             _ => {}
@@ -379,14 +399,23 @@ impl Bar {
                 for t in self.tooltips.values_mut() {
                     match t {
                         TooltipState::AnimatingIn(tooltip) => {
-                            if now.duration_since(tooltip.state.start) >= ANIMATION_DURATION {
-                                *t = TooltipState::Visible(tooltip.clone().to_visible());
+                            if now.duration_since(tooltip.state.start)
+                                >= ANIMATION_DURATION
+                            {
+                                *t = TooltipState::Visible(
+                                    tooltip.clone().to_visible(),
+                                );
                             }
                         }
                         TooltipState::AnimatingOut(tooltip) => {
-                            if now.duration_since(tooltip.state.start) >= ANIMATION_DURATION {
-                                let task = iced::window::close(tooltip.clone().id);
-                                *t = TooltipState::Hidden(tooltip.clone().to_hidden());
+                            if now.duration_since(tooltip.state.start)
+                                >= ANIMATION_DURATION
+                            {
+                                let task =
+                                    iced::window::close(tooltip.clone().id);
+                                *t = TooltipState::Hidden(
+                                    tooltip.clone().to_hidden(),
+                                );
                                 return task;
                             }
                         }
@@ -397,10 +426,38 @@ impl Bar {
                 Task::none()
             }
             Message::TooltipMeasured(id, rect) => {
+                let tooltip_content: String =
+                    if let Some(info) = &self.battery_info.1 {
+                        info.iter()
+                            .enumerate()
+                            .map(|(i, bat)| {
+                                format!(
+                                    "Battery {}: {}% ({})",
+                                    i + 1,
+                                    (bat.percentage * 100.0).floor(),
+                                    bat.state
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    } else {
+                        "No Battery Info".to_string()
+                    };
+                match &self.tooltips.get(&id).unwrap() {
+                    TooltipState::Hidden(tooltip) => {
+                        self.tooltips.insert(
+                            id.clone(),
+                            TooltipState::AnimatingIn(
+                                tooltip.clone().animate_in(tooltip_content),
+                            ),
+                        );
+                    }
+                    _ => {}
+                };
                 if let Some(rect) = rect {
                     Task::done(Message::NewPopUp {
                         settings: IcedNewPopupSettings {
-                            size: (400, 300),
+                            size: (400, 200),
                             position: (
                                 BAR_WIDTH as i32 - GAPS as i32 - 1,
                                 (rect.y - rect.width / 4.0) as i32,
@@ -439,8 +496,10 @@ impl Bar {
                         metadata,
                     } => {
                         let mut player = MprisPlayer::new(name.clone(), status);
-                        player
-                            .update_metadata(&metadata, &mut self.mpris_art_cache.lock().unwrap());
+                        player.update_metadata(
+                            &metadata,
+                            &mut self.mpris_art_cache.lock().unwrap(),
+                        );
                         self.mpris_players.insert(name, player);
                     }
                     MprisEvent::PlayerVanished { name } => {
@@ -450,7 +509,9 @@ impl Bar {
                         player_name,
                         status,
                     } => {
-                        if let Some(player) = self.mpris_players.get_mut(&player_name) {
+                        if let Some(player) =
+                            self.mpris_players.get_mut(&player_name)
+                        {
                             player.status = status;
                         }
                     }
@@ -458,7 +519,9 @@ impl Bar {
                         player_name,
                         metadata,
                     } => {
-                        if let Some(player) = self.mpris_players.get_mut(&player_name) {
+                        if let Some(player) =
+                            self.mpris_players.get_mut(&player_name)
+                        {
                             player.update_metadata(
                                 &metadata,
                                 &mut self.mpris_art_cache.lock().unwrap(),
@@ -471,7 +534,9 @@ impl Bar {
             Message::PlayPause(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
+                        if let Ok(player) =
+                            PlayerProxy::new(&connection, player).await
+                        {
                             let _ = player.play_pause().await;
                         };
                     };
@@ -481,7 +546,9 @@ impl Bar {
             Message::NextSong(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
+                        if let Ok(player) =
+                            PlayerProxy::new(&connection, player).await
+                        {
                             let _ = player.next().await;
                         };
                     };
@@ -494,7 +561,11 @@ impl Bar {
                 Task::perform(
                     async move {
                         let _ = TokioCommand::new("wpctl")
-                            .args(&["set-volume", "@DEFAULT_SINK@", &format!("{value}%{sign}")])
+                            .args(&[
+                                "set-volume",
+                                "@DEFAULT_SINK@",
+                                &format!("{value}%{sign}"),
+                            ])
                             .output()
                             .await;
                     },
@@ -507,25 +578,24 @@ impl Bar {
                 Task::none()
             }
             Message::SysTrayEvent(event) => {
-                self.systray_state
-                    .on_event(event, &mut self.icon_cache.lock().unwrap());
+                self.systray_state.on_event(event);
                 Task::none()
             }
             Message::SysTrayInteraction(event) => {
                 match event {
-                    SysTrayInteraction::LeftClick(id) => {
+                    SysTrayInteraction::LeftClick(address) => {
                         if let Some(tray) = self.systray_client.clone() {
                             return Task::perform(
                                 async move {
                                     match tray
                                         .activate(ActivateRequest::Default {
-                                            address: id,
-                                            x: 0,
-                                            y: 0,
+                                            address,
+                                            x: 100,
+                                            y: 100,
                                         })
                                         .await
                                     {
-                                        Ok(_) => {}
+                                        Ok(()) => {}
                                         Err(e) => eprintln!("{e}"),
                                     }
                                 },
@@ -533,16 +603,38 @@ impl Bar {
                             );
                         };
                     }
-                    SysTrayInteraction::RightClick(id) => {
-                        // self.systray_state.items.get(&id).and_then(|item| {
-                        // if let Some(tray) = &self.systray_client {
-                        // tray.menu()
-                        // }
-                        // None
-                        // });
+                    SysTrayInteraction::RightClick(address) => {
+                        self.systray_state.open_menu = Some(address);
+                        let id = self.systray_menu_id;
+                        let task = if !self.systray_menu_open {
+                            Task::done(Message::NewMenu {
+                                settings: IcedNewMenuSettings {
+                                    size: (400, 300),
+                                    direction: MenuDirection::Up,
+                                },
+                                id,
+                            })
+                        } else {
+                            iced::window::close::<()>(id).then(move |_| {
+                                Task::done(Message::NewMenu {
+                                    settings: IcedNewMenuSettings {
+                                        size: (400, 300),
+                                        direction: MenuDirection::Up,
+                                    },
+                                    id,
+                                })
+                            })
+                        };
+                        self.systray_menu_open = !self.systray_menu_open;
+
+                        return task;
                     }
                 }
                 Task::none()
+            }
+            Message::CloseSysTrayMenu => {
+                self.systray_menu_open = false;
+                iced::window::close(self.systray_menu_id)
             }
             Message::NoOp => Task::none(),
             _ => unreachable!(),
@@ -556,30 +648,53 @@ impl Bar {
             .filter(|(_, tooltip)| tooltip.id() == id)
         {
             let progress = tooltip.progress();
+            // println!("{}", progress);
             return Container::new(
-                tooltip
-                    .content()
-                    .lines()
-                    .map(|line| {
-                        Container::new(
-                            Text::new(line)
-                                .size(16)
-                                // .color(Color::from_rgba(1.0, 1.0, 1.0, progress))
-                                .line_height(text::LineHeight::Relative(1.0))
-                                .shaping(text::Shaping::Basic)
-                                .wrapping(text::Wrapping::None),
-                        )
-                        .width(Length::Fill)
-                        .height(Length::Fixed(16.0))
-                        .clip(true)
-                    })
-                    .fold(Column::new(), |col, text| col.push(text)),
+                Container::new(
+                    tooltip
+                        .content()
+                        .lines()
+                        .map(|line| {
+                            Container::new(
+                                Text::new(line)
+                                    .size(16)
+                                    // .color(Color::from_rgba(1.0, 1.0, 1.0, progress))
+                                    .line_height(text::LineHeight::Relative(1.0))
+                                    .shaping(text::Shaping::Basic)
+                                    .wrapping(text::Wrapping::None),
+                            )
+                            .width(Length::Fill)
+                            .height(Length::Fixed(16.0))
+                            .clip(true)
+                        })
+                        .fold(Column::new(), |col, text| col.push(text)),
+                )
+                .style(tooltip_style(1.0))
+                .padding(7)
+                .width(progress * 300.0)
+                .clip(true),
             )
-            .style(tooltip_style(1.0))
-            .padding(7)
-            .width(progress * 300.0)
-            .clip(true)
+            .style(|_| container::Style {
+                background: Some(Background::Color(Color::from_rgba(
+                    0.7, 0.2, 0.2, 0.15,
+                ))),
+                ..Default::default()
+            })
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into();
+        }
+        if id == self.systray_menu_id {
+            return Container::new(column![])
+                .style(|_| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(
+                        0.7, 0.2, 0.2, 0.15,
+                    ))),
+                    ..Default::default()
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
         }
         let time: String = self.time.format("%H\n%M").to_string();
         let cava_visualizer = MouseArea::new(
@@ -615,7 +730,10 @@ impl Bar {
         let top_section = Container::new(
             column![
                 text("󱄅").size(32),
-                battery_icon(self.battery_info.1.as_ref(), self.battery_info.0.clone()),
+                battery_icon(
+                    self.battery_info.1.as_ref(),
+                    self.battery_info.0.clone()
+                ),
                 text(time).size(16),
                 cava_visualizer,
                 mpris_art,
@@ -645,17 +763,23 @@ impl Bar {
                             title: &w.title,
                             id: &w.id,
                             icon: w.app_id.as_ref().and_then(|app_id| {
-                                self.icon_cache.lock().unwrap().get_icon(app_id).clone()
+                                self.icon_cache
+                                    .lock()
+                                    .unwrap()
+                                    .get_icon(app_id)
+                                    .clone()
                             }),
                         })
                     })
                     .collect::<Vec<_>>(),
             })
             .fold(Column::new(), |col, ws| {
-                col.push(ws.to_widget(self.hovered_workspace_index.is_some_and(|x| &x == ws.idx)))
+                col.push(ws.to_widget(
+                    self.hovered_workspace_index.is_some_and(|x| &x == ws.idx),
+                ))
             })
             .align_x(Horizontal::Center)
-            .spacing(12);
+            .spacing(10);
 
         let middle_section = Container::new(
             Scrollable::new(Container::new(ws).align_y(Vertical::Center))
@@ -668,9 +792,18 @@ impl Bar {
             .systray_state
             .items
             .iter()
-            .sorted_by_key(|(_, item)| &item.id)
-            .map(|(id, item)| to_widget(id, item, &mut self.icon_cache.lock().unwrap()))
-            .fold(Column::new(), |col, item| col.push(item))
+            .sorted_by_key(|(_, item)| &item.item.id)
+            .map(|(address, item)| {
+                to_widget(
+                    address,
+                    &item.item,
+                    &mut self.icon_cache.lock().unwrap(),
+                )
+            })
+            .fold(
+                Column::new().padding(top(5).bottom(5)).spacing(2),
+                |col, item| col.push(item),
+            )
             .align_x(Horizontal::Center);
 
         let bottom_section = Container::new(tray_items)
@@ -681,12 +814,25 @@ impl Bar {
 
         let layout = stack![top_section, middle_section, bottom_section];
 
-        Container::new(layout)
-            .width(Length::Fixed(BAR_WIDTH as f32 - GAPS as f32))
+        let bar = Container::new(layout)
+            .width(Length::Fixed(BAR_WIDTH as f32 - GAPS as f32 * 2.0))
             .height(Length::Fill)
-            .padding(top(GAPS as f32).bottom(GAPS as f32))
-            .style(rounded_corners)
-            .into()
+            .style(rounded_corners);
+
+        return MouseArea::new(
+            Container::new(bar)
+                .style(|_| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(
+                        0.7, 0.2, 0.2, 0.15,
+                    ))),
+                    ..Default::default()
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(GAPS),
+        )
+        .on_press(Message::CloseSysTrayMenu)
+        .into();
     }
 
     fn style(&self, theme: &Theme) -> iced_layershell::Appearance {

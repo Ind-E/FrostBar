@@ -82,26 +82,37 @@ impl IconCache {
     }
 
     pub fn get_tray_icon(&mut self, item: &StatusNotifierItem) -> &Option<Icon> {
-        if let Some(icon_name) = &item.icon_name {
-            self.inner.entry(icon_name.to_string()).or_insert_with(|| {
+        let key = match &item.icon_name {
+            Some(name) if !name.is_empty() => name.clone(),
+            _ => item.id.clone(),
+        };
+        self.inner.entry(key).or_insert_with(|| {
+            if let Some(icon_name) = &item.icon_name {
                 lookup(icon_name)
                     .with_theme("Flat-Remix-Blue-Dark")
                     .with_scale(2)
                     .find()
                     .and_then(|path| load_icon_from_path(&path))
+                    .or_else(|| {
+                        lookup(icon_name)
+                            .find()
+                            .and_then(|path| load_icon_from_path(&path))
+                    })
+            } else {
+                None
+            }
+            .or_else(|| {
+                item.icon_pixmap.as_ref().and_then(|pixmaps| {
+                    pixmaps.iter().max_by_key(|p| p.width).map(|pixmap| {
+                        Icon::Raster(Handle::from_rgba(
+                            pixmap.width as u32,
+                            pixmap.height as u32,
+                            pixmap.pixels.clone(),
+                        ))
+                    })
+                })
             })
-        } else if let Some(pixmaps) = &item.icon_pixmap {
-            self.inner.entry(item.id.to_string()).or_insert_with(|| {
-                let pixmap = pixmaps[0].clone();
-                Some(Icon::Raster(Handle::from_rgba(
-                    pixmap.width as u32,
-                    pixmap.height as u32,
-                    pixmap.pixels,
-                )))
-            })
-        } else {
-            &None
-        }
+        })
     }
 }
 
