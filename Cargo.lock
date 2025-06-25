@@ -1814,6 +1814,7 @@ dependencies = [
  "iced_layershell",
  "iced_runtime",
  "itertools",
+ "lilt",
  "niri-ipc",
  "starship-battery",
  "system-tray",
@@ -2404,6 +2405,15 @@ dependencies = [
  "bitflags 2.9.1",
  "libc",
  "redox_syscall 0.5.13",
+]
+
+[[package]]
+name = "lilt"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f67562e5eff6b20553fa9be1c503356768420994e28f67e3eafe6f41910e57ad"
+dependencies = [
+ "web-time",
 ]
 
 [[package]]

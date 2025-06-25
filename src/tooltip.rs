@@ -1,4 +1,5 @@
 use iced::window::Id;
+use lilt::Animated;
 use tokio::time::Instant;
 
 use crate::ANIMATION_DURATION;
@@ -8,6 +9,13 @@ pub struct Tooltip<State: TooltipMarkerState> {
     pub id: Id,
     pub state: State,
 }
+
+// #[derive(Debug, Clone, Copy)]
+// pub struct Tooltip<'a> {
+//     pub id: Id,
+//     pub content: Option<&str>,
+//     pub animation: Animted<bool>,
+// }
 
 #[derive(Clone, Debug)]
 pub struct Hidden;
