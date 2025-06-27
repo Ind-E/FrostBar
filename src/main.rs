@@ -153,7 +153,7 @@ pub enum Message {
     SysTrayEvent(system_tray::client::Event),
     SysTrayInteraction(SysTrayInteraction),
     CloseSysTrayMenu,
-    AnimationTick(Instant),
+    AnimationFinished(container::Id),
     DestroyWindow(Id),
     NoOp,
 }
@@ -251,14 +251,6 @@ impl Bar {
                 client: Arc::clone(client),
             }))
         }
-        if self.tooltips.values().any(|tip| {
-            tip.animating.value || tip.animating.in_progress(Instant::now())
-        }) {
-            subscriptions.push(
-                time::every(std::time::Duration::from_millis(16))
-                    .map(Message::AnimationTick),
-            );
-        }
         Subscription::batch(subscriptions)
     }
 
@@ -337,6 +329,12 @@ impl Bar {
                                 TooltipState::Hiding => {
                                     tooltip.state = TooltipState::Visible;
                                     tooltip.animating.transition(true, now);
+
+                                    if let Some(handle) =
+                                        tooltip.abort_handle.take()
+                                    {
+                                        handle.abort();
+                                    }
                                 }
                                 _ => {}
                             }
@@ -347,15 +345,29 @@ impl Bar {
                 Task::none()
             }
             Message::MouseExitedBar => {
-                self.tooltips.values_mut().for_each(|tip| {
-                    if tip.state == TooltipState::Visible
-                        || tip.state == TooltipState::Measuring
+                for (id, tooltip) in self.tooltips.iter_mut() {
+                    if tooltip.state == TooltipState::Visible
+                        || tooltip.state == TooltipState::Measuring
                     {
                         let now = std::time::Instant::now();
-                        tip.state = TooltipState::Hiding;
-                        tip.animating.transition(false, now);
+                        tooltip.state = TooltipState::Hiding;
+                        tooltip.animating.transition(false, now);
+
+                        let id = id.clone();
+
+                        let (task, handle) = Task::abortable(Task::perform(
+                            async move {
+                                tokio::time::sleep(
+                                    std::time::Duration::from_millis(175),
+                                )
+                                .await;
+                            },
+                            move |_| Message::AnimationFinished(id.clone()),
+                        ));
+                        tooltip.abort_handle = Some(handle);
+                        return task;
                     }
-                });
+                }
                 self.hovered_workspace_index = None;
                 Task::none()
             }
@@ -372,6 +384,23 @@ impl Bar {
                                 let now = std::time::Instant::now();
                                 tooltip.state = TooltipState::Hiding;
                                 tooltip.animating.transition(false, now);
+
+                                let (task, handle) =
+                                    Task::abortable(Task::perform(
+                                        async move {
+                                            tokio::time::sleep(
+                                                std::time::Duration::from_millis(
+                                                    175,
+                                                ),
+                                            )
+                                            .await;
+                                        },
+                                        move |_| {
+                                            Message::AnimationFinished(id.clone())
+                                        },
+                                    ));
+                                tooltip.abort_handle = Some(handle);
+                                return task;
                             }
                         }
                     }
@@ -588,17 +617,15 @@ impl Bar {
                 self.systray_menu_open = false;
                 iced::window::close(self.systray_menu_id)
             }
-            Message::AnimationTick(now) => {
-                let mut tasks = vec![];
-                for tip in self.tooltips.values_mut() {
-                    if tip.state == TooltipState::Hiding
-                        && !tip.animating.in_progress(now)
-                    {
-                        tip.state = TooltipState::Hidden;
-                        tasks.push(Task::done(Message::DestroyWindow(tip.id)));
+            Message::AnimationFinished(id) => {
+                if let Some(tooltip) = self.tooltips.get_mut(&id) {
+                    if tooltip.state == TooltipState::Hiding {
+                        tooltip.state = TooltipState::Hidden;
+                        tooltip.abort_handle = None;
+                        return Task::done(Message::DestroyWindow(tooltip.id));
                     }
                 }
-                Task::batch(tasks)
+                Task::none()
             }
             Message::DestroyWindow(id) => iced::window::close(id),
             Message::NoOp => Task::none(),
@@ -616,7 +643,6 @@ impl Bar {
             }
             let content = &tooltip.content.as_ref().unwrap();
             let width = tooltip.animating.animate_bool(0.0, 300.0, now);
-            println!("{width}");
             return Container::new(
                 Container::new(
                     content

@@ -8,6 +8,7 @@ pub struct Tooltip {
     pub content: Option<String>,
     pub animating: Animated<bool, Instant>,
     pub state: TooltipState,
+    pub abort_handle: Option<iced::task::Handle>,
 }
 
 impl Default for Tooltip {
@@ -20,6 +21,7 @@ impl Default for Tooltip {
                 .easing(Easing::EaseInOut)
                 .delay(30.0),
             state: TooltipState::Hidden,
+            abort_handle: None,
         }
     }
 }
