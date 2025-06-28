@@ -1,18 +1,22 @@
 use futures_util::stream::{Stream, StreamExt, select_all};
 use iced::{
-    Element,
+    Border, Color, Element, Length,
     advanced::subscription,
+    border::Radius,
     mouse::Interaction,
-    widget::{Image, MouseArea, image, text},
+    widget::{Container, Image, MouseArea, container, image, text},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
-use crate::{dbus_proxy::PlayerProxy, icon_cache::MprisArtCache, Message};
+use crate::{
+    BAR_WIDTH, Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
+};
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 
-type EventStream = Pin<Box<dyn Stream<Item = Result<MprisEvent, zbus::Error>> + Send>>;
+type EventStream =
+    Pin<Box<dyn Stream<Item = Result<MprisEvent, zbus::Error>> + Send>>;
 
 #[derive(Clone, Debug)]
 pub enum MprisEvent {
@@ -88,11 +92,30 @@ impl MprisPlayer {
                 .interaction(Interaction::Pointer)
                 .into()
         } else {
-            MouseArea::new(text("󰜺").size(30))
-                .on_release(Message::PlayPause(self.name.clone()))
-                .on_right_release(Message::NextSong(self.name.clone()))
-                .interaction(Interaction::Pointer)
-                .into()
+            MouseArea::new(
+                Container::new(
+                    text("󰝚")
+                        .size(18)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center(),
+                )
+                .padding(5)
+                .width(BAR_WIDTH as u16 - 16)
+                .height(BAR_WIDTH as u16 - 16)
+                .style(|_| container::Style {
+                    border: Border {
+                        color: Color::WHITE,
+                        width: 1.0,
+                        radius: Radius::new(1),
+                    },
+                    ..Default::default()
+                }),
+            )
+            .on_release(Message::PlayPause(self.name.clone()))
+            .on_right_release(Message::NextSong(self.name.clone()))
+            .interaction(Interaction::Pointer)
+            .into()
         }
     }
 }
@@ -176,7 +199,10 @@ impl subscription::Recipe for MprisListener {
     }
 }
 
-async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisEvent {
+async fn get_initial_player_state(
+    connection: &Connection,
+    name: &str,
+) -> MprisEvent {
     let proxy = PlayerProxy::new(connection, name).await.unwrap();
     let status = proxy.playback_status().await.unwrap();
     let metadata = proxy.metadata().await.unwrap();

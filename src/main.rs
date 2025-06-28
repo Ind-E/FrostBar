@@ -26,7 +26,6 @@ use itertools::Itertools;
 use niri_ipc::Request;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use system_tray::client::ActivateRequest;
 use zbus::Connection;
 
@@ -53,7 +52,6 @@ use crate::{
         SysTrayInteraction, SysTrayState, SysTraySubscription, create_client,
         to_widget,
     },
-    // tooltip::{Hidden, Tooltip, TooltipState},
     tooltip::{Tooltip, TooltipState},
     utils::align_clock,
 };
@@ -139,7 +137,7 @@ pub enum Message {
     MouseEntered(MouseEnterEvent),
     MouseExited(MouseEnterEvent),
     MouseExitedBar,
-    TooltipMeasured(container::Id, Option<Rectangle>),
+    TooltipPositioned(container::Id, Option<Rectangle>),
     NiriEvent(Result<niri_ipc::Event, IpcError>),
     FocusWorkspace(u8),
     FocusWindow(u64),
@@ -320,7 +318,7 @@ impl Bar {
                                     tooltip.animating.transition(true, now);
                                     return container::visible_bounds(id.clone())
                                         .map(move |rect| {
-                                            Message::TooltipMeasured(
+                                            Message::TooltipPositioned(
                                                 id.clone(),
                                                 rect,
                                             )
@@ -344,6 +342,7 @@ impl Bar {
 
                 Task::none()
             }
+            //TODO: make this batch tasks instead of returning early
             Message::MouseExitedBar => {
                 for (id, tooltip) in self.tooltips.iter_mut() {
                     if tooltip.state == TooltipState::Visible
@@ -408,7 +407,7 @@ impl Bar {
 
                 Task::none()
             }
-            Message::TooltipMeasured(id, rect) => {
+            Message::TooltipPositioned(id, rect) => {
                 if let Some(tooltip) = self.tooltips.get_mut(&id) {
                     if tooltip.state != TooltipState::Measuring {
                         return Task::none();
@@ -638,9 +637,6 @@ impl Bar {
             self.tooltips.iter().filter(|(_, tooltip)| tooltip.id == id)
         {
             let now = std::time::Instant::now();
-            if !tooltip.animating.in_progress(now) && !tooltip.animating.value {
-                return column![].into();
-            }
             let content = &tooltip.content.as_ref().unwrap();
             let width = tooltip.animating.animate_bool(0.0, 300.0, now);
             return Container::new(
