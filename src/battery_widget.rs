@@ -4,11 +4,13 @@ use iced::{
 };
 use std::sync::LazyLock;
 use std::sync::Mutex;
+
+use crate::bar::{Message, MouseEnterEvent};
 extern crate starship_battery as battery;
 
-use crate::{Message, MouseEnterEvent};
-static BATTERY_MANAGER: LazyLock<Mutex<Result<battery::Manager, battery::Error>>> =
-    LazyLock::new(|| Mutex::new(battery::Manager::new()));
+static BATTERY_MANAGER: LazyLock<
+    Mutex<Result<battery::Manager, battery::Error>>,
+> = LazyLock::new(|| Mutex::new(battery::Manager::new()));
 
 #[derive(Debug, Clone)]
 pub struct BatteryInfo {
@@ -56,7 +58,8 @@ pub fn battery_icon<'a>(
         return stack![].into();
     }
     let info = info.as_ref().unwrap();
-    let percentage = info.iter().map(|b| b.percentage).sum::<f32>() / info.len() as f32;
+    let percentage =
+        info.iter().map(|b| b.percentage).sum::<f32>() / info.len() as f32;
     let icon = match percentage {
         x if x < 0.0 => "?",
         x if x < 0.1 => "󰁺",
@@ -73,7 +76,9 @@ pub fn battery_icon<'a>(
     };
 
     let charging: bool = info.iter().all(|b| match b.state {
-        battery::State::Unknown | battery::State::Charging | battery::State::Full => true,
+        battery::State::Unknown
+        | battery::State::Charging
+        | battery::State::Full => true,
         battery::State::Discharging | battery::State::Empty => false,
     });
 

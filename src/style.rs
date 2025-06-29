@@ -25,7 +25,7 @@ pub fn tooltip_style<'a>(opacity: f32) -> container::StyleFn<'a, Theme> {
         ))),
         border: Border {
             radius: top_right(12).bottom_right(12),
-            width: 0.928,
+            width: 0.0,
             ..Default::default()
         },
         ..Default::default()

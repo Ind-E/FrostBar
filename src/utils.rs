@@ -1,9 +1,9 @@
 use chrono::{Local, Timelike};
 use iced::{Task, time::Duration};
 use tokio::time::sleep;
-extern crate starship_battery as battery;
 
-use crate::Message;
+use crate::bar::Message;
+extern crate starship_battery as battery;
 
 pub fn align_clock() -> Task<Message> {
     Task::perform(

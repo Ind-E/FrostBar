@@ -6,7 +6,7 @@ use iced::{
     border::Radius,
     futures::Stream,
     mouse::Interaction,
-    padding::{left, top},
+    padding::top,
     widget::{
         Column, Container, Image, MouseArea, Svg,
         container::{self, StyleFn},
@@ -18,7 +18,10 @@ use niri_ipc::{Event, Request, socket::Socket};
 use std::{cmp::Ordering, collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 
-use crate::{Message, MouseEnterEvent, icon_cache::Icon};
+use crate::{
+    bar::{Message, MouseEnterEvent},
+    icon_cache::Icon,
+};
 
 pub struct NiriEvents;
 
@@ -91,7 +94,9 @@ impl<'a> Workspace<'a> {
                 .align_x(Horizontal::Center),
             )
             .on_press(Message::FocusWorkspace(*self.idx))
-            .on_enter(Message::MouseEntered(MouseEnterEvent::Workspace(*self.idx)))
+            .on_enter(Message::MouseEntered(MouseEnterEvent::Workspace(
+                *self.idx,
+            )))
             .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
             .interaction(Interaction::Pointer),
         )
@@ -129,7 +134,8 @@ impl NiriState {
     pub fn on_event(&mut self, event: Event) {
         match event {
             Event::WorkspacesChanged { workspaces } => {
-                self.workspaces = workspaces.into_iter().map(|ws| (ws.id, ws)).collect()
+                self.workspaces =
+                    workspaces.into_iter().map(|ws| (ws.id, ws)).collect()
             }
             Event::WindowsChanged { windows } => {
                 self.windows = windows.into_iter().map(|w| (w.id, w)).collect()

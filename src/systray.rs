@@ -16,7 +16,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
 use crate::{
-    Message,
+    bar::Message,
     icon_cache::{Icon, IconCache},
 };
 

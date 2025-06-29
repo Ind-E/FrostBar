@@ -10,7 +10,7 @@ use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use crate::{
-    BAR_WIDTH, Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
+    BAR_WIDTH, bar::Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
 };
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
