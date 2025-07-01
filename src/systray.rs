@@ -174,7 +174,7 @@ impl subscription::Recipe for SysTraySubscription {
         let message_stream = broadcast_stream.filter_map(|result| match result {
             Ok(event) => Some(Message::SysTrayEvent(event)),
             Err(e) => {
-                eprintln!("{e}");
+                eprintln!(" systray subscription error: {e}");
                 None
             }
         });

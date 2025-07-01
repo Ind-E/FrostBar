@@ -8,7 +8,7 @@ pub struct Tooltip {
     pub animating: Animated<bool, Instant>,
     pub state: TooltipState,
     pub abort_handle: Option<iced::task::Handle>,
-    pub position: Point,
+    pub position: Option<Point>,
 }
 
 impl Default for Tooltip {
@@ -21,7 +21,7 @@ impl Default for Tooltip {
                 .delay(30.0),
             state: TooltipState::Hidden,
             abort_handle: None,
-            position: Point::new(0.0, 0.0),
+            position: None,
         }
     }
 }

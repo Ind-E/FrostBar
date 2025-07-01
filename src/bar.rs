@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Background, Border, Color, Element, Event, Length, Point, Rectangle,
-    Subscription, Task, Theme,
+    Background, Color, Element, Event, Length, Point, Rectangle, Subscription,
+    Task, Theme,
     advanced::{mouse, subscription},
     alignment::{Horizontal, Vertical},
     event,
@@ -21,8 +21,10 @@ use iced_layershell::{
 };
 use itertools::Itertools;
 use niri_ipc::Request;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use system_tray::client::ActivateRequest;
 use zbus::Connection;
 
@@ -333,7 +335,7 @@ impl Bar {
 
                     if let Some(rect) = rect {
                         let y = rect.y - rect.width / 4.0;
-                        tooltip.position = Point::new(0.0, y);
+                        tooltip.position = Some(Point::new(0.0, y));
                     }
                 }
                 Task::none()
@@ -404,7 +406,7 @@ impl Bar {
                 Task::none()
             }
             Message::ErrorMessage(msg) => {
-                eprintln!("{}", msg);
+                eprintln!("error message: {}", msg);
                 Task::none()
             }
             Message::CavaUpdate(update) => {
@@ -417,7 +419,7 @@ impl Bar {
                         self.cava_visualizer.cache.clear();
                     }
                     Err(e) => {
-                        eprintln!("{}", e);
+                        eprintln!("cava error: {}", e);
                     }
                 };
                 Task::none()
@@ -530,7 +532,9 @@ impl Bar {
                                         .await
                                     {
                                         Ok(()) => {}
-                                        Err(e) => eprintln!("{e}"),
+                                        Err(e) => {
+                                            eprintln!("sys tray error: {e}")
+                                        }
                                     }
                                 },
                                 |_| Message::NoOp,
@@ -732,6 +736,7 @@ impl Bar {
                     tooltip.state != TooltipState::Hidden
                         && tooltip.state != TooltipState::Measuring
                         && tooltip.content.is_some()
+                        && tooltip.position.is_some()
                 })
                 .fold(Stack::new(), |stack, (_id, tooltip)| {
                     let now = std::time::Instant::now();
@@ -763,7 +768,18 @@ impl Bar {
                         .width(width)
                         .clip(true),
                     )
-                    .padding(top(tooltip.position.y).left(tooltip.position.x))
+                    .padding(
+                        top(tooltip
+                            .position
+                            .and_then(|p| Some(p.y))
+                            .unwrap_or(0.0))
+                        .left(
+                            tooltip
+                                .position
+                                .and_then(|p| Some(p.x))
+                                .unwrap_or(0.0),
+                        ),
+                    )
                     .width(Length::Fill)
                     .height(Length::Fill);
 

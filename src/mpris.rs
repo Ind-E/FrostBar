@@ -138,7 +138,7 @@ impl subscription::Recipe for MprisListener {
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("{e}");
+                    eprintln!("mpris stream error: {e}");
                     return;
                 }
             };
