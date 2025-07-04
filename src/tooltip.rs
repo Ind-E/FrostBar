@@ -1,4 +1,4 @@
-use iced::Point;
+use iced::{Point, Size};
 use lilt::{Animated, Easing};
 use std::time::Instant;
 
@@ -9,6 +9,7 @@ pub struct Tooltip {
     pub state: TooltipState,
     pub abort_handle: Option<iced::task::Handle>,
     pub position: Option<Point>,
+    pub size: Option<Size>,
 }
 
 impl Default for Tooltip {
@@ -22,13 +23,15 @@ impl Default for Tooltip {
             state: TooltipState::Hidden,
             abort_handle: None,
             position: None,
+            size: None
         }
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TooltipState {
     Hidden,
-    Measuring,
+    MeasuringPosition,
+    MeasuringContentSize,
     Visible,
     Hiding,
 }

@@ -20,6 +20,7 @@ mod style;
 mod systray;
 mod tooltip;
 mod utils;
+mod animated_container;
 
 #[tokio::main]
 pub async fn main() -> Result<(), iced_layershell::Error> {

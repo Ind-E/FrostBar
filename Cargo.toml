@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = { version = "0.4.41", default-features = false, features = ["std", "iana-time-zone", "js-sys", "wasmbind", "android-tzdata", "wasm-bindgen", "oldtime", "now", "clock", "alloc"] }
-iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg", "advanced", "canvas", "image", "wgpu"] }
+iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg", "advanced", "canvas", "image", "wgpu", "lazy"] }
 iced_layershell = "0.13.7"
 iced_runtime = { version = "0.13.2", default-features = false }
 starship-battery = { version = "0.10.2", default-features = false }

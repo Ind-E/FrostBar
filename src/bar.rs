@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use iced::Size;
 use iced::{
     Background, Color, Element, Event, Length, Point, Rectangle, Subscription,
     Task, Theme,
@@ -36,6 +37,7 @@ use tokio::{
     },
 };
 
+use crate::animated_container::AnimatedContainer;
 use crate::{
     battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
     cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
@@ -74,6 +76,7 @@ pub enum Message {
     MouseExited(MouseEnterEvent),
     MouseExitedBar,
     TooltipMeasured(container::Id, Option<Rectangle>),
+    TooltipContentMeasured(container::Id, Size),
     NiriEvent(Result<niri_ipc::Event, IpcError>),
     FocusWorkspace(u8),
     FocusWindow(u64),
@@ -284,8 +287,30 @@ impl Bar {
                             let now = std::time::Instant::now();
                             match tooltip.state {
                                 TooltipState::Hidden => {
-                                    tooltip.state = TooltipState::Measuring;
-                                    tooltip.animating.transition(true, now);
+                                    let tooltip_content: String = if let Some(
+                                        info,
+                                    ) =
+                                        &self.battery_info.1
+                                    {
+                                        info.iter()
+                                            .enumerate()
+                                            .map(|(i, bat)| {
+                                                format!(
+                                                    "Battery {}: {}% ({})",
+                                                    i + 1,
+                                                    (bat.percentage * 100.0)
+                                                        .floor(),
+                                                    bat.state
+                                                )
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n")
+                                    } else {
+                                        "No Battery Info".to_string()
+                                    };
+                                    tooltip.content = Some(tooltip_content);
+                                    tooltip.state =
+                                        TooltipState::MeasuringPosition;
                                     return container::visible_bounds(id.clone())
                                         .map(move |rect| {
                                             Message::TooltipMeasured(
@@ -307,44 +332,35 @@ impl Bar {
                 Task::none()
             }
             Message::TooltipMeasured(id, rect) => {
-                if let Some(tooltip) = self.tooltips.get_mut(&id) {
-                    if tooltip.state != TooltipState::Measuring {
-                        return Task::none();
-                    }
-
-                    tooltip.state = TooltipState::Visible;
-
-                    let tooltip_content: String =
-                        if let Some(info) = &self.battery_info.1 {
-                            info.iter()
-                                .enumerate()
-                                .map(|(i, bat)| {
-                                    format!(
-                                        "Battery {}: {}% ({})",
-                                        i + 1,
-                                        (bat.percentage * 100.0).floor(),
-                                        bat.state
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        } else {
-                            "No Battery Info".to_string()
-                        };
-                    tooltip.content = Some(tooltip_content);
-
+                if let Some(tooltip) = self.tooltips.get_mut(&id)
+                    && tooltip.state == TooltipState::MeasuringPosition
+                {
                     if let Some(rect) = rect {
                         let y = rect.y - rect.width / 4.0;
                         tooltip.position = Some(Point::new(0.0, y));
                     }
+                    tooltip.state = TooltipState::MeasuringContentSize;
                 }
+                Task::none()
+            }
+            Message::TooltipContentMeasured(id, size) => {
+                if let Some(tooltip) = self.tooltips.get_mut(&id)
+                    && tooltip.state == TooltipState::MeasuringContentSize
+                {
+                    tooltip.size = Some(size);
+                    tooltip.state = TooltipState::Visible;
+
+                    let now = std::time::Instant::now();
+                    tooltip.animating.transition(true, now);
+                }
+
                 Task::none()
             }
             //TODO: make this batch tasks instead of returning early
             Message::MouseExitedBar => {
                 for (id, tooltip) in self.tooltips.iter_mut() {
-                    if tooltip.state == TooltipState::Visible
-                        || tooltip.state == TooltipState::Measuring
+                    if tooltip.state != TooltipState::Hidden
+                        && tooltip.state != TooltipState::Hiding
                     {
                         let now = std::time::Instant::now();
                         tooltip.state = TooltipState::Hiding;
@@ -375,8 +391,8 @@ impl Bar {
                     }
                     MouseEnterEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id) {
-                            if tooltip.state == TooltipState::Visible
-                                || tooltip.state == TooltipState::Measuring
+                            if tooltip.state != TooltipState::Hidden
+                                && tooltip.state != TooltipState::Hiding
                             {
                                 let now = std::time::Instant::now();
                                 tooltip.state = TooltipState::Hiding;
@@ -733,54 +749,73 @@ impl Bar {
             self.tooltips
                 .iter()
                 .filter(|(_id, tooltip)| {
-                    tooltip.state != TooltipState::Hidden
-                        && tooltip.state != TooltipState::Measuring
-                        && tooltip.content.is_some()
-                        && tooltip.position.is_some()
+                    matches!(
+                        tooltip.state,
+                        TooltipState::MeasuringContentSize
+                            | TooltipState::Visible
+                            | TooltipState::Hiding
+                    )
                 })
-                .fold(Stack::new(), |stack, (_id, tooltip)| {
+                .fold(Stack::new(), |stack, (id, tooltip)| {
+                    let Some(content) = tooltip.content.as_ref() else {
+                        return stack;
+                    };
+                    let Some(position) = tooltip.position else {
+                        return stack;
+                    };
+
                     let now = std::time::Instant::now();
-                    let content = &tooltip.content.as_ref().unwrap();
-                    let width = tooltip.animating.animate_bool(0.0, 300.0, now);
+                    let animation_progress =
+                        tooltip.animating.animate_bool(0.0, 1.0, now);
+                    let id_ = id.clone();
+
+                    let width = match tooltip.state {
+                        TooltipState::MeasuringContentSize => Length::Shrink,
+
+                        _ => {
+                            let target_width =
+                                tooltip.size.map_or(0.0, |s| s.width);
+                            Length::Fixed(target_width * animation_progress)
+                        }
+                    };
+
+                    let position = match tooltip.state {
+                        TooltipState::MeasuringContentSize => {
+                            Point::new(-1000.0, -1000.0)
+                        }
+                        _ => position,
+                    };
+
                     let widget = Container::new(
-                        Container::new(
+                        AnimatedContainer::new(
                             content
                                 .lines()
                                 .map(|line| {
                                     Container::new(
                                         Text::new(line)
                                             .size(16)
-                                            // .color(Color::from_rgba(1.0, 1.0, 1.0, progress))
                                             .line_height(
                                                 text::LineHeight::Relative(1.0),
                                             )
                                             .shaping(text::Shaping::Basic)
                                             .wrapping(text::Wrapping::None),
                                     )
-                                    .width(Length::Fill)
+                                    .width(Length::Shrink)
                                     .height(Length::Fixed(16.0))
                                     .clip(true)
                                 })
                                 .fold(Column::new(), |col, text| col.push(text)),
+                            move |size| {
+                                Message::TooltipContentMeasured(id_.clone(), size)
+                            },
                         )
                         .style(tooltip_style(1.0))
                         .padding(7)
                         .width(width)
                         .clip(true),
                     )
-                    .padding(
-                        top(tooltip
-                            .position
-                            .and_then(|p| Some(p.y))
-                            .unwrap_or(0.0))
-                        .left(
-                            tooltip
-                                .position
-                                .and_then(|p| Some(p.x))
-                                .unwrap_or(0.0),
-                        ),
-                    )
-                    .width(Length::Fill)
+                    .padding(top(position.y).left(position.x))
+                    .width(Length::Shrink)
                     .height(Length::Fill);
 
                     stack.push(widget)
