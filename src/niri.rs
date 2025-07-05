@@ -76,7 +76,11 @@ pub struct Workspace<'a> {
 }
 
 impl<'a> Workspace<'a> {
-    pub fn to_widget(&self, hovered: bool) -> Element<'a, Message> {
+    pub fn to_widget(
+        &self,
+        hovered: bool,
+        id: container::Id,
+    ) -> Element<'a, Message> {
         Container::new(
             MouseArea::new(
                 Container::new(
@@ -100,6 +104,7 @@ impl<'a> Workspace<'a> {
             .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
             .interaction(Interaction::Pointer),
         )
+        .id(id)
         .into()
     }
 }
