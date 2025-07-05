@@ -5,7 +5,7 @@ use iced::{
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
-use crate::bar::{Message, MouseEnterEvent};
+use crate::bar::{Message, MouseEvent};
 extern crate starship_battery as battery;
 
 static BATTERY_MANAGER: LazyLock<
@@ -97,8 +97,8 @@ pub fn battery_icon<'a>(
                     bottom: 0.0
                 })
         ])
-        .on_enter(Message::MouseEntered(MouseEnterEvent::Tooltip(id.clone())))
-        .on_exit(Message::MouseExited(MouseEnterEvent::Tooltip(id)))
+        .on_enter(Message::MouseEntered(MouseEvent::Tooltip(id.clone())))
+        .on_exit(Message::MouseExited(MouseEvent::Tooltip(id)))
         .into()
     } else {
         icon_widget.into()

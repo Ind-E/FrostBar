@@ -8,6 +8,7 @@ use iced_layershell::{
 
 use crate::bar::Bar;
 
+mod animated_container;
 mod bar;
 mod battery_widget;
 mod cava;
@@ -20,7 +21,6 @@ mod style;
 mod systray;
 mod tooltip;
 mod utils;
-mod animated_container;
 
 #[tokio::main]
 pub async fn main() -> Result<(), iced_layershell::Error> {

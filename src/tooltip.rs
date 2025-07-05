@@ -7,7 +7,6 @@ pub struct Tooltip {
     pub content: Option<String>,
     pub animating: Animated<bool, Instant>,
     pub state: TooltipState,
-    pub abort_handle: Option<iced::task::Handle>,
     pub position: Option<Point>,
     pub size: Option<Size>,
 }
@@ -21,17 +20,19 @@ impl Default for Tooltip {
                 .easing(Easing::EaseInOut)
                 .delay(30.0),
             state: TooltipState::Hidden,
-            abort_handle: None,
             position: None,
-            size: None
+            size: None,
         }
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TooltipState {
     Hidden,
-    MeasuringPosition,
-    MeasuringContentSize,
-    Visible,
-    Hiding,
+    Measuring {
+        content_measured: bool,
+        position_measured: bool,
+    },
+    AnimatingIn,
+    FullyVisible,
+    AnimatingOut,
 }

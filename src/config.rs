@@ -14,3 +14,5 @@ pub const FIRA_CODE: Font = Font {
     weight: Weight::Medium,
     ..Font::DEFAULT
 };
+
+pub const ICON_THEME: &str = "Flat-Remix-Blue-Dark";

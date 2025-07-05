@@ -19,63 +19,64 @@ use std::{cmp::Ordering, collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 
 use crate::{
-    bar::{Message, MouseEnterEvent},
-    icon_cache::Icon,
+    bar::{Message, MouseEvent},
+    icon_cache::{Icon, IconCache},
 };
 
 pub struct NiriEvents;
 
 #[derive(Eq)]
-pub struct Window<'a> {
-    pub title: &'a Option<String>,
-    pub id: &'a u64,
+pub struct Window {
+    pub title: Option<String>,
+    pub id: u64,
     pub icon: Option<Icon>,
 }
 
-impl<'a> PartialEq for Window<'a> {
+impl PartialEq for Window {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<'a> Window<'a> {
+impl<'a> Window {
     pub fn to_widget(&self) -> Element<'a, Message> {
         match &self.icon {
             Some(Icon::Svg(handle)) => {
                 MouseArea::new(Svg::new(handle.clone()).height(24).width(24))
-                    .on_right_press(Message::FocusWindow(*self.id))
+                    .on_right_press(Message::FocusWindow(self.id))
                     .into()
             }
             Some(Icon::Raster(handle)) => {
                 MouseArea::new(Image::new(handle.clone()).height(24).width(24))
-                    .on_right_press(Message::FocusWindow(*self.id))
+                    .on_right_press(Message::FocusWindow(self.id))
                     .into()
             }
-            Option::None => MouseArea::new(text(self.id)).into(),
+            Option::None => unreachable!(),
         }
     }
 }
 
-impl<'a> PartialOrd for Window<'a> {
+impl PartialOrd for Window {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a> Ord for Window<'a> {
+impl Ord for Window {
     fn cmp(&self, other: &Self) -> Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-pub struct Workspace<'a> {
-    pub output: &'a Option<String>,
-    pub idx: &'a u8,
-    pub is_active: &'a bool,
-    pub windows: Vec<Window<'a>>,
+pub struct Workspace {
+    pub output: Option<String>,
+    pub idx: u8,
+    pub id: u64,
+    pub is_active: bool,
+    pub windows: HashMap<u64, Window>,
 }
 
-impl<'a> Workspace<'a> {
+impl<'a> Workspace {
     pub fn to_widget(
         &self,
         hovered: bool,
@@ -89,7 +90,7 @@ impl<'a> Workspace<'a> {
                             .align_x(Horizontal::Center)
                             .spacing(5)
                             .push(text(self.idx - 1).size(20)),
-                        |col, w| col.push(w.to_widget()),
+                        |col, (_, w)| col.push(w.to_widget()),
                     ),
                 )
                 .style(workspace_style(self.is_active, hovered))
@@ -97,22 +98,38 @@ impl<'a> Workspace<'a> {
                 .width(Length::Fill)
                 .align_x(Horizontal::Center),
             )
-            .on_press(Message::FocusWorkspace(*self.idx))
-            .on_enter(Message::MouseEntered(MouseEnterEvent::Workspace(
-                *self.idx,
-            )))
-            .on_exit(Message::MouseExited(MouseEnterEvent::Workspace(*self.idx)))
+            .on_press(Message::FocusWorkspace(self.idx))
+            .on_enter(Message::MouseEntered(MouseEvent::Workspace(self.idx)))
+            .on_exit(Message::MouseExited(MouseEvent::Workspace(self.idx)))
             .interaction(Interaction::Pointer),
         )
         .id(id)
         .into()
     }
+
+    pub fn window_titles(&self) -> String {
+        let window_titles: Vec<String> = self
+            .windows
+            .iter()
+            .sorted()
+            .map(|(_, w)| {
+                if let Some(title) = &w.title {
+                    title.clone()
+                } else {
+                    "N/A".to_string()
+                }
+            })
+            .filter(|t| !t.is_empty())
+            .collect();
+
+        return window_titles.join("\n");
+    }
 }
 
-fn workspace_style<'a>(active: &'a bool, hovered: bool) -> StyleFn<'a, Theme> {
+fn workspace_style<'a>(active: bool, hovered: bool) -> StyleFn<'a, Theme> {
     Box::new(move |_| container::Style {
         border: Border {
-            color: if *active {
+            color: if active {
                 Color::WHITE
             } else {
                 Color::from_rgb(0.3, 0.3, 0.3)
@@ -129,29 +146,87 @@ fn workspace_style<'a>(active: &'a bool, hovered: bool) -> StyleFn<'a, Theme> {
     })
 }
 
-#[derive(Default)]
 pub struct NiriState {
-    pub workspaces: HashMap<u64, niri_ipc::Workspace>,
+    pub workspaces: HashMap<u64, Workspace>,
     pub windows: HashMap<u64, niri_ipc::Window>,
+    pub icon_cache: IconCache,
+}
+
+fn map_window(window: &niri_ipc::Window, icon_cache: &mut IconCache) -> Window {
+    Window {
+        title: window.title.clone(),
+        id: window.id,
+        icon: window
+            .app_id
+            .as_ref()
+            .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
+    }
 }
 
 impl NiriState {
+    pub fn new(icon_cache: IconCache) -> Self {
+        Self {
+            workspaces: HashMap::new(),
+            windows: HashMap::new(),
+            icon_cache,
+        }
+    }
+
     pub fn on_event(&mut self, event: Event) {
         match event {
             Event::WorkspacesChanged { workspaces } => {
-                self.workspaces =
-                    workspaces.into_iter().map(|ws| (ws.id, ws)).collect()
+                self.workspaces = workspaces
+                    .into_iter()
+                    .map(|ws| Workspace {
+                        output: ws.output,
+                        idx: ws.idx,
+                        id: ws.id,
+                        is_active: ws.is_active,
+                        windows: self
+                            .windows
+                            .iter()
+                            .filter(|(_, w)| w.workspace_id == Some(ws.id))
+                            .map(|(id, w)| {
+                                (*id, map_window(w, &mut self.icon_cache))
+                            })
+                            .collect(),
+                    })
+                    .map(|ws| (ws.id, ws))
+                    .collect()
             }
             Event::WindowsChanged { windows } => {
-                self.windows = windows.into_iter().map(|w| (w.id, w)).collect()
+                self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
+
+                self.workspaces.values_mut().for_each(|ws| {
+                    ws.windows = self
+                        .windows
+                        .values()
+                        .filter(|w| w.workspace_id == Some(ws.id))
+                        .map(|w| (w.id, map_window(&w, &mut self.icon_cache)))
+                        .collect()
+                });
             }
             Event::WindowOpenedOrChanged { window } => {
+                let id = window.id.clone();
                 self.windows.insert(window.id, window);
+                let window = self.windows.get(&id).unwrap();
+
+                if let Some(ws_id) = window.workspace_id
+                    && let Some(ws) = self.workspaces.get_mut(&ws_id)
+                {
+                    ws.windows.insert(
+                        window.id,
+                        map_window(&window, &mut self.icon_cache),
+                    );
+                }
             }
             Event::WindowClosed { id } => {
                 self.windows.remove(&id);
+                self.workspaces.values_mut().for_each(|ws| {
+                    ws.windows.remove(&id);
+                });
             }
-            Event::WorkspaceActivated { id, focused } => {
+            Event::WorkspaceActivated { id, .. } => {
                 let output = self.workspaces.iter().find_map(|(wid, ws)| {
                     if wid == &id { ws.output.clone() } else { None }
                 });
@@ -162,7 +237,6 @@ impl NiriState {
                 }
                 self.workspaces.get_mut(&id).map(|ws| {
                     ws.is_active = true;
-                    ws.is_focused = focused;
                 });
             }
             Event::WorkspaceUrgencyChanged { id: _, urgent: _ } => {}

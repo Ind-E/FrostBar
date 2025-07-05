@@ -4,7 +4,7 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-use system_tray::item::{IconPixmap, StatusNotifierItem};
+use system_tray::item::StatusNotifierItem;
 
 use base64::engine::general_purpose;
 use color_eyre::{Result, eyre::Context};
@@ -14,6 +14,8 @@ use iced::widget::{
     svg,
 };
 use xdgkit::icon_finder;
+
+use crate::config::ICON_THEME;
 
 pub const DEFAULT_ICON: &str =
     "/usr/share/icons/Adwaita/16x16/apps/help-contents-symbolic.symbolic.png";
@@ -49,7 +51,6 @@ pub fn client_icon_path(app_id: &str) -> Result<PathBuf> {
         })
         .unwrap_or_else(|| PathBuf::from(DEFAULT_ICON));
 
-    // println!("{:?}", desktop_file);
     Ok(desktop_file)
 }
 
@@ -95,7 +96,7 @@ impl IconCache {
         self.inner.entry(key).or_insert_with(|| {
             if let Some(icon_name) = &item.icon_name {
                 lookup(icon_name)
-                    .with_theme("Flat-Remix-Blue-Dark")
+                    .with_theme(ICON_THEME)
                     .with_scale(2)
                     .find()
                     .and_then(|path| load_icon_from_path(&path))
