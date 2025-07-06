@@ -197,16 +197,29 @@ impl NiriState {
                 });
             }
             Event::WindowOpenedOrChanged { window } => {
-                let id = window.id.clone();
-                self.windows.insert(window.id, window);
-                let window = self.windows.get(&id).unwrap();
+                let window_id = window.id;
 
-                if let Some(ws_id) = window.workspace_id
-                    && let Some(ws) = self.workspaces.get_mut(&ws_id)
+                let old_workspace_id =
+                    self.windows.get(&window_id).and_then(|w| w.workspace_id);
+                let new_workspace_id = window.workspace_id;
+
+                if old_workspace_id != new_workspace_id {
+                    if let Some(old_ws_id) = old_workspace_id
+                        && let Some(old_ws) = self.workspaces.get_mut(&old_ws_id)
+                    {
+                        old_ws.windows.remove(&window_id);
+                    }
+                }
+
+                self.windows.insert(window_id, window);
+
+                if let Some(new_ws_id) = new_workspace_id
+                    && let Some(new_ws) = self.workspaces.get_mut(&new_ws_id)
                 {
-                    ws.windows.insert(
-                        window.id,
-                        map_window(&window, &mut self.icon_cache),
+                    let window_ref = self.windows.get(&window_id).unwrap();
+                    new_ws.windows.insert(
+                        window_id,
+                        map_window(window_ref, &mut self.icon_cache),
                     );
                 }
             }

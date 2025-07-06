@@ -10,7 +10,10 @@ use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use crate::{
-    BAR_WIDTH, bar::Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
+    BAR_WIDTH,
+    bar::{Message, MouseEvent},
+    dbus_proxy::PlayerProxy,
+    icon_cache::MprisArtCache,
 };
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
@@ -84,38 +87,70 @@ impl MprisPlayer {
         }
     }
 
-    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
-        if let Some(art) = &self.art {
-            MouseArea::new(Image::new(art))
+    pub fn tooltip(&self) -> String {
+        let raw_artists =
+            self.artists.clone().unwrap_or_else(|| "[]".to_string());
+        let raw_title = self.title.clone().unwrap_or_else(|| "\"\"".to_string());
+
+        let artists = raw_artists
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(',')
+            .map(|s| s.trim().trim_matches('"'))
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let title = raw_title.trim().trim_matches('"');
+
+        format!("{} - {}", artists, title)
+    }
+
+    pub fn to_widget<'a>(
+        &self,
+        id: Option<container::Id>,
+    ) -> Element<'a, Message> {
+        let content: Element<'a, Message> = if let Some(art) = &self.art {
+            Container::new(Image::new(art)).into()
+        } else {
+            Container::new(
+                text("󰝚")
+                    .size(18)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(),
+            )
+            .padding(5)
+            .width(BAR_WIDTH as u16 - 16)
+            .height(BAR_WIDTH as u16 - 16)
+            .style(|_| container::Style {
+                border: Border {
+                    color: Color::WHITE,
+                    width: 1.0,
+                    radius: Radius::new(1),
+                },
+                ..Default::default()
+            })
+            .into()
+        };
+
+        let container = Container::new(
+            MouseArea::new(content)
+                .on_enter(Message::MouseEntered(MouseEvent::MprisPlayer(
+                    self.name.clone(),
+                )))
+                .on_exit(Message::MouseExited(MouseEvent::MprisPlayer(
+                    self.name.clone(),
+                )))
                 .on_release(Message::PlayPause(self.name.clone()))
                 .on_right_release(Message::NextSong(self.name.clone()))
-                .interaction(Interaction::Pointer)
-                .into()
+                .interaction(Interaction::Pointer),
+        );
+
+        if let Some(id) = id {
+            container.id(id).into()
         } else {
-            MouseArea::new(
-                Container::new(
-                    text("󰝚")
-                        .size(18)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center(),
-                )
-                .padding(5)
-                .width(BAR_WIDTH as u16 - 16)
-                .height(BAR_WIDTH as u16 - 16)
-                .style(|_| container::Style {
-                    border: Border {
-                        color: Color::WHITE,
-                        width: 1.0,
-                        radius: Radius::new(1),
-                    },
-                    ..Default::default()
-                }),
-            )
-            .on_release(Message::PlayPause(self.name.clone()))
-            .on_right_release(Message::NextSong(self.name.clone()))
-            .interaction(Interaction::Pointer)
-            .into()
+            container.into()
         }
     }
 }

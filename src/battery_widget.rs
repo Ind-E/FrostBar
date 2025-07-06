@@ -18,43 +18,37 @@ pub struct BatteryInfo {
     pub state: battery::State,
 }
 
-pub fn fetch_battery_info() -> Message {
-    let manager_guard = BATTERY_MANAGER.lock().unwrap();
-    let manager: &battery::Manager = match manager_guard.as_ref() {
-        Ok(manager) => manager,
-        Err(e) => return err(e),
-    };
+pub fn fetch_battery_info() -> color_eyre::Result<Vec<BatteryInfo>> {
+    match BATTERY_MANAGER.try_lock().unwrap().as_ref() {
+        Ok(manager) => {
+            let batteries = match manager.batteries() {
+                Ok(batteries) => batteries,
+                Err(e) => return Err(e.into()),
+            };
 
-    let batteries = match manager.batteries() {
-        Ok(batteries) => batteries,
-        Err(e) => return err(&e),
-    };
-
-    let mut info = Vec::with_capacity(2);
-    for battery in batteries {
-        if let Ok(mut bat) = battery {
-            info.push(BatteryInfo {
-                percentage: (bat.energy() / bat.energy_full()).into(),
-                state: bat.state(),
-            });
-            if let Err(e) = manager.refresh(&mut bat) {
-                return err(&e);
+            let mut info = Vec::with_capacity(2);
+            for battery in batteries {
+                if let Ok(mut bat) = battery {
+                    info.push(BatteryInfo {
+                        percentage: (bat.energy() / bat.energy_full()).into(),
+                        state: bat.state(),
+                    });
+                    if let Err(e) = manager.refresh(&mut bat) {
+                        return Err(e.into());
+                    }
+                }
             }
+            Ok(info)
         }
+        Err(e) => Err(color_eyre::Report::msg(format!("{}", e))),
     }
-
-    Message::BatteryUpdate(info)
-}
-
-fn err(e: &battery::Error) -> Message {
-    Message::ErrorMessage(e.to_string())
 }
 
 pub fn battery_icon<'a>(
-    info: Option<&Vec<BatteryInfo>>,
+    info: &color_eyre::Result<Vec<BatteryInfo>>,
     id: container::Id,
 ) -> Element<'a, Message> {
-    if info.is_none() {
+    if info.is_err() {
         return stack![].into();
     }
     let info = info.as_ref().unwrap();

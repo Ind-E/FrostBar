@@ -24,4 +24,3 @@ futures-util = "0.3.31"
 system-tray = "0.7.0"
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 freedesktop-icons = "0.4.0"
-lilt = "0.8.1"

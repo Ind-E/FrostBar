@@ -8,7 +8,6 @@ use iced_layershell::{
 
 use crate::bar::Bar;
 
-mod animated_container;
 mod bar;
 mod battery_widget;
 mod cava;
@@ -20,10 +19,9 @@ mod niri;
 mod style;
 mod systray;
 mod tooltip;
-mod utils;
 
 #[tokio::main]
-pub async fn main() -> Result<(), iced_layershell::Error> {
+pub async fn main() -> color_eyre::Result<()> {
     daemon(Bar::namespace, Bar::update, Bar::view, Bar::remove_id)
         .subscription(Bar::subscription)
         .style(Bar::style)
@@ -42,5 +40,6 @@ pub async fn main() -> Result<(), iced_layershell::Error> {
             },
             ..Default::default()
         })
-        .run_with(|| Bar::new())
+        .run_with(|| Bar::new())?;
+    Ok(())
 }

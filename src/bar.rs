@@ -1,11 +1,11 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Background, Color, Element, Event, Length, Point, Rectangle, Size,
-    Subscription, Task, Theme,
+    Background, Color, Element, Event, Length, Point, Rectangle, Subscription,
+    Task, Theme,
     advanced::{mouse, subscription},
     alignment::{Horizontal, Vertical},
     event,
-    mouse::{Interaction, ScrollDelta},
+    mouse::ScrollDelta,
     padding::{left, top},
     time::{self, Duration},
     widget::{
@@ -24,7 +24,6 @@ use niri_ipc::Request;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Instant,
 };
 use system_tray::client::ActivateRequest;
 use zbus::Connection;
@@ -38,10 +37,9 @@ use tokio::{
 };
 
 use crate::{
-    animated_container::AnimatedContainer,
     battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
     cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
-    config::{BAR_WIDTH, GAPS, TOOLTIP_RETRIES, VOLUME_PERCENT},
+    config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES, VOLUME_PERCENT},
     dbus_proxy::PlayerProxy,
     icon_cache::{IconCache, MprisArtCache},
     mpris::{MprisEvent, MprisListener, MprisPlayer},
@@ -52,13 +50,13 @@ use crate::{
         to_widget,
     },
     tooltip::{Tooltip, TooltipState},
-    utils::align_clock,
 };
 
 #[derive(Debug, Clone)]
 pub enum MouseEvent {
     Workspace(u8),
     Window(u64),
+    MprisPlayer(String),
     Tooltip(container::Id),
 }
 
@@ -67,14 +65,12 @@ pub enum MouseEvent {
 pub enum Message {
     IcedEvent(Event),
     Tick(DateTime<Local>),
-    AlignClock,
     BatteryUpdate(Vec<BatteryInfo>),
     ErrorMessage(String),
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
     MouseExitedBar,
     TooltipMeasured(container::Id, Option<Rectangle>),
-    TooltipContentMeasured(container::Id, Size),
     NiriEvent(Result<niri_ipc::Event, IpcError>),
     FocusWorkspace(u8),
     FocusWindow(u64),
@@ -90,42 +86,39 @@ pub enum Message {
     CloseSysTrayMenu,
     DestroyWindow(Id),
     CreateTooltipCanvas,
-    AnimationTick(Instant),
-    OpenControl,
     NoOp,
 }
 
 pub struct Bar {
     pub time: DateTime<Local>,
-    pub clock_aligned: bool,
-    pub battery_info: (container::Id, Option<Vec<BatteryInfo>>),
+    pub battery_info: (container::Id, color_eyre::Result<Vec<BatteryInfo>>),
     pub tooltips: HashMap<container::Id, Tooltip>,
+    pub tooltip_canvas: Id,
+
     pub window_tooltips: HashMap<u64, container::Id>,
     pub niri_state: NiriState,
     pub niri_request_sender: Sender<Request>,
     pub hovered_workspace_index: Option<u8>,
+
     pub cava_visualizer: CavaVisualizer,
+
     pub icon_cache: Arc<Mutex<IconCache>>,
+
     pub mpris_art_cache: Arc<Mutex<MprisArtCache>>,
     pub mpris_players: HashMap<String, MprisPlayer>,
+    pub mpris_tooltips: HashMap<String, container::Id>,
+
     pub systray_state: SysTrayState,
     pub systray_client: Option<Arc<system_tray::client::Client>>,
-    pub systray_menu_id: Id,
     pub systray_menu_open: bool,
-    pub tooltip_canvas: Id,
+    pub systray_menu_id: Id,
 }
 
 impl Bar {
     pub fn new() -> (Self, Task<Message>) {
         let battery_id = container::Id::unique();
 
-        let battery_info = (
-            battery_id.clone(),
-            match fetch_battery_info() {
-                Message::BatteryUpdate(info) => Some(info),
-                _ => unreachable!(),
-            },
-        );
+        let battery_info = (battery_id.clone(), fetch_battery_info());
 
         let mut tooltips = HashMap::new();
         tooltips.insert(battery_id.clone(), Tooltip::default());
@@ -140,7 +133,6 @@ impl Bar {
 
         (
             Self {
-                clock_aligned: false,
                 time: Local::now(),
                 battery_info,
                 tooltips,
@@ -155,6 +147,7 @@ impl Bar {
                 icon_cache: Arc::new(Mutex::new(IconCache::new())),
                 mpris_art_cache: Arc::new(Mutex::new(MprisArtCache::new())),
                 mpris_players: HashMap::new(),
+                mpris_tooltips: HashMap::new(),
                 systray_state: SysTrayState::new(),
                 systray_client: None,
                 systray_menu_id: Id::unique(),
@@ -162,7 +155,7 @@ impl Bar {
                 tooltip_canvas: Id::unique(),
             },
             Task::batch(vec![
-                align_clock(),
+                // align_clock(),
                 create_client(),
                 Task::done(Message::CreateTooltipCanvas),
             ]),
@@ -172,16 +165,13 @@ impl Bar {
     pub fn remove_id(&mut self, _id: Id) {}
 
     pub fn namespace(&self) -> String {
-        String::from("Iced Bar")
+        String::from(BAR_NAMESPACE)
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
         let mut subscriptions: Vec<Subscription<Message>> = Vec::with_capacity(8);
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
-        subscriptions.push(
-            time::every(Duration::from_secs(1)).map(|_| fetch_battery_info()),
-        );
 
         subscriptions
             .push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
@@ -198,28 +188,15 @@ impl Bar {
             .map(Message::CavaUpdate),
         );
 
-        if self.clock_aligned {
-            subscriptions.push(
-                time::every(Duration::from_secs(60))
-                    .map(|_| Message::Tick(Local::now())),
-            );
-        }
+        subscriptions.push(
+            time::every(Duration::from_secs(1))
+                .map(|_| Message::Tick(Local::now())),
+        );
 
         if let Some(client) = &self.systray_client {
             subscriptions.push(subscription::from_recipe(SysTraySubscription {
                 client: Arc::clone(client),
             }))
-        }
-
-        if self
-            .tooltips
-            .values()
-            .any(|tip| tip.state != TooltipState::Hidden)
-        {
-            subscriptions.push(
-                time::every(Duration::from_millis(16))
-                    .map(Message::AnimationTick),
-            )
         }
 
         Subscription::batch(subscriptions)
@@ -252,19 +229,7 @@ impl Bar {
             }
             Message::Tick(time) => {
                 self.time = time;
-                Task::none()
-            }
-            Message::OpenControl => Task::perform(
-                async { TokioCommand::new("control").output().await },
-                |_| Message::NoOp,
-            ),
-            Message::AlignClock => {
-                self.clock_aligned = true;
-                self.time = Local::now();
-                Task::none()
-            }
-            Message::BatteryUpdate(info) => {
-                self.battery_info.1 = Some(info);
+                self.battery_info.1 = fetch_battery_info();
                 Task::none()
             }
             Message::NiriEvent(event) => {
@@ -298,104 +263,88 @@ impl Bar {
             }
             Message::MouseEntered(event) => {
                 match event {
+                    MouseEvent::MprisPlayer(name) => {
+                        let id = self
+                            .mpris_tooltips
+                            .entry(name.clone())
+                            .or_insert_with(container::Id::unique)
+                            .clone();
+                        let tooltip = self
+                            .tooltips
+                            .entry(id.clone())
+                            .or_insert_with(|| Tooltip::default());
+                        if tooltip.state == TooltipState::Hidden
+                            && let Some(player) = self.mpris_players.get(&name)
+                        {
+                            tooltip.content = Some(player.tooltip());
+                            tooltip.state = TooltipState::Measuring(0);
+
+                            return container::visible_bounds(id.clone()).map(
+                                move |rect| {
+                                    Message::TooltipMeasured(id.clone(), rect)
+                                },
+                            );
+                        }
+                    }
                     MouseEvent::Window(w_id) => {
                         let id = self
                             .window_tooltips
                             .entry(w_id)
                             .or_insert_with(container::Id::unique)
                             .clone();
-                        // println!(
-                        //     "[ENTER] Mouse entered window {w_id}, using tooltip id {id:?}. Starting Measurement"
-                        // );
+                        let tooltip = self
+                            .tooltips
+                            .entry(id.clone())
+                            .or_insert_with(|| Tooltip::default());
 
-                        let tooltip =
-                            self.tooltips.entry(id.clone()).or_default();
+                        if tooltip.state == TooltipState::Hidden
+                            && let Some(window) = self
+                                .niri_state
+                                .windows
+                                .values()
+                                .find(|w| w.id == w_id)
+                        {
+                            tooltip.content = window.title.clone();
+                            tooltip.state = TooltipState::Measuring(0);
 
-                        match tooltip.state {
-                            TooltipState::Hidden => {
-                                if let Some(window) = self
-                                    .niri_state
-                                    .windows
-                                    .values()
-                                    .find(|w| w.id == w_id)
-                                {
-                                    tooltip.content = window.title.clone();
-
-                                    tooltip.state = TooltipState::Measuring {
-                                        content_measured: false,
-                                        position_measured: false,
-                                        retries: 0,
-                                    };
-
-                                    return container::visible_bounds(id.clone())
-                                        .map(move |rect| {
-                                            Message::TooltipMeasured(
-                                                id.clone(),
-                                                rect,
-                                            )
-                                        });
-                                }
-                            }
-                            TooltipState::AnimatingOut => {
-                                let now = Instant::now();
-                                tooltip.state = TooltipState::AnimatingIn;
-                                tooltip.animating.transition(true, now);
-                            }
-                            _ => unreachable!(),
+                            return container::visible_bounds(id.clone()).map(
+                                move |rect| {
+                                    Message::TooltipMeasured(id.clone(), rect)
+                                },
+                            );
                         }
                     }
                     MouseEvent::Workspace(idx) => {
                         self.hovered_workspace_index = Some(idx);
                     }
                     MouseEvent::Tooltip(id) => {
-                        if let Some(tooltip) = self.tooltips.get_mut(&id) {
-                            // println!(
-                            //     "[ENTER] Mouse entered tooltip {id:?}, Starting Measurement"
-                            // );
-                            match tooltip.state {
-                                TooltipState::Hidden => {
-                                    let tooltip_content: String = if let Some(
-                                        info,
-                                    ) =
-                                        &self.battery_info.1
-                                    {
-                                        info.iter()
-                                            .enumerate()
-                                            .map(|(i, bat)| {
-                                                format!(
-                                                    "Battery {}: {}% ({})",
-                                                    i + 1,
-                                                    (bat.percentage * 100.0)
-                                                        .floor(),
-                                                    bat.state
-                                                )
-                                            })
-                                            .collect::<Vec<_>>()
-                                            .join("\n")
-                                    } else {
-                                        "No Battery Info".to_string()
-                                    };
-                                    tooltip.content = Some(tooltip_content);
-                                    tooltip.state = TooltipState::Measuring {
-                                        content_measured: false,
-                                        position_measured: false,
-                                        retries: 0,
-                                    };
-                                    return container::visible_bounds(id.clone())
-                                        .map(move |rect| {
-                                            Message::TooltipMeasured(
-                                                id.clone(),
-                                                rect,
+                        if let Some(tooltip) = self.tooltips.get_mut(&id)
+                            && tooltip.state == TooltipState::Hidden
+                        {
+                            let tooltip_content: String =
+                                if let Ok(info) = &self.battery_info.1 {
+                                    info.iter()
+                                        .enumerate()
+                                        .map(|(i, bat)| {
+                                            format!(
+                                                "Battery {}: {}% ({})",
+                                                i + 1,
+                                                (bat.percentage * 100.0).floor(),
+                                                bat.state
                                             )
-                                        });
-                                }
-                                TooltipState::AnimatingOut => {
-                                    let now = Instant::now();
-                                    tooltip.state = TooltipState::AnimatingIn;
-                                    tooltip.animating.transition(true, now);
-                                }
-                                _ => unreachable!(),
-                            }
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                } else {
+                                    "No Battery Info".to_string()
+                                };
+                            tooltip.content = Some(tooltip_content);
+                            tooltip.state = TooltipState::Measuring(0);
+                            return container::visible_bounds(id.clone()).map(
+                                move |rect| {
+                                    Message::TooltipMeasured(id.clone(), rect)
+                                },
+                            );
                         }
                     }
                 };
@@ -403,143 +352,56 @@ impl Bar {
                 Task::none()
             }
             Message::TooltipMeasured(id, rect) => {
-                // println!("[POS_MEASURED] id={id:?}, rect={rect:?}");
                 if let Some(tooltip) = self.tooltips.get_mut(&id)
-                    && let TooltipState::Measuring {
-                        position_measured,
-                        content_measured,
-                        retries,
-                    } = tooltip.state
+                    && let TooltipState::Measuring(retries) = tooltip.state
                 {
-                    // println!(
-                    //     "[POS_MEASURED] Applying position. State before: {:?}.",
-                    //     tooltip.state
-                    // );
-                    if !position_measured && let Some(rect) = rect {
-                        let y = rect.y - rect.height / 4.0;
-
-                        tooltip.position = Some(Point::new(0.0, y));
-
-                        if content_measured {
-                            let now = Instant::now();
-                            // println!(
-                            //     "[ANIM_START] from POS_MEASURED. Stored size is {:?}. Starting animation.",
-                            //     tooltip.size
-                            // );
-                            tooltip.state = TooltipState::AnimatingIn;
-                            tooltip.animating.transition(true, now);
-                        } else {
-                            tooltip.state = TooltipState::Measuring {
-                                content_measured,
-                                position_measured: true,
-                                retries,
-                            };
+                    tooltip.position = match rect {
+                        Some(rect) => Some(Point::new(0.0, rect.center().y)),
+                        Option::None => {
+                            tooltip.state = TooltipState::Measuring(retries + 1);
+                            if retries < TOOLTIP_RETRIES {
+                                return container::visible_bounds(id.clone())
+                                    .map(move |rect| {
+                                        Message::TooltipMeasured(id.clone(), rect)
+                                    });
+                            } else {
+                                None
+                            }
                         }
-                        // println!(
-                        //     "[POS_MEASURED] State after: {:?}.",
-                        //     tooltip.state
-                        // );
-                    } else if retries < TOOLTIP_RETRIES {
-                        tooltip.state = TooltipState::Measuring {
-                            content_measured,
-                            position_measured,
-                            retries: retries + 1,
-                        };
-                        return container::visible_bounds(id.clone()).map(
-                            move |rect| {
-                                Message::TooltipMeasured(id.clone(), rect)
-                            },
-                        );
-                    }
+                    };
+                    tooltip.state = TooltipState::Visible;
                 }
-                Task::none()
-            }
-            Message::TooltipContentMeasured(id, size) => {
-                // println!("[SIZE_MEASURED] id={id:?}, measured size={size:?}");
-                if let Some(tooltip) = self.tooltips.get_mut(&id)
-                    && let TooltipState::Measuring {
-                        content_measured,
-                        position_measured,
-                        retries,
-                    } = tooltip.state
-                    && !content_measured
-                {
-                    // println!(
-                    //     "[SIZE_MEASURED] Applying size. State before: {:?}.",
-                    //     tooltip.state
-                    // );
-                    tooltip.size = Some(size);
-
-                    if position_measured {
-                        let now = Instant::now();
-                        // println!(
-                        //     "[ANIM_START] from SIZE_MEASURED. Stored size is {:?}. Starting animation.",
-                        //     tooltip.size
-                        // );
-                        tooltip.state = TooltipState::AnimatingIn;
-                        tooltip.animating.transition(true, now);
-                    } else {
-                        tooltip.state = TooltipState::Measuring {
-                            content_measured: true,
-                            position_measured,
-                            retries,
-                        };
-                    }
-                    // println!("[SIZE_MEASURED] State after: {:?}.", tooltip.state);
-                }
-
-                Task::none()
-            }
-            Message::AnimationTick(now) => {
-                self.tooltips
-                    .values_mut()
-                    .filter(|tip| {
-                        tip.state == TooltipState::AnimatingOut
-                            && !tip.animating.in_progress(now)
-                    })
-                    .for_each(|tip| {
-                        tip.state = TooltipState::Hidden;
-                    });
                 Task::none()
             }
             Message::MouseExitedBar => {
-                for tooltip in self.tooltips.values_mut().filter(|tip| {
-                    tip.state != TooltipState::Hidden
-                        && tip.state != TooltipState::AnimatingOut
-                }) {
-                    let now = Instant::now();
-                    tooltip.state = TooltipState::AnimatingOut;
-                    tooltip.animating.transition(false, now);
-                }
+                self.tooltips.values_mut().for_each(|tip| {
+                    tip.state = TooltipState::Hidden;
+                });
                 self.hovered_workspace_index = None;
                 Task::none()
             }
             Message::MouseExited(event) => {
                 match event {
+                    MouseEvent::MprisPlayer(name) => {
+                        if let Some(id) = self.mpris_tooltips.get(&name)
+                            && let Some(tooltip) = self.tooltips.get_mut(id)
+                        {
+                            tooltip.state = TooltipState::Hidden;
+                        }
+                    }
                     MouseEvent::Window(id) => {
                         if let Some(id) = self.window_tooltips.get(&id)
                             && let Some(tooltip) = self.tooltips.get_mut(id)
-                            && !matches!(
-                                tooltip.state,
-                                TooltipState::Hidden | TooltipState::AnimatingOut
-                            )
                         {
-                            let now = Instant::now();
-                            tooltip.state = TooltipState::AnimatingOut;
-                            tooltip.animating.transition(false, now);
+                            tooltip.state = TooltipState::Hidden;
                         }
                     }
                     MouseEvent::Workspace(..) => {
                         self.hovered_workspace_index = None;
                     }
                     MouseEvent::Tooltip(id) => {
-                        if let Some(tooltip) = self.tooltips.get_mut(&id)
-                            && tooltip.state != TooltipState::Hidden
-                            && tooltip.state != TooltipState::AnimatingOut
-                        {
-                            let now = Instant::now();
-                            tooltip.state = TooltipState::AnimatingOut;
-                            tooltip.animating.transition(false, now);
+                        if let Some(tooltip) = self.tooltips.get_mut(&id) {
+                            tooltip.state = TooltipState::Hidden;
                         }
                     }
                 };
@@ -746,22 +608,20 @@ impl Bar {
                 }
             })
         });
-        let mpris_art = self
-            .mpris_players
-            .values()
-            .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(player.to_widget())
-            });
+        let mpris_art =
+            self.mpris_players.values().fold(
+                Column::new().spacing(5).padding(5),
+                |col, player| {
+                    col.push(player.to_widget(
+                        self.mpris_tooltips.get(&player.name).cloned(),
+                    ))
+                },
+            );
 
         let top_section = Container::new(
             column![
-                MouseArea::new(text("󱄅").size(32))
-                    .on_release(Message::OpenControl)
-                    .interaction(Interaction::Pointer),
-                battery_icon(
-                    self.battery_info.1.as_ref(),
-                    self.battery_info.0.clone()
-                ),
+                text("󱄅").size(28),
+                battery_icon(&self.battery_info.1, self.battery_info.0.clone()),
                 text(time).size(16),
                 cava_visualizer,
                 mpris_art,
@@ -846,62 +706,55 @@ impl Bar {
             self.tooltips
                 .iter()
                 .filter(|(_id, tooltip)| tooltip.state != TooltipState::Hidden)
-                .fold(Stack::new(), |stack, (id, tooltip)| {
+                .fold(Stack::new(), |stack, (_id, tooltip)| {
                     let Some(content) = tooltip.content.as_ref() else {
                         return stack;
                     };
 
-                    let now = Instant::now();
-                    let animation_progress =
-                        tooltip.animating.animate_bool(0.0, 1.0, now);
-                    let id_ = id.clone();
-
                     let is_measuring =
-                        matches!(tooltip.state, TooltipState::Measuring { .. });
+                        matches!(tooltip.state, TooltipState::Measuring(_));
 
-                    let (width, style) = if is_measuring {
-                        (Length::Shrink, tooltip_style(0.0))
-                    } else {
-                        let target_width = tooltip
-                            .size
-                            .map_or(0.0, |s| s.width * animation_progress);
-                        (Length::Fixed(target_width), tooltip_style(1.0))
-                    };
+                    let (text_color, style) =
+                        if is_measuring || tooltip.position.is_none() {
+                            (Some(Color::TRANSPARENT), tooltip_style(0.0))
+                        } else {
+                            (None, tooltip_style(1.0))
+                        };
 
-                    let text_color = if is_measuring {
-                        Some(Color::TRANSPARENT)
-                    } else {
-                        None
-                    };
                     let position =
                         tooltip.position.unwrap_or(Point::new(0.0, 0.0));
+
+                    const TOOLTIP_PADDING: u16 = 7;
+                    const TEXT_SIZE: u16 = 16;
 
                     let content_column = content
                         .lines()
                         .map(|line| {
                             Container::new(
                                 Text::new(line)
-                                    .size(16)
+                                    .size(TEXT_SIZE)
                                     .color_maybe(text_color)
                                     .line_height(1.0),
                             )
                             .width(Length::Shrink)
-                            .height(16)
+                            .height(TEXT_SIZE)
                             .clip(true)
                         })
                         .fold(Column::new(), |col, text| col.push(text));
 
+                    let y_offset = position.y
+                        - content.lines().count() as f32
+                            * (TEXT_SIZE as f32 / 2.0)
+                        - TOOLTIP_PADDING as f32;
+
                     let widget = Container::new(
-                        AnimatedContainer::new(content_column, move |size| {
-                            Message::TooltipContentMeasured(id_.clone(), size)
-                        })
-                        .measure(is_measuring)
-                        .style(style)
-                        .padding(7)
-                        .width(width)
-                        .clip(true),
+                        Container::new(content_column)
+                            .style(style)
+                            .padding(TOOLTIP_PADDING)
+                            .width(Length::Shrink)
+                            .clip(true),
                     )
-                    .padding(top(position.y).left(position.x));
+                    .padding(top(y_offset).left(position.x));
 
                     stack.push(widget)
                 }),
@@ -913,8 +766,7 @@ impl Bar {
     pub fn view(&self, id: Id) -> Element<Message> {
         if id == self.tooltip_canvas {
             return self.view_canvas();
-        }
-        if id == self.systray_menu_id {
+        } else if id == self.systray_menu_id {
             return Container::new(column![])
                 .style(|_| container::Style {
                     background: Some(Background::Color(Color::from_rgba(
@@ -925,13 +777,13 @@ impl Bar {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into();
+        } else {
+            self.view_bar()
         }
-        self.view_bar()
     }
 
     pub fn style(&self, theme: &Theme) -> iced_layershell::Appearance {
-        use iced_layershell::Appearance;
-        Appearance {
+        iced_layershell::Appearance {
             background_color: Color::TRANSPARENT,
             text_color: theme.palette().text,
         }
