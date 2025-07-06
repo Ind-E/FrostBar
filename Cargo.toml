@@ -9,7 +9,7 @@ iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg
 iced_layershell = "0.13.7"
 iced_runtime = { version = "0.13.2", default-features = false }
 starship-battery = { version = "0.10.2", default-features = false }
-tokio = { version = "1.45.1", default-features = true, features = ["time", "macros", "sync", "process"] }
+tokio = { version = "1.45.1", default-features = false, features = ["time", "macros", "sync", "process"] }
 niri-ipc = {git = "https://github.com/YaLTeR/niri/", branch = "main"}
 thiserror = { version = "2.0.12", default-features = false }
 color-eyre = "0.6.5"
@@ -18,8 +18,10 @@ xdgkit = { version = "3.2.5", default-features = false }
 freedesktop-desktop-entry = { version = "0.7.13", default-features = false }
 async-stream = { version = "0.3.6", default-features = false }
 url = "2.5.4"
-zbus = "5.7.1"
+zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 base64 = "0.22.1"
 futures-util = "0.3.31"
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 freedesktop-icons = "0.4.0"
+system-tray = "0.8.1"
+log = "0.4.27"

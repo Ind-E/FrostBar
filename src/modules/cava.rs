@@ -19,7 +19,7 @@ pub enum CavaError {
     PipeFailed,
 }
 
-const CAVA_CONFIG: &str = include_str!("../assets/cava-config");
+const CAVA_CONFIG: &str = include_str!("../../assets/cava-config");
 const MAX_BAR_HEIGHT: u32 = 12;
 
 pub fn write_temp_cava_config() -> std::io::Result<std::path::PathBuf> {

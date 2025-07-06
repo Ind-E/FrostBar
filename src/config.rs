@@ -20,3 +20,6 @@ pub const ICON_THEME: &str = "Flat-Remix-Blue-Dark";
 pub const TOOLTIP_RETRIES: u8 = 5;
 
 pub const BAR_NAMESPACE: &str = "Iced Bar";
+
+pub const BATTERY_ICON_SIZE: u16 = 22;
+pub const CHARGING_OVERLAY_SIZE: u16 = 13;

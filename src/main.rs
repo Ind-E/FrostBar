@@ -9,16 +9,12 @@ use iced_layershell::{
 use crate::bar::Bar;
 
 mod bar;
-mod battery_widget;
-mod cava;
 mod config;
 mod dbus_proxy;
 mod icon_cache;
-mod mpris;
-mod niri;
 mod style;
-mod systray;
 mod tooltip;
+mod modules;
 
 #[tokio::main]
 pub async fn main() -> color_eyre::Result<()> {

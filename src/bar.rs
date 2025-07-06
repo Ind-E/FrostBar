@@ -34,13 +34,15 @@ use tokio::{
 };
 
 use crate::{
-    battery_widget::{BatteryInfo, battery_icon, fetch_battery_info},
-    cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
     config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES, VOLUME_PERCENT},
     dbus_proxy::PlayerProxy,
     icon_cache::{IconCache, MprisArtCache},
-    mpris::{MprisEvent, MprisListener, MprisPlayer},
-    niri::{IpcError, NiriEvents, NiriState, run_niri_request_handler},
+    modules::{
+        battery::BatteryState,
+        cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
+        mpris::{MprisEvent, MprisListener, MprisPlayer},
+        niri::{IpcError, NiriEvents, NiriState, run_niri_request_handler},
+    },
     style::{no_rail, rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
 };
@@ -58,7 +60,6 @@ pub enum MouseEvent {
 pub enum Message {
     IcedEvent(Event),
     Tick(DateTime<Local>),
-    BatteryUpdate(Vec<BatteryInfo>),
     ErrorMessage(String),
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
@@ -79,7 +80,7 @@ pub enum Message {
 
 pub struct Bar {
     pub time: DateTime<Local>,
-    pub battery_info: (container::Id, color_eyre::Result<Vec<BatteryInfo>>),
+    pub battery_module: BatteryState,
     pub tooltips: HashMap<container::Id, Tooltip>,
     pub tooltip_canvas: Id,
 
@@ -91,7 +92,6 @@ pub struct Bar {
     pub cava_visualizer: CavaVisualizer,
 
     // pub icon_cache: Arc<Mutex<IconCache>>,
-
     pub mpris_art_cache: Arc<Mutex<MprisArtCache>>,
     pub mpris_players: HashMap<String, MprisPlayer>,
     pub mpris_tooltips: HashMap<String, container::Id>,
@@ -99,12 +99,10 @@ pub struct Bar {
 
 impl Bar {
     pub fn new() -> (Self, Task<Message>) {
-        let battery_id = container::Id::unique();
-
-        let battery_info = (battery_id.clone(), fetch_battery_info());
+        let battery_module = BatteryState::new();
 
         let mut tooltips = HashMap::new();
-        tooltips.insert(battery_id.clone(), Tooltip::default());
+        tooltips.insert(battery_module.id.clone(), Tooltip::default());
 
         let (request_tx, request_rx) = mpsc::channel(32);
         let request_socket = match niri_ipc::socket::Socket::connect() {
@@ -117,7 +115,7 @@ impl Bar {
         (
             Self {
                 time: Local::now(),
-                battery_info,
+                battery_module,
                 tooltips,
                 window_tooltips: HashMap::new(),
                 niri_state: NiriState::new(IconCache::new()),
@@ -202,7 +200,7 @@ impl Bar {
             }
             Message::Tick(time) => {
                 self.time = time;
-                self.battery_info.1 = fetch_battery_info();
+                self.battery_module.fetch_battery_info();
                 Task::none()
             }
             Message::NiriEvent(event) => {
@@ -294,24 +292,7 @@ impl Bar {
                         if let Some(tooltip) = self.tooltips.get_mut(&id)
                             && tooltip.state == TooltipState::Hidden
                         {
-                            let tooltip_content: String =
-                                if let Ok(info) = &self.battery_info.1 {
-                                    info.iter()
-                                        .enumerate()
-                                        .map(|(i, bat)| {
-                                            format!(
-                                                "Battery {}: {}% ({})",
-                                                i + 1,
-                                                (bat.percentage * 100.0).floor(),
-                                                bat.state
-                                            )
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join("\n")
-                                } else {
-                                    "No Battery Info".to_string()
-                                };
-                            tooltip.content = Some(tooltip_content);
+                            tooltip.content = Some(self.battery_module.tooltip());
                             tooltip.state = TooltipState::Measuring(0);
                             return container::visible_bounds(id.clone()).map(
                                 move |rect| {
@@ -527,7 +508,7 @@ impl Bar {
         let top_section = Container::new(
             column![
                 text("󱄅").size(28),
-                battery_icon(&self.battery_info.1, self.battery_info.0.clone()),
+                self.battery_module.to_widget(),
                 text(time).size(16),
                 cava_visualizer,
                 mpris_art,
