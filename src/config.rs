@@ -16,3 +16,5 @@ pub const FIRA_CODE: Font = Font {
 };
 
 pub const ICON_THEME: &str = "Flat-Remix-Blue-Dark";
+
+pub const TOOLTIP_RETRIES: u8 = 5;

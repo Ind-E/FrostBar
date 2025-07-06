@@ -11,7 +11,6 @@ use std::{
     process::{Command, Stdio},
 };
 
-
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
     #[error("Cava command failed to start: {0}")]
@@ -45,53 +44,57 @@ impl<Message> Program<Message> for CavaVisualizer {
         bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<Geometry<Renderer>> {
-        let bars = self
-            .cache
-            .draw(renderer, bounds.size(), |frame: &mut Frame| {
-                let left_color = Color::from_rgb(0.4, 0.9, 0.6);
-                let right_color = Color::from_rgb(0.9, 0.6, 0.4);
+        let bars =
+            self.cache
+                .draw(renderer, bounds.size(), |frame: &mut Frame| {
+                    let left_color = Color::from_rgb(0.4, 0.9, 0.6);
+                    let right_color = Color::from_rgb(0.9, 0.6, 0.4);
 
-                let center_x = frame.center().x;
+                    let center_x = frame.center().x;
 
-                let bars_per_channel = self.bars.len() / 2;
+                    let bars_per_channel = self.bars.len() / 2;
 
-                if bars_per_channel == 0 {
-                    return;
-                }
-
-                let bar_thickness_total = frame.height() / bars_per_channel as f32;
-                let spacing = bar_thickness_total * 0.15;
-                let bar_thickness = bar_thickness_total - spacing;
-
-                for i in 0..bars_per_channel {
-                    let left_val = self.bars[i];
-                    let right_val = self.bars[2 * bars_per_channel - i - 1];
-
-                    let max_bar_width = center_x;
-                    let left_width = max_bar_width * (left_val as f32 / MAX_BAR_HEIGHT as f32);
-                    let right_width = max_bar_width * (right_val as f32 / MAX_BAR_HEIGHT as f32);
-
-                    let y_pos = i as f32 * bar_thickness_total + spacing / 2.0;
-
-                    if left_val > 0 {
-                        let top_left = Point {
-                            x: center_x - left_width,
-                            y: y_pos,
-                        };
-                        let bar_size = Size::new(left_width, bar_thickness);
-                        frame.fill_rectangle(top_left, bar_size, left_color);
+                    if bars_per_channel == 0 {
+                        return;
                     }
 
-                    if right_val > 0 {
-                        let top_left = Point {
-                            x: center_x,
-                            y: y_pos,
-                        };
-                        let bar_size = Size::new(right_width, bar_thickness);
-                        frame.fill_rectangle(top_left, bar_size, right_color);
+                    let bar_thickness_total =
+                        frame.height() / bars_per_channel as f32;
+                    let spacing = bar_thickness_total * 0.15;
+                    let bar_thickness = bar_thickness_total - spacing;
+
+                    for i in 0..bars_per_channel {
+                        let left_val = self.bars[i];
+                        let right_val = self.bars[2 * bars_per_channel - i - 1];
+
+                        let max_bar_width = center_x;
+                        let left_width = max_bar_width
+                            * (left_val as f32 / MAX_BAR_HEIGHT as f32);
+                        let right_width = max_bar_width
+                            * (right_val as f32 / MAX_BAR_HEIGHT as f32);
+
+                        let y_pos =
+                            i as f32 * bar_thickness_total + spacing / 2.0;
+
+                        if left_val > 0 {
+                            let top_left = Point {
+                                x: center_x - left_width,
+                                y: y_pos,
+                            };
+                            let bar_size = Size::new(left_width, bar_thickness);
+                            frame.fill_rectangle(top_left, bar_size, left_color);
+                        }
+
+                        if right_val > 0 {
+                            let top_left = Point {
+                                x: center_x,
+                                y: y_pos,
+                            };
+                            let bar_size = Size::new(right_width, bar_thickness);
+                            frame.fill_rectangle(top_left, bar_size, right_color);
+                        }
                     }
-                }
-            });
+                });
 
         vec![bars]
     }

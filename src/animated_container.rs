@@ -32,6 +32,7 @@ pub struct AnimatedContainer<
     content: Element<'a, Message, Theme, Renderer>,
     class: Theme::Class<'a>,
     on_measure: Box<dyn Fn(Size) -> Message>,
+    should_measure: bool,
 }
 
 impl<'a, Message, Theme, Renderer> AnimatedContainer<'a, Message, Theme, Renderer>
@@ -63,7 +64,13 @@ where
             class: Theme::default(),
             content,
             on_measure: Box::new(on_measure),
+            should_measure: true,
         }
+    }
+
+    pub fn measure(mut self, should_measure: bool) -> Self {
+        self.should_measure = should_measure;
+        self
     }
 
     /// Sets the [`Id`] of the [`Container`].
@@ -265,11 +272,11 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) -> event::Status {
-        let measured_size = layout.bounds().size();
-
-        let message = (self.on_measure)(measured_size);
-
-        shell.publish(message);
+        if self.should_measure {
+            let measured_size = layout.bounds().size();
+            let message = (self.on_measure)(measured_size);
+            shell.publish(message);
+        }
 
         self.content.as_widget_mut().on_event(
             tree,

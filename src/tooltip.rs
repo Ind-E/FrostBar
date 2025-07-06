@@ -31,8 +31,9 @@ pub enum TooltipState {
     Measuring {
         content_measured: bool,
         position_measured: bool,
+        retries: u8,
     },
     AnimatingIn,
-    FullyVisible,
+    // FullyVisible,
     AnimatingOut,
 }

@@ -27,7 +27,6 @@ pub struct NiriEvents;
 
 #[derive(Eq)]
 pub struct Window {
-    pub title: Option<String>,
     pub id: u64,
     pub icon: Option<Icon>,
 }
@@ -39,19 +38,28 @@ impl PartialEq for Window {
 }
 
 impl<'a> Window {
-    pub fn to_widget(&self) -> Element<'a, Message> {
-        match &self.icon {
+    pub fn to_widget(&self, id: Option<container::Id>) -> Element<'a, Message> {
+        let icon: Element<'a, Message> = match &self.icon {
             Some(Icon::Svg(handle)) => {
-                MouseArea::new(Svg::new(handle.clone()).height(24).width(24))
-                    .on_right_press(Message::FocusWindow(self.id))
-                    .into()
+                Svg::new(handle.clone()).height(24).width(24).into()
             }
             Some(Icon::Raster(handle)) => {
-                MouseArea::new(Image::new(handle.clone()).height(24).width(24))
-                    .on_right_press(Message::FocusWindow(self.id))
-                    .into()
+                Image::new(handle.clone()).height(24).width(24).into()
             }
             Option::None => unreachable!(),
+        };
+
+        let container = Container::new(
+            MouseArea::new(icon)
+                .on_right_press(Message::FocusWindow(self.id))
+                .on_enter(Message::MouseEntered(MouseEvent::Window(self.id)))
+                .on_exit(Message::MouseExited(MouseEvent::Window(self.id))),
+        );
+
+        if let Some(id) = id {
+            container.id(id).into()
+        } else {
+            container.into()
         }
     }
 }
@@ -80,7 +88,7 @@ impl<'a> Workspace {
     pub fn to_widget(
         &self,
         hovered: bool,
-        id: container::Id,
+        window_ids: &HashMap<u64, container::Id>,
     ) -> Element<'a, Message> {
         Container::new(
             MouseArea::new(
@@ -90,7 +98,9 @@ impl<'a> Workspace {
                             .align_x(Horizontal::Center)
                             .spacing(5)
                             .push(text(self.idx - 1).size(20)),
-                        |col, (_, w)| col.push(w.to_widget()),
+                        |col, (_, w)| {
+                            col.push(w.to_widget(window_ids.get(&w.id).cloned()))
+                        },
                     ),
                 )
                 .style(workspace_style(self.is_active, hovered))
@@ -103,26 +113,7 @@ impl<'a> Workspace {
             .on_exit(Message::MouseExited(MouseEvent::Workspace(self.idx)))
             .interaction(Interaction::Pointer),
         )
-        .id(id)
         .into()
-    }
-
-    pub fn window_titles(&self) -> String {
-        let window_titles: Vec<String> = self
-            .windows
-            .iter()
-            .sorted()
-            .map(|(_, w)| {
-                if let Some(title) = &w.title {
-                    title.clone()
-                } else {
-                    "N/A".to_string()
-                }
-            })
-            .filter(|t| !t.is_empty())
-            .collect();
-
-        return window_titles.join("\n");
     }
 }
 
@@ -154,7 +145,6 @@ pub struct NiriState {
 
 fn map_window(window: &niri_ipc::Window, icon_cache: &mut IconCache) -> Window {
     Window {
-        title: window.title.clone(),
         id: window.id,
         icon: window
             .app_id
