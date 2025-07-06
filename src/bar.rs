@@ -1,7 +1,6 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Background, Color, Element, Event, Length, Point, Rectangle, Subscription,
-    Task, Theme,
+    Color, Element, Event, Length, Point, Rectangle, Subscription, Task, Theme,
     advanced::{mouse, subscription},
     alignment::{Horizontal, Vertical},
     event,
@@ -15,7 +14,6 @@ use iced::{
     window::Id,
 };
 use iced_layershell::{
-    actions::{IcedNewMenuSettings, MenuDirection},
     reexport::{Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings},
     to_layer_message,
 };
@@ -25,7 +23,6 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use system_tray::client::ActivateRequest;
 use zbus::Connection;
 
 use tokio::{
@@ -45,10 +42,6 @@ use crate::{
     mpris::{MprisEvent, MprisListener, MprisPlayer},
     niri::{IpcError, NiriEvents, NiriState, run_niri_request_handler},
     style::{no_rail, rounded_corners, tooltip_style},
-    systray::{
-        SysTrayInteraction, SysTrayState, SysTraySubscription, create_client,
-        to_widget,
-    },
     tooltip::{Tooltip, TooltipState},
 };
 
@@ -80,11 +73,6 @@ pub enum Message {
     NextSong(String),
     StopPlayer(String),
     ChangeVolume(i32),
-    SysTrayClientCreated(Arc<system_tray::client::Client>),
-    SysTrayEvent(system_tray::client::Event),
-    SysTrayInteraction(SysTrayInteraction),
-    CloseSysTrayMenu,
-    DestroyWindow(Id),
     CreateTooltipCanvas,
     NoOp,
 }
@@ -102,16 +90,11 @@ pub struct Bar {
 
     pub cava_visualizer: CavaVisualizer,
 
-    pub icon_cache: Arc<Mutex<IconCache>>,
+    // pub icon_cache: Arc<Mutex<IconCache>>,
 
     pub mpris_art_cache: Arc<Mutex<MprisArtCache>>,
     pub mpris_players: HashMap<String, MprisPlayer>,
     pub mpris_tooltips: HashMap<String, container::Id>,
-
-    pub systray_state: SysTrayState,
-    pub systray_client: Option<Arc<system_tray::client::Client>>,
-    pub systray_menu_open: bool,
-    pub systray_menu_id: Id,
 }
 
 impl Bar {
@@ -144,19 +127,15 @@ impl Bar {
                     bars: vec![0; 10],
                     cache: iced::widget::canvas::Cache::new(),
                 },
-                icon_cache: Arc::new(Mutex::new(IconCache::new())),
+                // icon_cache: Arc::new(Mutex::new(IconCache::new())),
                 mpris_art_cache: Arc::new(Mutex::new(MprisArtCache::new())),
                 mpris_players: HashMap::new(),
                 mpris_tooltips: HashMap::new(),
-                systray_state: SysTrayState::new(),
-                systray_client: None,
-                systray_menu_id: Id::unique(),
-                systray_menu_open: false,
                 tooltip_canvas: Id::unique(),
             },
             Task::batch(vec![
                 // align_clock(),
-                create_client(),
+                // create_client(),
                 Task::done(Message::CreateTooltipCanvas),
             ]),
         )
@@ -192,12 +171,6 @@ impl Bar {
             time::every(Duration::from_secs(1))
                 .map(|_| Message::Tick(Local::now())),
         );
-
-        if let Some(client) = &self.systray_client {
-            subscriptions.push(subscription::from_recipe(SysTraySubscription {
-                client: Arc::clone(client),
-            }))
-        }
 
         Subscription::batch(subscriptions)
     }
@@ -511,73 +484,6 @@ impl Bar {
                     |_| Message::NoOp,
                 )
             }
-            Message::SysTrayClientCreated(client) => {
-                self.systray_state.init(client.items());
-                self.systray_client = Some(client);
-                Task::none()
-            }
-            Message::SysTrayEvent(event) => {
-                self.systray_state.on_event(event);
-                Task::none()
-            }
-            Message::SysTrayInteraction(event) => {
-                match event {
-                    SysTrayInteraction::LeftClick(address) => {
-                        if let Some(tray) = self.systray_client.clone() {
-                            return Task::perform(
-                                async move {
-                                    match tray
-                                        .activate(ActivateRequest::Default {
-                                            address,
-                                            x: 100,
-                                            y: 100,
-                                        })
-                                        .await
-                                    {
-                                        Ok(()) => {}
-                                        Err(e) => {
-                                            eprintln!("sys tray error: {e}")
-                                        }
-                                    }
-                                },
-                                |_| Message::NoOp,
-                            );
-                        };
-                    }
-                    SysTrayInteraction::RightClick(address) => {
-                        self.systray_state.open_menu = Some(address);
-                        let id = self.systray_menu_id;
-                        let task = if !self.systray_menu_open {
-                            Task::done(Message::NewMenu {
-                                settings: IcedNewMenuSettings {
-                                    size: (400, 300),
-                                    direction: MenuDirection::Up,
-                                },
-                                id,
-                            })
-                        } else {
-                            iced::window::close::<()>(id).then(move |_| {
-                                Task::done(Message::NewMenu {
-                                    settings: IcedNewMenuSettings {
-                                        size: (400, 300),
-                                        direction: MenuDirection::Up,
-                                    },
-                                    id,
-                                })
-                            })
-                        };
-                        self.systray_menu_open = !self.systray_menu_open;
-
-                        return task;
-                    }
-                }
-                Task::none()
-            }
-            Message::CloseSysTrayMenu => {
-                self.systray_menu_open = false;
-                iced::window::close(self.systray_menu_id)
-            }
-            Message::DestroyWindow(id) => iced::window::close(id),
             Message::NoOp => Task::none(),
             _ => unreachable!(),
         }
@@ -654,23 +560,7 @@ impl Bar {
         )
         .center_y(Length::Fill);
 
-        let tray_items = self
-            .systray_state
-            .items
-            .iter()
-            .sorted_by_key(|(_, item)| &item.item.id)
-            .map(|(address, item)| {
-                to_widget(
-                    address,
-                    &item.item,
-                    &mut self.icon_cache.lock().unwrap(),
-                )
-            })
-            .fold(
-                Column::new().padding(top(5).bottom(5)).spacing(2),
-                |col, item| col.push(item),
-            )
-            .align_x(Horizontal::Center);
+        let tray_items = column![];
 
         let bottom_section = Container::new(tray_items)
             .width(Length::Fill)
@@ -685,20 +575,11 @@ impl Bar {
             .height(Length::Fill)
             .style(rounded_corners);
 
-        return MouseArea::new(
-            Container::new(bar)
-                // .style(|_| container::Style {
-                //     background: Some(Background::Color(Color::from_rgba(
-                //         0.7, 0.2, 0.2, 0.15,
-                //     ))),
-                //     ..Default::default()
-                // })
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(GAPS),
-        )
-        .on_press(Message::CloseSysTrayMenu)
-        .into();
+        Container::new(bar)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(GAPS)
+            .into()
     }
 
     fn view_canvas(&self) -> Element<Message> {
@@ -766,17 +647,6 @@ impl Bar {
     pub fn view(&self, id: Id) -> Element<Message> {
         if id == self.tooltip_canvas {
             return self.view_canvas();
-        } else if id == self.systray_menu_id {
-            return Container::new(column![])
-                .style(|_| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(
-                        0.7, 0.2, 0.2, 0.15,
-                    ))),
-                    ..Default::default()
-                })
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
         } else {
             self.view_bar()
         }

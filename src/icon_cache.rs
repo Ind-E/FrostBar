@@ -4,7 +4,6 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-use system_tray::item::StatusNotifierItem;
 
 use base64::engine::general_purpose;
 use color_eyre::{Result, eyre::Context};
@@ -88,39 +87,39 @@ impl IconCache {
         })
     }
 
-    pub fn get_tray_icon(&mut self, item: &StatusNotifierItem) -> &Option<Icon> {
-        let key = match &item.icon_name {
-            Some(name) if !name.is_empty() => name.clone(),
-            _ => item.id.clone(),
-        };
-        self.inner.entry(key).or_insert_with(|| {
-            if let Some(icon_name) = &item.icon_name {
-                lookup(icon_name)
-                    .with_theme(ICON_THEME)
-                    .with_scale(2)
-                    .find()
-                    .and_then(|path| load_icon_from_path(&path))
-                    .or_else(|| {
-                        lookup(icon_name)
-                            .find()
-                            .and_then(|path| load_icon_from_path(&path))
-                    })
-            } else {
-                None
-            }
-            .or_else(|| {
-                item.icon_pixmap.as_ref().and_then(|pixmaps| {
-                    pixmaps.iter().max_by_key(|p| p.width).map(|pixmap| {
-                        Icon::Raster(Handle::from_rgba(
-                            pixmap.width as u32,
-                            pixmap.height as u32,
-                            pixmap.pixels.clone(),
-                        ))
-                    })
-                })
-            })
-        })
-    }
+    // pub fn get_tray_icon(&mut self, item: &StatusNotifierItem) -> &Option<Icon> {
+    //     let key = match &item.icon_name {
+    //         Some(name) if !name.is_empty() => name.clone(),
+    //         _ => item.id.clone(),
+    //     };
+    //     self.inner.entry(key).or_insert_with(|| {
+    //         if let Some(icon_name) = &item.icon_name {
+    //             lookup(icon_name)
+    //                 .with_theme(ICON_THEME)
+    //                 .with_scale(2)
+    //                 .find()
+    //                 .and_then(|path| load_icon_from_path(&path))
+    //                 .or_else(|| {
+    //                     lookup(icon_name)
+    //                         .find()
+    //                         .and_then(|path| load_icon_from_path(&path))
+    //                 })
+    //         } else {
+    //             None
+    //         }
+    //         .or_else(|| {
+    //             item.icon_pixmap.as_ref().and_then(|pixmaps| {
+    //                 pixmaps.iter().max_by_key(|p| p.width).map(|pixmap| {
+    //                     Icon::Raster(Handle::from_rgba(
+    //                         pixmap.width as u32,
+    //                         pixmap.height as u32,
+    //                         pixmap.pixels.clone(),
+    //                     ))
+    //                 })
+    //             })
+    //         })
+    //     })
+    // }
 }
 
 pub struct MprisArtCache {
