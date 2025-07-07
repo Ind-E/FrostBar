@@ -4,7 +4,7 @@ use iced::{
     advanced::subscription,
     border::Radius,
     mouse::Interaction,
-    widget::{Container, Image, MouseArea, container, image, text},
+    widget::{Column, Container, Image, MouseArea, container, image, text},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
@@ -15,6 +15,63 @@ use crate::{
     dbus_proxy::PlayerProxy,
     icon_cache::MprisArtCache,
 };
+
+pub struct MprisState {
+    pub players: HashMap<String, MprisPlayer>,
+    art_cache: MprisArtCache,
+}
+
+impl MprisState {
+    pub fn new() -> Self {
+        Self {
+            players: HashMap::new(),
+            art_cache: MprisArtCache::new(),
+        }
+    }
+
+    pub fn on_event(&mut self, event: MprisEvent) -> iced::Task<Message> {
+        match event {
+            MprisEvent::PlayerAppeared {
+                name,
+                status,
+                metadata,
+            } => {
+                let mut player = MprisPlayer::new(name.clone(), status);
+                player.update_metadata(&metadata, &mut self.art_cache);
+                self.players.insert(name, player);
+            }
+            MprisEvent::PlayerVanished { name } => {
+                self.players.remove(&name);
+            }
+            MprisEvent::PlaybackStatusChanged {
+                player_name,
+                status,
+            } => {
+                if let Some(player) = self.players.get_mut(&player_name) {
+                    player.status = status;
+                }
+            }
+            MprisEvent::MetadataChanged {
+                player_name,
+                metadata,
+            } => {
+                if let Some(player) = self.players.get_mut(&player_name) {
+                    player.update_metadata(&metadata, &mut self.art_cache);
+                }
+            }
+        };
+        iced::Task::none()
+    }
+
+    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
+        self.players
+            .values()
+            .fold(Column::new().spacing(5).padding(5), |col, player| {
+                col.push(player.to_widget())
+            })
+            .into()
+    }
+}
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 
@@ -43,11 +100,12 @@ pub enum MprisEvent {
 
 #[derive(Clone, Debug)]
 pub struct MprisPlayer {
-    pub name: String,
-    pub status: String,
-    pub artists: Option<String>,
-    pub title: Option<String>,
-    pub art: Option<image::Handle>,
+    name: String,
+    status: String,
+    artists: Option<String>,
+    title: Option<String>,
+    art: Option<image::Handle>,
+    pub id: container::Id,
 }
 
 impl MprisPlayer {
@@ -84,6 +142,7 @@ impl MprisPlayer {
             artists: None,
             title: None,
             art: None,
+            id: container::Id::unique(),
         }
     }
 
@@ -106,10 +165,7 @@ impl MprisPlayer {
         format!("{} - {}", artists, title)
     }
 
-    pub fn to_widget<'a>(
-        &self,
-        id: Option<container::Id>,
-    ) -> Element<'a, Message> {
+    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &self.art {
             Container::new(Image::new(art)).into()
         } else {
@@ -134,7 +190,7 @@ impl MprisPlayer {
             .into()
         };
 
-        let container = Container::new(
+        Container::new(
             MouseArea::new(content)
                 .on_enter(Message::MouseEntered(MouseEvent::MprisPlayer(
                     self.name.clone(),
@@ -145,13 +201,9 @@ impl MprisPlayer {
                 .on_release(Message::PlayPause(self.name.clone()))
                 .on_right_release(Message::NextSong(self.name.clone()))
                 .interaction(Interaction::Pointer),
-        );
-
-        if let Some(id) = id {
-            container.id(id).into()
-        } else {
-            container.into()
-        }
+        )
+        .id(self.id.clone())
+        .into()
     }
 }
 

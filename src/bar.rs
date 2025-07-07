@@ -18,10 +18,7 @@ use iced_layershell::{
     to_layer_message,
 };
 use itertools::Itertools;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
 use zbus::Connection;
 
 use tokio::process::Command as TokioCommand;
@@ -29,11 +26,11 @@ use tokio::process::Command as TokioCommand;
 use crate::{
     config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES, VOLUME_PERCENT},
     dbus_proxy::PlayerProxy,
-    icon_cache::{IconCache, MprisArtCache},
+    icon_cache::IconCache,
     modules::{
         battery::BatteryState,
         cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
-        mpris::{MprisEvent, MprisListener, MprisPlayer},
+        mpris::{MprisEvent, MprisListener, MprisState},
         niri::{NiriState, NiriSubscriptionRecipe},
     },
     style::{no_rail, rounded_corners, tooltip_style},
@@ -42,7 +39,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub enum MouseEvent {
-    Workspace(u8),
+    Workspace(u64),
     Window(u64),
     MprisPlayer(String),
     Tooltip(container::Id),
@@ -71,21 +68,18 @@ pub enum Message {
 }
 
 pub struct Bar {
-    pub time: DateTime<Local>,
-    pub battery_module: BatteryState,
-    pub tooltips: HashMap<container::Id, Tooltip>,
-    pub tooltip_canvas: Id,
+    time: DateTime<Local>,
+    battery_module: BatteryState,
+    tooltips: HashMap<container::Id, Tooltip>,
+    tooltip_canvas: Id,
 
-    pub window_tooltips: HashMap<u64, container::Id>,
-    pub niri_state: NiriState,
-    pub hovered_workspace_index: Option<u8>,
+    window_tooltips: HashMap<u64, container::Id>,
+    niri_state: NiriState,
 
-    pub cava_visualizer: CavaVisualizer,
+    cava_visualizer: CavaVisualizer,
 
     // pub icon_cache: Arc<Mutex<IconCache>>,
-    pub mpris_art_cache: Arc<Mutex<MprisArtCache>>,
-    pub mpris_players: HashMap<String, MprisPlayer>,
-    pub mpris_tooltips: HashMap<String, container::Id>,
+    mpris_module: MprisState,
 }
 
 impl Bar {
@@ -102,15 +96,12 @@ impl Bar {
                 tooltips,
                 window_tooltips: HashMap::new(),
                 niri_state: NiriState::new(IconCache::new()),
-                hovered_workspace_index: None,
                 cava_visualizer: CavaVisualizer {
                     bars: vec![0; 10],
                     cache: iced::widget::canvas::Cache::new(),
                 },
                 // icon_cache: Arc::new(Mutex::new(IconCache::new())),
-                mpris_art_cache: Arc::new(Mutex::new(MprisArtCache::new())),
-                mpris_players: HashMap::new(),
-                mpris_tooltips: HashMap::new(),
+                mpris_module: MprisState::new(),
                 tooltip_canvas: Id::unique(),
             },
             Task::batch(vec![
@@ -192,19 +183,16 @@ impl Bar {
             Message::NiriAction(action) => self.niri_state.handle_action(action),
             Message::MouseEntered(event) => {
                 match event {
-                    MouseEvent::MprisPlayer(name) => {
-                        let id = self
-                            .mpris_tooltips
-                            .entry(name.clone())
-                            .or_insert_with(container::Id::unique)
-                            .clone();
-                        let tooltip = self
-                            .tooltips
-                            .entry(id.clone())
-                            .or_insert_with(|| Tooltip::default());
-                        if tooltip.state == TooltipState::Hidden
-                            && let Some(player) = self.mpris_players.get(&name)
-                        {
+                    MouseEvent::MprisPlayer(name) => 'block: {
+                        let Some(player) = self.mpris_module.players.get(&name)
+                        else {
+                            break 'block;
+                        };
+                        let id = player.id.clone();
+                        let Some(tooltip) = self.tooltips.get_mut(&id) else {
+                            break 'block;
+                        };
+                        if tooltip.state == TooltipState::Hidden {
                             tooltip.content = Some(player.tooltip());
                             tooltip.state = TooltipState::Measuring(0);
 
@@ -243,8 +231,8 @@ impl Bar {
                             );
                         }
                     }
-                    MouseEvent::Workspace(idx) => {
-                        self.hovered_workspace_index = Some(idx);
+                    MouseEvent::Workspace(id) => {
+                        self.niri_state.hovered_workspace_id = Some(id);
                     }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id)
@@ -289,15 +277,23 @@ impl Bar {
                 self.tooltips.values_mut().for_each(|tip| {
                     tip.state = TooltipState::Hidden;
                 });
-                self.hovered_workspace_index = None;
+                self.niri_state.hovered_workspace_id = None;
                 Task::none()
             }
             Message::MouseExited(event) => {
                 match event {
                     MouseEvent::MprisPlayer(name) => {
-                        if let Some(id) = self.mpris_tooltips.get(&name)
-                            && let Some(tooltip) = self.tooltips.get_mut(id)
+                        if let Some(id) = self
+                            .mpris_module
+                            .players
+                            .get(&name)
+                            .and_then(|p| Some(&p.id))
                         {
+                            let tooltip = self
+                                .tooltips
+                                .entry(id.clone())
+                                .or_insert_with(|| Tooltip::default());
+
                             tooltip.state = TooltipState::Hidden;
                         }
                     }
@@ -309,7 +305,7 @@ impl Bar {
                         }
                     }
                     MouseEvent::Workspace(..) => {
-                        self.hovered_workspace_index = None;
+                        self.niri_state.hovered_workspace_id = None;
                     }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id) {
@@ -339,49 +335,7 @@ impl Bar {
                 };
                 Task::none()
             }
-            Message::MprisEvent(event) => {
-                match event {
-                    MprisEvent::PlayerAppeared {
-                        name,
-                        status,
-                        metadata,
-                    } => {
-                        let mut player = MprisPlayer::new(name.clone(), status);
-                        player.update_metadata(
-                            &metadata,
-                            &mut self.mpris_art_cache.lock().unwrap(),
-                        );
-                        self.mpris_players.insert(name, player);
-                    }
-                    MprisEvent::PlayerVanished { name } => {
-                        self.mpris_players.remove(&name);
-                    }
-                    MprisEvent::PlaybackStatusChanged {
-                        player_name,
-                        status,
-                    } => {
-                        if let Some(player) =
-                            self.mpris_players.get_mut(&player_name)
-                        {
-                            player.status = status;
-                        }
-                    }
-                    MprisEvent::MetadataChanged {
-                        player_name,
-                        metadata,
-                    } => {
-                        if let Some(player) =
-                            self.mpris_players.get_mut(&player_name)
-                        {
-                            player.update_metadata(
-                                &metadata,
-                                &mut self.mpris_art_cache.lock().unwrap(),
-                            );
-                        }
-                    }
-                }
-                Task::none()
-            }
+            Message::MprisEvent(event) => self.mpris_module.on_event(event),
             Message::PlayPause(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await {
@@ -453,15 +407,6 @@ impl Bar {
                 }
             })
         });
-        let mpris_art =
-            self.mpris_players.values().fold(
-                Column::new().spacing(5).padding(5),
-                |col, player| {
-                    col.push(player.to_widget(
-                        self.mpris_tooltips.get(&player.name).cloned(),
-                    ))
-                },
-            );
 
         let top_section = Container::new(
             column![
@@ -469,7 +414,7 @@ impl Bar {
                 self.battery_module.to_widget(),
                 text(time).size(16),
                 cava_visualizer,
-                mpris_art,
+                self.mpris_module.to_widget(),
             ]
             .align_x(Horizontal::Center),
         )
@@ -484,10 +429,14 @@ impl Bar {
             .iter()
             .sorted_by_key(|(_, ws)| ws.idx)
             .fold(Column::new(), |col, (_, ws)| {
-                col.push(ws.to_widget(
-                    self.hovered_workspace_index.is_some_and(|x| x == ws.idx),
-                    &self.window_tooltips,
-                ))
+                col.push(
+                    ws.to_widget(
+                        self.niri_state
+                            .hovered_workspace_id
+                            .is_some_and(|id| id == ws.id),
+                        &self.window_tooltips,
+                    ),
+                )
             })
             .align_x(Horizontal::Center)
             .spacing(10);
