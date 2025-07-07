@@ -9,7 +9,7 @@ iced = { version = "0.13.1", default-features = false, features = ["tokio", "svg
 iced_layershell = "0.13.7"
 iced_runtime = { version = "0.13.2", default-features = false }
 starship-battery = { version = "0.10.2", default-features = false }
-tokio = { version = "1.45.1", default-features = false, features = ["time", "macros", "sync", "process"] }
+tokio = { version = "1.46.1", default-features = false, features = ["time", "macros", "sync", "process", "rt", "rt-multi-thread"] }
 niri-ipc = {git = "https://github.com/YaLTeR/niri/", branch = "main"}
 thiserror = { version = "2.0.12", default-features = false }
 itertools = { version = "0.14.0", default-features = false, features = ["use_alloc"] }

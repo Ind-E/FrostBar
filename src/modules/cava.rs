@@ -33,6 +33,15 @@ pub struct CavaVisualizer {
     pub cache: Cache,
 }
 
+impl CavaVisualizer {
+    pub fn new() -> Self {
+        Self {
+            bars: vec![0; 10],
+            cache: Cache::new(),
+        }
+    }
+}
+
 impl<Message> Program<Message> for CavaVisualizer {
     type State = ();
 

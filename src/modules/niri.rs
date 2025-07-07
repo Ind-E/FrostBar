@@ -13,7 +13,12 @@ use iced::{
 };
 use itertools::Itertools;
 use niri_ipc::{Action, Event, Request, WorkspaceReferenceArg, socket::Socket};
-use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use tokio::sync::mpsc::{self};
 
 use crate::{
@@ -107,7 +112,8 @@ impl<'a> Workspace {
     }
 }
 
-fn map_window(window: &NiriWindow, icon_cache: &mut IconCache) -> Window {
+fn map_window(window: &NiriWindow, icon_cache: Arc<Mutex<IconCache>>) -> Window {
+    let mut icon_cache = icon_cache.lock().unwrap();
     Window {
         id: window.inner.id,
         icon: window
@@ -123,12 +129,12 @@ pub struct NiriState {
     workspaces: HashMap<u64, Workspace>,
     pub windows: HashMap<u64, NiriWindow>,
     pub hovered_workspace_id: Option<u64>,
-    icon_cache: IconCache,
+    icon_cache: Arc<Mutex<IconCache>>,
     sender: Arc<tokio::sync::mpsc::Sender<Request>>,
 }
 
 impl NiriState {
-    pub fn new(icon_cache: IconCache) -> Self {
+    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
         let (request_tx, request_rx) = mpsc::channel(32);
         let request_socket = match niri_ipc::socket::Socket::connect() {
             Ok(sock) => sock,
@@ -194,7 +200,10 @@ impl NiriState {
                             .values()
                             .filter(|w| w.inner.workspace_id == Some(ws.id))
                             .map(|w| {
-                                (w.inner.id, map_window(w, &mut self.icon_cache))
+                                (
+                                    w.inner.id,
+                                    map_window(w, self.icon_cache.clone()),
+                                )
                             })
                             .collect(),
                     })
@@ -213,7 +222,7 @@ impl NiriState {
                         .values()
                         .filter(|w| w.inner.workspace_id == Some(ws.id))
                         .map(|w| {
-                            (w.inner.id, map_window(&w, &mut self.icon_cache))
+                            (w.inner.id, map_window(&w, self.icon_cache.clone()))
                         })
                         .collect()
                 });
@@ -243,7 +252,7 @@ impl NiriState {
                     let window_ref = self.windows.get(&window_id).unwrap();
                     new_ws.windows.insert(
                         window_id,
-                        map_window(window_ref, &mut self.icon_cache),
+                        map_window(window_ref, self.icon_cache.clone()),
                     );
                 }
             }

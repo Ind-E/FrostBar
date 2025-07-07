@@ -18,6 +18,7 @@ mod tooltip;
 
 #[tokio::main]
 pub async fn main() -> Result<(), iced_layershell::Error> {
+    let (bar, task) = Bar::new().await;
     daemon(Bar::namespace, Bar::update, Bar::view, Bar::remove_id)
         .subscription(Bar::subscription)
         .style(Bar::style)
@@ -36,5 +37,5 @@ pub async fn main() -> Result<(), iced_layershell::Error> {
             },
             ..Default::default()
         })
-        .run_with(|| Bar::new())
+        .run_with(move || (bar, task))
 }

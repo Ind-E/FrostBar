@@ -17,7 +17,11 @@ use iced_layershell::{
     reexport::{Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings},
     to_layer_message,
 };
-use std::collections::HashMap;
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use zbus::Connection;
 
 use tokio::process::Command as TokioCommand;
@@ -31,6 +35,7 @@ use crate::{
         cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
         mpris::{MprisEvent, MprisListener, MprisState},
         niri::{NiriState, NiriSubscriptionRecipe},
+        systray::SysTrayState,
     },
     style::{rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
@@ -58,6 +63,9 @@ pub enum Message {
     NiriIpcEvent(niri_ipc::Event),
     NiriAction(niri_ipc::Action),
 
+    SysTrayEvent(system_tray::client::Event),
+    SysTrayAction(),
+
     CavaUpdate(Result<String, CavaError>),
 
     MprisEvent(MprisEvent),
@@ -79,32 +87,33 @@ pub struct Bar {
     niri_module: NiriState,
     mpris_module: MprisState,
     cava_module: CavaVisualizer,
+    systray_module: SysTrayState,
 
     tooltips: HashMap<container::Id, Tooltip>,
     tooltip_canvas: Id,
-    // pub icon_cache: Arc<Mutex<IconCache>>,
+    icon_cache: Arc<Mutex<IconCache>>,
 }
 
 impl Bar {
-    pub fn new() -> (Self, Task<Message>) {
+    pub async fn new() -> (Self, Task<Message>) {
         let battery_module = BatteryState::new();
 
         let mut tooltips = HashMap::new();
         tooltips.insert(battery_module.id.clone(), Tooltip::default());
 
+        let icon_cache = Arc::new(Mutex::new(IconCache::new()));
+
         (
             Self {
+                tooltips,
+                tooltip_canvas: Id::unique(),
                 time: Local::now(),
                 battery_module,
-                tooltips,
-                niri_module: NiriState::new(IconCache::new()),
-                cava_module: CavaVisualizer {
-                    bars: vec![0; 10],
-                    cache: iced::widget::canvas::Cache::new(),
-                },
-                // icon_cache: Arc::new(Mutex::new(IconCache::new())),
+                niri_module: NiriState::new(icon_cache.clone()),
                 mpris_module: MprisState::new(),
-                tooltip_canvas: Id::unique(),
+                cava_module: CavaVisualizer::new(),
+                systray_module: SysTrayState::new().await,
+                icon_cache,
             },
             Task::batch(vec![
                 // create_client(),
