@@ -8,8 +8,8 @@ use iced::{
     padding::{left, top},
     time::{self, Duration},
     widget::{
-        Column, Container, MouseArea, Scrollable, Stack, Text, canvas, column,
-        container, stack, text,
+        Column, Container, MouseArea, Stack, Text, canvas, column, container,
+        stack, text,
     },
     window::Id,
 };
@@ -17,7 +17,6 @@ use iced_layershell::{
     reexport::{Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings},
     to_layer_message,
 };
-use itertools::Itertools;
 use std::collections::HashMap;
 use zbus::Connection;
 
@@ -33,7 +32,7 @@ use crate::{
         mpris::{MprisEvent, MprisListener, MprisState},
         niri::{NiriState, NiriSubscriptionRecipe},
     },
-    style::{no_rail, rounded_corners, tooltip_style},
+    style::{rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
 };
 
@@ -49,20 +48,27 @@ pub enum MouseEvent {
 #[derive(Debug, Clone)]
 pub enum Message {
     IcedEvent(Event),
+
     Tick(DateTime<Local>),
+
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
     MouseExitedBar,
-    TooltipMeasured(container::Id, Option<Rectangle>),
+
     NiriIpcEvent(niri_ipc::Event),
     NiriAction(niri_ipc::Action),
+
     CavaUpdate(Result<String, CavaError>),
+
     MprisEvent(MprisEvent),
     PlayPause(String),
     NextSong(String),
     StopPlayer(String),
     ChangeVolume(i32),
+
     CreateTooltipCanvas,
+    TooltipMeasured(container::Id, Option<Rectangle>),
+
     ErrorMessage(String),
     NoOp,
 }
@@ -70,16 +76,13 @@ pub enum Message {
 pub struct Bar {
     time: DateTime<Local>,
     battery_module: BatteryState,
+    niri_module: NiriState,
+    mpris_module: MprisState,
+    cava_module: CavaVisualizer,
+
     tooltips: HashMap<container::Id, Tooltip>,
     tooltip_canvas: Id,
-
-    window_tooltips: HashMap<u64, container::Id>,
-    niri_state: NiriState,
-
-    cava_visualizer: CavaVisualizer,
-
     // pub icon_cache: Arc<Mutex<IconCache>>,
-    mpris_module: MprisState,
 }
 
 impl Bar {
@@ -94,9 +97,8 @@ impl Bar {
                 time: Local::now(),
                 battery_module,
                 tooltips,
-                window_tooltips: HashMap::new(),
-                niri_state: NiriState::new(IconCache::new()),
-                cava_visualizer: CavaVisualizer {
+                niri_module: NiriState::new(IconCache::new()),
+                cava_module: CavaVisualizer {
                     bars: vec![0; 10],
                     cache: iced::widget::canvas::Cache::new(),
                 },
@@ -178,9 +180,9 @@ impl Bar {
                 Task::none()
             }
             Message::NiriIpcEvent(event) => {
-                self.niri_state.handle_ipc_event(event)
+                self.niri_module.handle_ipc_event(event)
             }
-            Message::NiriAction(action) => self.niri_state.handle_action(action),
+            Message::NiriAction(action) => self.niri_module.handle_action(action),
             Message::MouseEntered(event) => {
                 match event {
                     MouseEvent::MprisPlayer(name) => 'block: {
@@ -203,12 +205,17 @@ impl Bar {
                             );
                         }
                     }
-                    MouseEvent::Window(w_id) => {
-                        let id = self
-                            .window_tooltips
-                            .entry(w_id)
-                            .or_insert_with(container::Id::unique)
-                            .clone();
+                    MouseEvent::Window(w_id) => 'block: {
+                        // let id = self
+                        //     .window_tooltips
+                        //     .entry(w_id)
+                        //     .or_insert_with(container::Id::unique)
+                        //     .clone();
+                        let Some(window) = self.niri_module.windows.get(&w_id)
+                        else {
+                            break 'block;
+                        };
+                        let id = window.container_id.clone();
                         let tooltip = self
                             .tooltips
                             .entry(id.clone())
@@ -216,12 +223,12 @@ impl Bar {
 
                         if tooltip.state == TooltipState::Hidden
                             && let Some(window) = self
-                                .niri_state
+                                .niri_module
                                 .windows
                                 .values()
-                                .find(|w| w.id == w_id)
+                                .find(|w| w.inner.id == w_id)
                         {
-                            tooltip.content = window.title.clone();
+                            tooltip.content = window.inner.title.clone();
                             tooltip.state = TooltipState::Measuring(0);
 
                             return container::visible_bounds(id.clone()).map(
@@ -232,7 +239,7 @@ impl Bar {
                         }
                     }
                     MouseEvent::Workspace(id) => {
-                        self.niri_state.hovered_workspace_id = Some(id);
+                        self.niri_module.hovered_workspace_id = Some(id);
                     }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id)
@@ -277,7 +284,7 @@ impl Bar {
                 self.tooltips.values_mut().for_each(|tip| {
                     tip.state = TooltipState::Hidden;
                 });
-                self.niri_state.hovered_workspace_id = None;
+                self.niri_module.hovered_workspace_id = None;
                 Task::none()
             }
             Message::MouseExited(event) => {
@@ -293,19 +300,25 @@ impl Bar {
                                 .tooltips
                                 .entry(id.clone())
                                 .or_insert_with(|| Tooltip::default());
-
                             tooltip.state = TooltipState::Hidden;
                         }
                     }
-                    MouseEvent::Window(id) => {
-                        if let Some(id) = self.window_tooltips.get(&id)
-                            && let Some(tooltip) = self.tooltips.get_mut(id)
+                    MouseEvent::Window(w_id) => {
+                        if let Some(id) = self
+                            .niri_module
+                            .windows
+                            .get(&w_id)
+                            .and_then(|w| Some(&w.container_id))
                         {
+                            let tooltip = self
+                                .tooltips
+                                .entry(id.clone())
+                                .or_insert_with(|| Tooltip::default());
                             tooltip.state = TooltipState::Hidden;
                         }
                     }
                     MouseEvent::Workspace(..) => {
-                        self.niri_state.hovered_workspace_id = None;
+                        self.niri_module.hovered_workspace_id = None;
                     }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id) {
@@ -323,11 +336,11 @@ impl Bar {
             Message::CavaUpdate(update) => {
                 match update {
                     Ok(line) => {
-                        self.cava_visualizer.bars = line
+                        self.cava_module.bars = line
                             .split(";")
                             .map(|s| s.parse::<u8>().unwrap_or(0))
                             .collect();
-                        self.cava_visualizer.cache.clear();
+                        self.cava_module.cache.clear();
                     }
                     Err(e) => {
                         eprintln!("cava error: {}", e);
@@ -385,9 +398,7 @@ impl Bar {
     fn view_bar(&self) -> Element<Message> {
         let time: String = self.time.format("%H\n%M").to_string();
         let cava_visualizer = MouseArea::new(
-            canvas(&self.cava_visualizer)
-                .width(Length::Fill)
-                .height(130),
+            canvas(&self.cava_module).width(Length::Fill).height(130),
         )
         .on_scroll(|delta| {
             Message::ChangeVolume(match delta {
@@ -423,30 +434,32 @@ impl Bar {
         .align_x(Horizontal::Center)
         .align_y(Vertical::Top);
 
-        let ws = self
-            .niri_state
-            .workspaces
-            .iter()
-            .sorted_by_key(|(_, ws)| ws.idx)
-            .fold(Column::new(), |col, (_, ws)| {
-                col.push(
-                    ws.to_widget(
-                        self.niri_state
-                            .hovered_workspace_id
-                            .is_some_and(|id| id == ws.id),
-                        &self.window_tooltips,
-                    ),
-                )
-            })
-            .align_x(Horizontal::Center)
-            .spacing(10);
+        // let ws = self
+        //     .niri_state
+        //     .workspaces
+        //     .iter()
+        //     .sorted_by_key(|(_, ws)| ws.idx)
+        //     .fold(Column::new(), |col, (_, ws)| {
+        //         col.push(
+        //             ws.to_widget(
+        //                 self.niri_state
+        //                     .hovered_workspace_id
+        //                     .is_some_and(|id| id == ws.id),
+        //                 &self.window_tooltips,
+        //             ),
+        //         )
+        //     })
+        //     .align_x(Horizontal::Center)
+        //     .spacing(10);
+        //
+        // let middle_section = Container::new(
+        //     Scrollable::new(Container::new(ws).align_y(Vertical::Center))
+        //         .height(570)
+        //         .style(no_rail),
+        // )
+        // .center_y(Length::Fill);
 
-        let middle_section = Container::new(
-            Scrollable::new(Container::new(ws).align_y(Vertical::Center))
-                .height(570)
-                .style(no_rail),
-        )
-        .center_y(Length::Fill);
+        let middle_section = self.niri_module.to_widget();
 
         let tray_items = column![];
 

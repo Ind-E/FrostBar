@@ -1,12 +1,12 @@
 use iced::{
     Element, Length,
     advanced::subscription,
-    alignment::Horizontal,
+    alignment::{Horizontal, Vertical},
     futures::Stream,
     mouse::Interaction,
     padding::top,
     widget::{
-        Column, Container, Image, MouseArea, Svg,
+        Column, Container, Image, MouseArea, Scrollable, Svg,
         container::{self},
         text,
     },
@@ -19,16 +19,17 @@ use tokio::sync::mpsc::{self};
 use crate::{
     bar::{Message, MouseEvent},
     icon_cache::{Icon, IconCache},
-    style::workspace_style,
+    style::{no_rail, workspace_style},
 };
 
-pub struct Window {
-    pub id: u64,
-    pub icon: Option<Icon>,
+struct Window {
+    id: u64,
+    icon: Option<Icon>,
+    container_id: container::Id,
 }
 
 impl<'a> Window {
-    pub fn to_widget(&self, id: Option<container::Id>) -> Element<'a, Message> {
+    fn to_widget(&self) -> Element<'a, Message> {
         let icon: Element<'a, Message> = match &self.icon {
             Some(Icon::Svg(handle)) => {
                 Svg::new(handle.clone()).height(24).width(24).into()
@@ -48,28 +49,34 @@ impl<'a> Window {
                 .on_exit(Message::MouseExited(MouseEvent::Window(self.id))),
         );
 
-        if let Some(id) = id {
-            container.id(id).into()
-        } else {
-            container.into()
+        container.id(self.container_id.clone()).into()
+    }
+}
+
+pub struct NiriWindow {
+    pub inner: niri_ipc::Window,
+    pub container_id: container::Id,
+}
+
+impl NiriWindow {
+    fn new(inner: niri_ipc::Window) -> Self {
+        Self {
+            inner,
+            container_id: container::Id::unique(),
         }
     }
 }
 
-pub struct Workspace {
-    pub output: Option<String>,
-    pub idx: u8,
-    pub id: u64,
-    pub is_active: bool,
-    pub windows: HashMap<u64, Window>,
+struct Workspace {
+    output: Option<String>,
+    idx: u8,
+    id: u64,
+    is_active: bool,
+    windows: HashMap<u64, Window>,
 }
 
 impl<'a> Workspace {
-    pub fn to_widget(
-        &self,
-        hovered: bool,
-        window_ids: &HashMap<u64, container::Id>,
-    ) -> Element<'a, Message> {
+    fn to_widget(&self, hovered: bool) -> Element<'a, Message> {
         Container::new(
             MouseArea::new(
                 Container::new(
@@ -81,11 +88,7 @@ impl<'a> Workspace {
                                 .align_x(Horizontal::Center)
                                 .spacing(5)
                                 .push(text(self.idx - 1).size(20)),
-                            |col, w| {
-                                col.push(
-                                    w.to_widget(window_ids.get(&w.id).cloned()),
-                                )
-                            },
+                            |col, w| col.push(w.to_widget()),
                         ),
                 )
                 .style(workspace_style(self.is_active, hovered))
@@ -104,22 +107,24 @@ impl<'a> Workspace {
     }
 }
 
-pub struct NiriState {
-    pub workspaces: HashMap<u64, Workspace>,
-    pub windows: HashMap<u64, niri_ipc::Window>,
-    pub hovered_workspace_id: Option<u64>,
-    icon_cache: IconCache,
-    sender: Arc<tokio::sync::mpsc::Sender<Request>>,
-}
-
-fn map_window(window: &niri_ipc::Window, icon_cache: &mut IconCache) -> Window {
+fn map_window(window: &NiriWindow, icon_cache: &mut IconCache) -> Window {
     Window {
-        id: window.id,
+        id: window.inner.id,
         icon: window
+            .inner
             .app_id
             .as_ref()
             .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
+        container_id: window.container_id.clone(),
     }
+}
+
+pub struct NiriState {
+    workspaces: HashMap<u64, Workspace>,
+    pub windows: HashMap<u64, NiriWindow>,
+    pub hovered_workspace_id: Option<u64>,
+    icon_cache: IconCache,
+    sender: Arc<tokio::sync::mpsc::Sender<Request>>,
 }
 
 impl NiriState {
@@ -139,6 +144,28 @@ impl NiriState {
             icon_cache,
             sender: Arc::new(request_tx),
         }
+    }
+
+    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
+        let ws = self
+            .workspaces
+            .iter()
+            .sorted_by_key(|(_, ws)| ws.idx)
+            .fold(Column::new(), |col, (_, ws)| {
+                col.push(ws.to_widget(
+                    self.hovered_workspace_id.is_some_and(|id| id == ws.id),
+                ))
+            })
+            .align_x(Horizontal::Center)
+            .spacing(10);
+
+        Container::new(
+            Scrollable::new(Container::new(ws).align_y(Vertical::Center))
+                .height(570)
+                .style(no_rail),
+        )
+        .center_y(Length::Fill)
+        .into()
     }
 
     pub fn handle_action(&mut self, action: Action) -> iced::Task<Message> {
@@ -164,10 +191,10 @@ impl NiriState {
                         is_active: ws.is_active,
                         windows: self
                             .windows
-                            .iter()
-                            .filter(|(_, w)| w.workspace_id == Some(ws.id))
-                            .map(|(id, w)| {
-                                (*id, map_window(w, &mut self.icon_cache))
+                            .values()
+                            .filter(|w| w.inner.workspace_id == Some(ws.id))
+                            .map(|w| {
+                                (w.inner.id, map_window(w, &mut self.icon_cache))
                             })
                             .collect(),
                     })
@@ -175,22 +202,29 @@ impl NiriState {
                     .collect()
             }
             Event::WindowsChanged { windows } => {
-                self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
+                self.windows = windows
+                    .into_iter()
+                    .map(|w| (w.id, NiriWindow::new(w)))
+                    .collect();
 
                 self.workspaces.values_mut().for_each(|ws| {
                     ws.windows = self
                         .windows
                         .values()
-                        .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| (w.id, map_window(&w, &mut self.icon_cache)))
+                        .filter(|w| w.inner.workspace_id == Some(ws.id))
+                        .map(|w| {
+                            (w.inner.id, map_window(&w, &mut self.icon_cache))
+                        })
                         .collect()
                 });
             }
             Event::WindowOpenedOrChanged { window } => {
                 let window_id = window.id;
 
-                let old_workspace_id =
-                    self.windows.get(&window_id).and_then(|w| w.workspace_id);
+                let old_workspace_id = self
+                    .windows
+                    .get(&window_id)
+                    .and_then(|w| w.inner.workspace_id);
                 let new_workspace_id = window.workspace_id;
 
                 if old_workspace_id != new_workspace_id {
@@ -201,7 +235,7 @@ impl NiriState {
                     }
                 }
 
-                self.windows.insert(window_id, window);
+                self.windows.insert(window_id, NiriWindow::new(window));
 
                 if let Some(new_ws_id) = new_workspace_id
                     && let Some(new_ws) = self.workspaces.get_mut(&new_ws_id)
