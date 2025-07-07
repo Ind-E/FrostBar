@@ -1,6 +1,6 @@
 use iced::{
     Background, Border, Color, Theme,
-    border::{self, rounded, top_right},
+    border::{self, Radius, rounded, top_right},
     widget::{
         container,
         scrollable::{self, Rail, Scroller, Status},
@@ -48,4 +48,27 @@ pub fn no_rail(_theme: &Theme, _status: Status) -> scrollable::Style {
         horizontal_rail: no_rail,
         gap: None,
     }
+}
+
+pub fn workspace_style<'a>(
+    active: bool,
+    hovered: bool,
+) -> container::StyleFn<'a, Theme> {
+    Box::new(move |_| container::Style {
+        border: Border {
+            color: if active {
+                Color::WHITE
+            } else {
+                Color::from_rgb(0.3, 0.3, 0.3)
+            },
+            width: 2.0,
+            radius: Radius::new(12),
+        },
+        background: Some(Background::Color(if hovered {
+            Color::from_rgba(0.8, 0.8, 0.8, 0.015)
+        } else {
+            Color::TRANSPARENT
+        })),
+        ..Default::default()
+    })
 }

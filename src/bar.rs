@@ -18,20 +18,13 @@ use iced_layershell::{
     to_layer_message,
 };
 use itertools::Itertools;
-use niri_ipc::Request;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 use zbus::Connection;
 
-use tokio::{
-    process::Command as TokioCommand,
-    sync::{
-        Mutex as TokioMutex,
-        mpsc::{self, Sender},
-    },
-};
+use tokio::process::Command as TokioCommand;
 
 use crate::{
     config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES, VOLUME_PERCENT},
@@ -41,7 +34,7 @@ use crate::{
         battery::BatteryState,
         cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
         mpris::{MprisEvent, MprisListener, MprisPlayer},
-        niri::{IpcError, NiriEvents, NiriState, run_niri_request_handler},
+        niri::{NiriState, NiriSubscriptionRecipe},
     },
     style::{no_rail, rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
@@ -60,14 +53,12 @@ pub enum MouseEvent {
 pub enum Message {
     IcedEvent(Event),
     Tick(DateTime<Local>),
-    ErrorMessage(String),
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
     MouseExitedBar,
     TooltipMeasured(container::Id, Option<Rectangle>),
-    NiriEvent(Result<niri_ipc::Event, IpcError>),
-    FocusWorkspace(u8),
-    FocusWindow(u64),
+    NiriIpcEvent(niri_ipc::Event),
+    NiriAction(niri_ipc::Action),
     CavaUpdate(Result<String, CavaError>),
     MprisEvent(MprisEvent),
     PlayPause(String),
@@ -75,6 +66,7 @@ pub enum Message {
     StopPlayer(String),
     ChangeVolume(i32),
     CreateTooltipCanvas,
+    ErrorMessage(String),
     NoOp,
 }
 
@@ -86,7 +78,6 @@ pub struct Bar {
 
     pub window_tooltips: HashMap<u64, container::Id>,
     pub niri_state: NiriState,
-    pub niri_request_sender: Sender<Request>,
     pub hovered_workspace_index: Option<u8>,
 
     pub cava_visualizer: CavaVisualizer,
@@ -104,14 +95,6 @@ impl Bar {
         let mut tooltips = HashMap::new();
         tooltips.insert(battery_module.id.clone(), Tooltip::default());
 
-        let (request_tx, request_rx) = mpsc::channel(32);
-        let request_socket = match niri_ipc::socket::Socket::connect() {
-            Ok(sock) => Arc::new(TokioMutex::new(sock)),
-            Err(e) => panic!("Failed to create niri request socket: {}", e),
-        };
-
-        tokio::spawn(run_niri_request_handler(request_rx, request_socket));
-
         (
             Self {
                 time: Local::now(),
@@ -119,7 +102,6 @@ impl Bar {
                 tooltips,
                 window_tooltips: HashMap::new(),
                 niri_state: NiriState::new(IconCache::new()),
-                niri_request_sender: request_tx,
                 hovered_workspace_index: None,
                 cava_visualizer: CavaVisualizer {
                     bars: vec![0; 10],
@@ -132,7 +114,6 @@ impl Bar {
                 tooltip_canvas: Id::unique(),
             },
             Task::batch(vec![
-                // align_clock(),
                 // create_client(),
                 Task::done(Message::CreateTooltipCanvas),
             ]),
@@ -150,8 +131,10 @@ impl Bar {
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
 
-        subscriptions
-            .push(subscription::from_recipe(NiriEvents).map(Message::NiriEvent));
+        subscriptions.push(
+            subscription::from_recipe(NiriSubscriptionRecipe)
+                .map(Message::NiriIpcEvent),
+        );
         subscriptions.push(
             subscription::from_recipe(MprisListener).map(Message::MprisEvent),
         );
@@ -203,35 +186,10 @@ impl Bar {
                 self.battery_module.fetch_battery_info();
                 Task::none()
             }
-            Message::NiriEvent(event) => {
-                if let Ok(event) = event {
-                    self.niri_state.on_event(event);
-                }
-
-                Task::none()
+            Message::NiriIpcEvent(event) => {
+                self.niri_state.handle_ipc_event(event)
             }
-            Message::FocusWorkspace(idx) => {
-                let sender = self.niri_request_sender.clone();
-                let request =
-                    niri_ipc::Request::Action(niri_ipc::Action::FocusWorkspace {
-                        reference: niri_ipc::WorkspaceReferenceArg::Index(idx),
-                    });
-                Task::perform(
-                    async move { sender.send(request).await.ok() },
-                    |_| Message::NoOp,
-                )
-            }
-            Message::FocusWindow(id) => {
-                let sender = self.niri_request_sender.clone();
-                let request =
-                    niri_ipc::Request::Action(niri_ipc::Action::FocusWindow {
-                        id,
-                    });
-                Task::perform(
-                    async move { sender.send(request).await.ok() },
-                    |_| Message::NoOp,
-                )
-            }
+            Message::NiriAction(action) => self.niri_state.handle_action(action),
             Message::MouseEntered(event) => {
                 match event {
                     MouseEvent::MprisPlayer(name) => {

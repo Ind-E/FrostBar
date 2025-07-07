@@ -12,12 +12,12 @@ mod bar;
 mod config;
 mod dbus_proxy;
 mod icon_cache;
+mod modules;
 mod style;
 mod tooltip;
-mod modules;
 
 #[tokio::main]
-pub async fn main() -> color_eyre::Result<()> {
+pub async fn main() -> Result<(), iced_layershell::Error> {
     daemon(Bar::namespace, Bar::update, Bar::view, Bar::remove_id)
         .subscription(Bar::subscription)
         .style(Bar::style)
@@ -36,6 +36,5 @@ pub async fn main() -> color_eyre::Result<()> {
             },
             ..Default::default()
         })
-        .run_with(|| Bar::new())?;
-    Ok(())
+        .run_with(|| Bar::new())
 }

@@ -6,7 +6,6 @@ use std::{
 };
 
 use base64::engine::general_purpose;
-use color_eyre::{Result, eyre::Context};
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
 use iced::widget::{
     image::{self, Handle},
@@ -25,7 +24,9 @@ pub enum Icon {
     Raster(image::Handle),
 }
 
-pub fn client_icon_path(app_id: &str) -> Result<PathBuf> {
+pub fn client_icon_path(
+    app_id: &str,
+) -> Result<PathBuf, freedesktop_desktop_entry::DecodeError> {
     let mut paths = default_paths();
 
     let desktop_file = paths
@@ -33,17 +34,21 @@ pub fn client_icon_path(app_id: &str) -> Result<PathBuf> {
             let file = p.join(&format!("{}.desktop", app_id));
             if file.exists() { Some(file) } else { None }
         })
-        .map(|df| -> Result<_> {
-            let content = std::fs::read_to_string(&df).with_context(|| {
-                format!("Failed to read desktop entry {df:?}")
-            })?;
+        .map(
+            |df| -> Result<
+                Option<PathBuf>,
+                freedesktop_desktop_entry::DecodeError,
+            > {
+                let content = std::fs::read_to_string(&df)?;
 
-            let entry = DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
+                let entry =
+                    DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
 
-            Ok(entry.desktop_entry("Icon").and_then(|icon_name| {
-                icon_finder::find_icon(icon_name.to_string(), 128, 1)
-            }))
-        })
+                Ok(entry.desktop_entry("Icon").and_then(|icon_name| {
+                    icon_finder::find_icon(icon_name.to_string(), 128, 1)
+                }))
+            },
+        )
         .transpose()?
         .unwrap_or_else(|| {
             icon_finder::find_icon("default-application".to_string(), 128, 1)
