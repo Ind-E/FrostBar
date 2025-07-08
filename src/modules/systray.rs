@@ -11,9 +11,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 use system_tray::{
-    client::{self, Client, Event, UpdateEvent},
+    client::{Client, Event, UpdateEvent},
+    data::apply_menu_diffs,
     item::StatusNotifierItem,
-    menu::{MenuDiff, TrayMenu},
+    menu::TrayMenu,
 };
 use tokio::sync::broadcast::Receiver;
 use tokio_stream::{StreamExt, wrappers::BroadcastStream};
@@ -44,10 +45,11 @@ impl SysTrayState {
                     .lock()
                     .unwrap()
                     .iter()
-                    .map(|(id, (item, tray_menu))| {
+                    .map(|(address, (item, tray_menu))| {
                         (
-                            id.to_string(),
+                            address.to_string(),
                             SysTrayItem::new(
+                                address.to_string(),
                                 Box::new(item.clone()),
                                 tray_menu.clone(),
                             ),
@@ -71,53 +73,51 @@ impl SysTrayState {
 
     pub fn on_event(&mut self, event: Event) -> iced::Task<Message> {
         match event {
-            Event::Add(id, item) => {
-                self.items.insert(id, SysTrayItem::new(item, None));
+            Event::Add(address, item) => {
+                self.items.insert(
+                    address.clone(),
+                    SysTrayItem::new(address, item, None),
+                );
             }
-            Event::Remove(id) => {
-                self.items.remove(&id);
+            Event::Remove(address) => {
+                self.items.remove(&address);
             }
-            Event::Update(id, update_event) => match update_event {
-                UpdateEvent::Icon {
-                    icon_name,
-                    icon_pixmap,
-                } => {
-                    if let Some(icon_name) = icon_name {
-                        self.items.get_mut(&id).unwrap().item.icon_name =
-                            Some(icon_name);
+            Event::Update(address, update_event) => {
+                let item = self.items.get_mut(&address).unwrap();
+                match update_event {
+                    UpdateEvent::Icon {
+                        icon_name,
+                        icon_pixmap,
+                    } => {
+                        if let Some(icon_name) = icon_name {
+                            item.inner.icon_name = Some(icon_name);
+                        }
+                        if let Some(icon_pixmap) = icon_pixmap {
+                            item.inner.icon_pixmap = Some(icon_pixmap);
+                        }
                     }
-                    if let Some(icon_pixmap) = icon_pixmap {
-                        self.items.get_mut(&id).unwrap().item.icon_pixmap =
-                            Some(icon_pixmap);
+                    UpdateEvent::Title(title) => {
+                        item.inner.title = title;
                     }
-                }
-                UpdateEvent::Title(new_title) => {
-                    // self.items.get_mut(&id).unwrap().item.title = new_title;
-                }
-                UpdateEvent::Tooltip(new_tooltip) => {
-                    // self.items.get_mut(&id).unwrap().item.tool_tip = new_tooltip;
-                }
-                UpdateEvent::Menu(tray_menu) => {
-                    // self.items.get_mut(&id).unwrap().menu = Some(tray_menu);
-                }
-                UpdateEvent::MenuDiff(diffs) => {
-                    // let menu = &mut self.items.get_mut(&id).unwrap().menu;
-                    // diffs.iter().for_each(|diff| {
-                    //     diff.remove.iter().for_each(|remove| {});
-                    //     let update = &diff.update;
-                    //     if let Some(new_label) = &update.label {}
-                    //     if let Some(enabled) = &update.enabled {}
-                    //     if let Some(new_visible) = &update.visible {}
-                    //     if let Some(new_icon_name) = &update.icon_name {}
-                    //     if let Some(new_icon_data) = &update.icon_data {}
-                    //     if let Some(new_toggle_state) = &update.toggle_state {}
-                    // })
-                }
-                UpdateEvent::MenuConnect(_) => {}
-                UpdateEvent::AttentionIcon(_) => {}
-                UpdateEvent::OverlayIcon(_) => {}
-                UpdateEvent::Status(_) => {}
-            },
+                    UpdateEvent::Tooltip(tooltip) => {
+                        item.inner.tool_tip = tooltip;
+                    }
+                    UpdateEvent::Menu(menu) => {
+                        item.menu = Some(menu);
+                    }
+                    UpdateEvent::MenuDiff(diffs) => {
+                        if let Some(menu) = &mut item.menu {
+                            apply_menu_diffs(menu, &diffs);
+                        }
+                    }
+                    UpdateEvent::MenuConnect(name) => {
+                        log::warn!("{name} connected to {address}");
+                    }
+                    UpdateEvent::AttentionIcon(_) => {}
+                    UpdateEvent::OverlayIcon(_) => {}
+                    UpdateEvent::Status(_) => {}
+                };
+            }
         };
         iced::Task::none()
     }
@@ -126,7 +126,7 @@ impl SysTrayState {
         let tray_items = self
             .items
             .values()
-            .sorted_by(|item1, item2| item1.item.id.cmp(&item2.item.id))
+            .sorted_by(|item1, item2| item1.inner.id.cmp(&item2.inner.id))
             .map(|item| item.to_widget(&mut self.icon_cache.lock().unwrap()))
             .fold(
                 Column::new().padding(padding::top(5).bottom(5)).spacing(2),
@@ -145,18 +145,27 @@ impl SysTrayState {
 
 #[derive(Debug)]
 pub struct SysTrayItem {
-    pub item: Box<StatusNotifierItem>,
-    pub menu: Option<TrayMenu>,
+    address: String,
+    inner: Box<StatusNotifierItem>,
+    menu: Option<TrayMenu>,
 }
 
 impl SysTrayItem {
-    fn new(item: Box<StatusNotifierItem>, menu: Option<TrayMenu>) -> Self {
-        Self { item, menu }
+    fn new(
+        address: String,
+        item: Box<StatusNotifierItem>,
+        menu: Option<TrayMenu>,
+    ) -> Self {
+        Self {
+            address,
+            inner: item,
+            menu,
+        }
     }
 
     fn to_widget<'a>(&self, icon_cache: &mut IconCache) -> Element<'a, Message> {
         let mut tray_icon = None;
-        if let Some(icon) = icon_cache.get_tray_icon(&self.item).clone() {
+        if let Some(icon) = icon_cache.get_tray_icon(&self.inner).clone() {
             tray_icon = Some(icon);
         }
         if let Some(icon) = tray_icon {
@@ -164,12 +173,12 @@ impl SysTrayItem {
                 Icon::Svg(handle) => MouseArea::new(
                     Svg::new(handle).width(ICON_SIZE).height(ICON_SIZE),
                 )
-                // .on_release(Message::SysTrayInteraction(
-                //     SysTrayInteraction::LeftClick(address.to_string()),
-                // ))
-                // .on_right_release(Message::SysTrayInteraction(
-                //     SysTrayInteraction::RightClick(address.to_string()),
-                // ))
+                .on_release(Message::SysTrayAction(SysTrayAction::LeftClick(
+                    self.address.clone(),
+                )))
+                .on_right_release(Message::SysTrayAction(
+                    SysTrayAction::RightClick(self.address.clone()),
+                ))
                 .into(),
                 Icon::Raster(handle) => MouseArea::new(
                     Image::new(handle).width(ICON_SIZE).height(ICON_SIZE),
@@ -183,7 +192,7 @@ impl SysTrayItem {
 }
 
 #[derive(Debug, Clone)]
-pub enum SysTrayInteraction {
+pub enum SysTrayAction {
     LeftClick(String),
     RightClick(String),
 }

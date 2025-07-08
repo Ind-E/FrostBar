@@ -32,10 +32,10 @@ use crate::{
     icon_cache::IconCache,
     modules::{
         battery::BatteryState,
-        cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
+        cava::{write_temp_cava_config, CavaError, CavaEvents, CavaVisualizer},
         mpris::{MprisEvent, MprisListener, MprisState},
         niri::{NiriState, NiriSubscriptionRecipe},
-        systray::{SysTrayState, SysTraySubscription},
+        systray::{SysTrayAction, SysTrayState, SysTraySubscription},
     },
     style::{rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
@@ -64,7 +64,7 @@ pub enum Message {
     NiriAction(niri_ipc::Action),
 
     SysTrayEvent(system_tray::client::Event),
-    SysTrayAction(),
+    SysTrayAction(SysTrayAction),
 
     CavaUpdate(Result<String, CavaError>),
 
