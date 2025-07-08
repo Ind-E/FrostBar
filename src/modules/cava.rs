@@ -11,6 +11,8 @@ use std::{
     process::{Command, Stdio},
 };
 
+use crate::bar::Message;
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
     #[error("Cava command failed to start: {0}")]
@@ -39,6 +41,25 @@ impl CavaVisualizer {
             bars: vec![0; 10],
             cache: Cache::new(),
         }
+    }
+
+    pub fn update(
+        &mut self,
+        update: Result<String, CavaError>,
+    ) -> iced::Task<Message> {
+        match update {
+            Ok(line) => {
+                self.bars = line
+                    .split(";")
+                    .map(|s| s.parse::<u8>().unwrap_or(0))
+                    .collect();
+                self.cache.clear();
+            }
+            Err(e) => {
+                log::error!("cava error: {e}");
+            }
+        };
+        iced::Task::none()
     }
 }
 

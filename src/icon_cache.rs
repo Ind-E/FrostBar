@@ -59,6 +59,7 @@ pub fn client_icon_path(
     Ok(desktop_file)
 }
 
+#[derive(Debug)]
 pub struct IconCache {
     inner: BTreeMap<String, Option<Icon>>,
 }

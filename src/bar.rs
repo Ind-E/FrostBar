@@ -35,7 +35,7 @@ use crate::{
         cava::{CavaError, CavaEvents, CavaVisualizer, write_temp_cava_config},
         mpris::{MprisEvent, MprisListener, MprisState},
         niri::{NiriState, NiriSubscriptionRecipe},
-        systray::SysTrayState,
+        systray::{SysTrayState, SysTraySubscription},
     },
     style::{rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
@@ -91,7 +91,6 @@ pub struct Bar {
 
     tooltips: HashMap<container::Id, Tooltip>,
     tooltip_canvas: Id,
-    icon_cache: Arc<Mutex<IconCache>>,
 }
 
 impl Bar {
@@ -112,8 +111,7 @@ impl Bar {
                 niri_module: NiriState::new(icon_cache.clone()),
                 mpris_module: MprisState::new(),
                 cava_module: CavaVisualizer::new(),
-                systray_module: SysTrayState::new().await,
-                icon_cache,
+                systray_module: SysTrayState::new(icon_cache).await,
             },
             Task::batch(vec![
                 // create_client(),
@@ -140,6 +138,10 @@ impl Bar {
         subscriptions.push(
             subscription::from_recipe(MprisListener).map(Message::MprisEvent),
         );
+        if let Some(client) = self.systray_module.client.clone() {
+            subscriptions
+                .push(subscription::from_recipe(SysTraySubscription { client }));
+        }
         subscriptions.push(
             subscription::from_recipe(CavaEvents {
                 config_path: write_temp_cava_config()
@@ -339,24 +341,10 @@ impl Bar {
                 Task::none()
             }
             Message::ErrorMessage(msg) => {
-                eprintln!("error message: {}", msg);
+                log::error!("error message: {}", msg);
                 Task::none()
             }
-            Message::CavaUpdate(update) => {
-                match update {
-                    Ok(line) => {
-                        self.cava_module.bars = line
-                            .split(";")
-                            .map(|s| s.parse::<u8>().unwrap_or(0))
-                            .collect();
-                        self.cava_module.cache.clear();
-                    }
-                    Err(e) => {
-                        eprintln!("cava error: {}", e);
-                    }
-                };
-                Task::none()
-            }
+            Message::CavaUpdate(update) => self.cava_module.update(update),
             Message::MprisEvent(event) => self.mpris_module.on_event(event),
             Message::PlayPause(player) => Task::perform(
                 async {
@@ -399,6 +387,8 @@ impl Bar {
                     |_| Message::NoOp,
                 )
             }
+            Message::SysTrayEvent(event) => self.systray_module.on_event(event),
+            // Message::SysTrayAction(action) => self.systray_module.on_event(event),
             Message::NoOp => Task::none(),
             _ => unreachable!(),
         }
@@ -443,40 +433,9 @@ impl Bar {
         .align_x(Horizontal::Center)
         .align_y(Vertical::Top);
 
-        // let ws = self
-        //     .niri_state
-        //     .workspaces
-        //     .iter()
-        //     .sorted_by_key(|(_, ws)| ws.idx)
-        //     .fold(Column::new(), |col, (_, ws)| {
-        //         col.push(
-        //             ws.to_widget(
-        //                 self.niri_state
-        //                     .hovered_workspace_id
-        //                     .is_some_and(|id| id == ws.id),
-        //                 &self.window_tooltips,
-        //             ),
-        //         )
-        //     })
-        //     .align_x(Horizontal::Center)
-        //     .spacing(10);
-        //
-        // let middle_section = Container::new(
-        //     Scrollable::new(Container::new(ws).align_y(Vertical::Center))
-        //         .height(570)
-        //         .style(no_rail),
-        // )
-        // .center_y(Length::Fill);
-
         let middle_section = self.niri_module.to_widget();
 
-        let tray_items = column![];
-
-        let bottom_section = Container::new(tray_items)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Bottom);
+        let bottom_section = self.systray_module.to_widget();
 
         let layout = stack![top_section, middle_section, bottom_section];
 
