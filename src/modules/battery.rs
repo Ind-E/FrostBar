@@ -15,13 +15,13 @@ pub struct BatteryInfo {
     state: battery::State,
 }
 
-pub struct BatteryState {
+pub struct BatteryModule {
     pub id: container::Id,
     manager: Option<battery::Manager>,
     batteries: Vec<BatteryInfo>,
 }
 
-impl BatteryState {
+impl BatteryModule {
     pub fn new() -> Self {
         let manager = match battery::Manager::new() {
             Ok(manager) => Some(manager),

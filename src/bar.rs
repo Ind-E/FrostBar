@@ -4,20 +4,15 @@ use iced::{
     advanced::{mouse, subscription},
     alignment::{Horizontal, Vertical},
     event,
-    mouse::ScrollDelta,
     padding::{left, top},
     time::{self, Duration},
-    widget::{
-        Column, Container, MouseArea, Stack, Text, canvas, column, container,
-        stack, text,
-    },
+    widget::{Column, Container, Stack, Text, column, container, stack, text},
     window::Id,
 };
 use iced_layershell::{
     reexport::{Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings},
     to_layer_message,
 };
-
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -27,15 +22,16 @@ use zbus::Connection;
 use tokio::process::Command as TokioCommand;
 
 use crate::{
-    config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES, VOLUME_PERCENT},
+    config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES},
     dbus_proxy::PlayerProxy,
     icon_cache::IconCache,
     modules::{
-        battery::BatteryState,
-        cava::{write_temp_cava_config, CavaError, CavaEvents, CavaVisualizer},
-        mpris::{MprisEvent, MprisListener, MprisState},
-        niri::{NiriState, NiriSubscriptionRecipe},
-        systray::{SysTrayAction, SysTrayState, SysTraySubscription},
+        battery::BatteryModule,
+        cava::{CavaError, CavaEvents, CavaModule, write_temp_cava_config},
+        mpris::{MprisEvent, MprisListener, MprisModule},
+        niri::{NiriModule, NiriSubscriptionRecipe},
+        systray::{SysTrayAction, SysTrayModule, SysTraySubscription},
+        time::TimeModule,
     },
     style::{rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
@@ -47,6 +43,7 @@ pub enum MouseEvent {
     Window(u64),
     MprisPlayer(String),
     Tooltip(container::Id),
+    SysTrayItem(String),
 }
 
 #[to_layer_message(multi)]
@@ -82,12 +79,12 @@ pub enum Message {
 }
 
 pub struct Bar {
-    time: DateTime<Local>,
-    battery_module: BatteryState,
-    niri_module: NiriState,
-    mpris_module: MprisState,
-    cava_module: CavaVisualizer,
-    systray_module: SysTrayState,
+    time_module: TimeModule,
+    battery_module: BatteryModule,
+    niri_module: NiriModule,
+    mpris_module: MprisModule,
+    cava_module: CavaModule,
+    systray_module: SysTrayModule,
 
     tooltips: HashMap<container::Id, Tooltip>,
     tooltip_canvas: Id,
@@ -95,10 +92,12 @@ pub struct Bar {
 
 impl Bar {
     pub async fn new() -> (Self, Task<Message>) {
-        let battery_module = BatteryState::new();
+        let time_module = TimeModule::new();
+        let battery_module = BatteryModule::new();
 
         let mut tooltips = HashMap::new();
         tooltips.insert(battery_module.id.clone(), Tooltip::default());
+        tooltips.insert(time_module.id.clone(), Tooltip::default());
 
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
@@ -106,12 +105,12 @@ impl Bar {
             Self {
                 tooltips,
                 tooltip_canvas: Id::unique(),
-                time: Local::now(),
+                time_module,
                 battery_module,
-                niri_module: NiriState::new(icon_cache.clone()),
-                mpris_module: MprisState::new(),
-                cava_module: CavaVisualizer::new(),
-                systray_module: SysTrayState::new(icon_cache).await,
+                niri_module: NiriModule::new(icon_cache.clone()),
+                mpris_module: MprisModule::new(),
+                cava_module: CavaModule::new(),
+                systray_module: SysTrayModule::new(icon_cache).await,
             },
             Task::batch(vec![
                 // create_client(),
@@ -186,7 +185,7 @@ impl Bar {
                 Task::none()
             }
             Message::Tick(time) => {
-                self.time = time;
+                self.time_module.time = time;
                 self.battery_module.fetch_battery_info();
                 Task::none()
             }
@@ -217,11 +216,6 @@ impl Bar {
                         }
                     }
                     MouseEvent::Window(w_id) => 'block: {
-                        // let id = self
-                        //     .window_tooltips
-                        //     .entry(w_id)
-                        //     .or_insert_with(container::Id::unique)
-                        //     .clone();
                         let Some(window) = self.niri_module.windows.get(&w_id)
                         else {
                             break 'block;
@@ -252,11 +246,39 @@ impl Bar {
                     MouseEvent::Workspace(id) => {
                         self.niri_module.hovered_workspace_id = Some(id);
                     }
+                    MouseEvent::SysTrayItem(address) => 'block: {
+                        let Some(item) = self.systray_module.items.get(&address)
+                        else {
+                            break 'block;
+                        };
+                        let id = item.id.clone();
+                        let tooltip = self
+                            .tooltips
+                            .entry(id.clone())
+                            .or_insert_with(|| Tooltip::default());
+
+                        if tooltip.state == TooltipState::Hidden {
+                            tooltip.content = Some(item.tooltip());
+                            tooltip.state = TooltipState::Measuring(0);
+
+                            return container::visible_bounds(id.clone()).map(
+                                move |rect| {
+                                    Message::TooltipMeasured(id.clone(), rect)
+                                },
+                            );
+                        }
+                    }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id)
                             && tooltip.state == TooltipState::Hidden
                         {
-                            tooltip.content = Some(self.battery_module.tooltip());
+                            tooltip.content = if id == self.battery_module.id {
+                                Some(self.battery_module.tooltip())
+                            } else if id == self.time_module.id {
+                                Some(self.time_module.tooltip())
+                            } else {
+                                unreachable!()
+                            };
                             tooltip.state = TooltipState::Measuring(0);
                             return container::visible_bounds(id.clone()).map(
                                 move |rect| {
@@ -331,6 +353,20 @@ impl Bar {
                     MouseEvent::Workspace(..) => {
                         self.niri_module.hovered_workspace_id = None;
                     }
+                    MouseEvent::SysTrayItem(address) => {
+                        if let Some(id) = self
+                            .systray_module
+                            .items
+                            .get(&address)
+                            .and_then(|item| Some(&item.id))
+                        {
+                            let tooltip = self
+                                .tooltips
+                                .entry(id.clone())
+                                .or_insert_with(|| Tooltip::default());
+                            tooltip.state = TooltipState::Hidden;
+                        }
+                    }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id) {
                             tooltip.state = TooltipState::Hidden;
@@ -395,35 +431,12 @@ impl Bar {
     }
 
     fn view_bar(&self) -> Element<Message> {
-        let time: String = self.time.format("%H\n%M").to_string();
-        let cava_visualizer = MouseArea::new(
-            canvas(&self.cava_module).width(Length::Fill).height(130),
-        )
-        .on_scroll(|delta| {
-            Message::ChangeVolume(match delta {
-                ScrollDelta::Lines { x, y } => {
-                    if y > 0.0 || x < 0.0 {
-                        VOLUME_PERCENT
-                    } else {
-                        -VOLUME_PERCENT
-                    }
-                }
-                ScrollDelta::Pixels { x, y } => {
-                    if y > 0.0 || x < 0.0 {
-                        VOLUME_PERCENT
-                    } else {
-                        -VOLUME_PERCENT
-                    }
-                }
-            })
-        });
-
         let top_section = Container::new(
             column![
                 text("󱄅").size(28),
                 self.battery_module.to_widget(),
-                text(time).size(16),
-                cava_visualizer,
+                self.time_module.to_widget(),
+                self.cava_module.to_widget(),
                 self.mpris_module.to_widget(),
             ]
             .align_x(Horizontal::Center),

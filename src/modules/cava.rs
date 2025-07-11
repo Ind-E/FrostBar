@@ -1,7 +1,11 @@
 use iced::{
-    Color, Point, Renderer, Size,
+    Color, Element, Length, Point, Renderer, Size,
     advanced::subscription,
-    widget::canvas::{Cache, Frame, Geometry, Program},
+    mouse::ScrollDelta,
+    widget::{
+        Canvas, MouseArea,
+        canvas::{Cache, Frame, Geometry, Program},
+    },
 };
 use std::{
     env::temp_dir,
@@ -11,7 +15,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use crate::bar::Message;
+use crate::{bar::Message, config::VOLUME_PERCENT};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
@@ -30,12 +34,12 @@ pub fn write_temp_cava_config() -> std::io::Result<std::path::PathBuf> {
     Ok(tmp_path)
 }
 
-pub struct CavaVisualizer {
+pub struct CavaModule {
     pub bars: Vec<u8>,
     pub cache: Cache,
 }
 
-impl CavaVisualizer {
+impl CavaModule {
     pub fn new() -> Self {
         Self {
             bars: vec![0; 10],
@@ -61,9 +65,32 @@ impl CavaVisualizer {
         };
         iced::Task::none()
     }
+
+    pub fn to_widget<'a>(&'a self) -> Element<'a, Message> {
+        MouseArea::new(Canvas::new(self).width(Length::Fill).height(130))
+            .on_scroll(|delta| {
+                Message::ChangeVolume(match delta {
+                    ScrollDelta::Lines { x, y } => {
+                        if y > 0.0 || x < 0.0 {
+                            VOLUME_PERCENT
+                        } else {
+                            -VOLUME_PERCENT
+                        }
+                    }
+                    ScrollDelta::Pixels { x, y } => {
+                        if y > 0.0 || x < 0.0 {
+                            VOLUME_PERCENT
+                        } else {
+                            -VOLUME_PERCENT
+                        }
+                    }
+                })
+            })
+            .into()
+    }
 }
 
-impl<Message> Program<Message> for CavaVisualizer {
+impl<Message> Program<Message> for CavaModule {
     type State = ();
 
     fn draw(

@@ -8,6 +8,7 @@ use iced::{
     widget::{
         Column, Container, Image, MouseArea, Scrollable, Svg,
         container::{self},
+        scrollable::{Direction, Scrollbar},
         text,
     },
 };
@@ -24,7 +25,7 @@ use tokio::sync::mpsc::{self};
 use crate::{
     bar::{Message, MouseEvent},
     icon_cache::{Icon, IconCache},
-    style::{no_rail, workspace_style},
+    style::workspace_style,
 };
 
 struct Window {
@@ -125,7 +126,7 @@ fn map_window(window: &NiriWindow, icon_cache: Arc<Mutex<IconCache>>) -> Window 
     }
 }
 
-pub struct NiriState {
+pub struct NiriModule {
     workspaces: HashMap<u64, Workspace>,
     pub windows: HashMap<u64, NiriWindow>,
     pub hovered_workspace_id: Option<u64>,
@@ -133,7 +134,7 @@ pub struct NiriState {
     sender: Arc<tokio::sync::mpsc::Sender<Request>>,
 }
 
-impl NiriState {
+impl NiriModule {
     pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
         let (request_tx, request_rx) = mpsc::channel(32);
         let request_socket = match niri_ipc::socket::Socket::connect() {
@@ -166,9 +167,11 @@ impl NiriState {
             .spacing(10);
 
         Container::new(
-            Scrollable::new(Container::new(ws).align_y(Vertical::Center))
-                .height(570)
-                .style(no_rail),
+            Scrollable::with_direction(
+                Container::new(ws).align_y(Vertical::Center),
+                Direction::Vertical(Scrollbar::new().scroller_width(0).width(0)),
+            )
+            .height(570),
         )
         .center_y(Length::Fill)
         .into()

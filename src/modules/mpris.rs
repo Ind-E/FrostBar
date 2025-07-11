@@ -16,12 +16,12 @@ use crate::{
     icon_cache::MprisArtCache,
 };
 
-pub struct MprisState {
+pub struct MprisModule {
     pub players: HashMap<String, MprisPlayer>,
     art_cache: MprisArtCache,
 }
 
-impl MprisState {
+impl MprisModule {
     pub fn new() -> Self {
         Self {
             players: HashMap::new(),

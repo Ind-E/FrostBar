@@ -3,7 +3,7 @@ use iced::{
     advanced::subscription,
     alignment::{Horizontal, Vertical},
     padding,
-    widget::{Column, Container, Image, MouseArea, Svg, text},
+    widget::{Column, Container, Image, MouseArea, Svg, container, text},
 };
 use itertools::Itertools;
 use std::{
@@ -20,52 +20,31 @@ use tokio::sync::broadcast::Receiver;
 use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
 use crate::{
-    bar::Message,
+    bar::{Message, MouseEvent},
     icon_cache::{Icon, IconCache},
 };
 
 const ICON_SIZE: u16 = 24;
 
 #[derive(Debug)]
-pub struct SysTrayState {
+pub struct SysTrayModule {
     pub items: HashMap<String, SysTrayItem>,
     pub client: Option<Arc<Client>>,
     icon_cache: Arc<Mutex<IconCache>>,
 }
 
-impl SysTrayState {
+impl SysTrayModule {
     pub async fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
         let client_maybe = Client::new().await;
-        let systray_client: Option<Client>;
-        let items: HashMap<String, SysTrayItem>;
-        match client_maybe {
-            Ok(client) => {
-                let initial_items = client.items();
-                items = initial_items
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .map(|(address, (item, tray_menu))| {
-                        (
-                            address.to_string(),
-                            SysTrayItem::new(
-                                address.to_string(),
-                                Box::new(item.clone()),
-                                tray_menu.clone(),
-                            ),
-                        )
-                    })
-                    .collect();
-                systray_client = Some(client);
-            }
+        let systray_client: Option<Client> = match client_maybe {
+            Ok(client) => Some(client),
             Err(e) => {
-                systray_client = None;
-                items = HashMap::new();
                 log::error!("{e}");
+                None
             }
-        }
+        };
         Self {
-            items,
+            items: HashMap::new(),
             client: systray_client.and_then(|client| Some(Arc::new(client))),
             icon_cache,
         }
@@ -148,6 +127,7 @@ pub struct SysTrayItem {
     address: String,
     inner: Box<StatusNotifierItem>,
     menu: Option<TrayMenu>,
+    pub id: container::Id,
 }
 
 impl SysTrayItem {
@@ -160,34 +140,54 @@ impl SysTrayItem {
             address,
             inner: item,
             menu,
+            id: container::Id::unique(),
         }
     }
 
     fn to_widget<'a>(&self, icon_cache: &mut IconCache) -> Element<'a, Message> {
-        let mut tray_icon = None;
         if let Some(icon) = icon_cache.get_tray_icon(&self.inner).clone() {
-            tray_icon = Some(icon);
-        }
-        if let Some(icon) = tray_icon {
-            match icon {
-                Icon::Svg(handle) => MouseArea::new(
-                    Svg::new(handle).width(ICON_SIZE).height(ICON_SIZE),
-                )
-                .on_release(Message::SysTrayAction(SysTrayAction::LeftClick(
-                    self.address.clone(),
-                )))
-                .on_right_release(Message::SysTrayAction(
-                    SysTrayAction::RightClick(self.address.clone()),
-                ))
-                .into(),
-                Icon::Raster(handle) => MouseArea::new(
-                    Image::new(handle).width(ICON_SIZE).height(ICON_SIZE),
-                )
-                .into(),
-            }
+            let image: Element<'a, Message> = match icon {
+                Icon::Svg(handle) => {
+                    Svg::new(handle).width(ICON_SIZE).height(ICON_SIZE).into()
+                }
+                Icon::Raster(handle) => {
+                    Image::new(handle).width(ICON_SIZE).height(ICON_SIZE).into()
+                }
+            };
+            Container::new(
+                MouseArea::new(image)
+                    .on_enter(Message::MouseEntered(MouseEvent::SysTrayItem(
+                        self.address.clone(),
+                    )))
+                    .on_exit(Message::MouseExited(MouseEvent::SysTrayItem(
+                        self.address.clone(),
+                    )))
+                    .on_release(Message::SysTrayAction(SysTrayAction::LeftClick(
+                        self.address.clone(),
+                    )))
+                    .on_right_release(Message::SysTrayAction(
+                        SysTrayAction::RightClick(self.address.clone()),
+                    )),
+            )
+            .id(self.id.clone())
+            .into()
         } else {
             text("󰜺").size(16).into()
         }
+    }
+
+    pub fn tooltip(&self) -> String {
+        let mut tip = String::new();
+        if let Some(menu) = &self.menu {
+            for item in &menu.submenus {
+                if item.visible
+                    && let Some(label) = &item.label
+                {
+                    tip.push_str(&format!("{}\n", label));
+                }
+            }
+        }
+        tip
     }
 }
 

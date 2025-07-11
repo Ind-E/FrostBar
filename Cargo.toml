@@ -17,10 +17,10 @@ xdgkit = { version = "3.2.5", default-features = false }
 freedesktop-desktop-entry = { version = "0.7.13", default-features = false }
 async-stream = { version = "0.3.6", default-features = false }
 url = "2.5.4"
-zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 base64 = "0.22.1"
 futures-util = "0.3.31"
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 freedesktop-icons = "0.4.0"
-system-tray = "0.8.1"
+system-tray = { version = "0.8.1", default-features = false }
 log = "0.4.27"
+zbus = "5.8.0"
