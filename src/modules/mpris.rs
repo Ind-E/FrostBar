@@ -307,25 +307,26 @@ async fn add_player_listener(
 ) -> Result<(), zbus::Error> {
     let player_proxy = PlayerProxy::new(&connection, name.clone()).await?;
     let mut streams: Vec<EventStream> = vec![];
+    {
+        let player_name = name.clone();
 
-    let player_name = name.clone();
-
-    let playback_stream = player_proxy
-        .receive_playback_status_changed()
-        .await
-        .map(move |p| {
-            let player_name = player_name.clone();
-            async move {
-                let status = p.get().await?;
-                Ok(MprisEvent::PlaybackStatusChanged {
-                    player_name,
-                    status,
-                })
-            }
-        })
-        .buffer_unordered(1)
-        .boxed();
-    streams.push(playback_stream);
+        let playback_stream = player_proxy
+            .receive_playback_status_changed()
+            .await
+            .map(move |p| {
+                let player_name = player_name.clone();
+                async move {
+                    let status = p.get().await?;
+                    Ok(MprisEvent::PlaybackStatusChanged {
+                        player_name,
+                        status,
+                    })
+                }
+            })
+            .buffer_unordered(1)
+            .boxed();
+        streams.push(playback_stream);
+    }
 
     let player_name = name.clone();
 

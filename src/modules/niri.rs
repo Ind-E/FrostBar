@@ -179,13 +179,18 @@ impl NiriModule {
 
     pub fn handle_action(&mut self, action: Action) -> iced::Task<Message> {
         let request = Request::Action(action);
-        let sender = self.sender.clone();
-        iced::Task::perform(async move { sender.send(request).await }, |result| {
-            if let Err(e) = result {
-                log::error!("{e}");
-            }
-            Message::NoOp
-        })
+        {
+            let sender = self.sender.clone();
+            iced::Task::perform(
+                async move { sender.send(request).await },
+                |result| {
+                    if let Err(e) = result {
+                        log::error!("{e}");
+                    }
+                    Message::NoOp
+                },
+            )
+        }
     }
 
     pub fn handle_ipc_event(&mut self, event: Event) -> iced::Task<Message> {
@@ -361,7 +366,7 @@ impl subscription::Recipe for NiriSubscriptionRecipe {
         Box::pin(async_stream::stream! {
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-            tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(|| {
                 run_event_listener(tx);
             });
 
