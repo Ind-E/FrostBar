@@ -1,10 +1,7 @@
 use iced::{
     Background, Border, Color, Theme,
-    border::{self, Radius, rounded, top_right},
-    widget::{
-        container,
-        scrollable::{self, Rail, Scroller, Status},
-    },
+    border::{Radius, rounded, top_right},
+    widget::container,
 };
 
 pub fn rounded_corners(_theme: &Theme) -> container::Style {

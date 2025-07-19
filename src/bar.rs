@@ -15,11 +15,11 @@ use iced_layershell::{
 };
 use std::{
     collections::HashMap,
+    process::Command,
     sync::{Arc, Mutex},
+    thread,
 };
 use zbus::Connection;
-
-use tokio::process::Command as TokioCommand;
 
 use crate::{
     config::{BAR_NAMESPACE, BAR_WIDTH, GAPS, TOOLTIP_RETRIES},
@@ -30,7 +30,6 @@ use crate::{
         cava::{CavaError, CavaEvents, CavaModule, write_temp_cava_config},
         mpris::{MprisEvent, MprisListener, MprisModule},
         niri::{NiriModule, NiriSubscriptionRecipe},
-        systray::{SysTrayAction, SysTrayModule, SysTraySubscription},
         time::TimeModule,
     },
     style::{rounded_corners, tooltip_style},
@@ -43,7 +42,6 @@ pub enum MouseEvent {
     Window(u64),
     MprisPlayer(String),
     Tooltip(container::Id),
-    SysTrayItem(String),
 }
 
 #[to_layer_message(multi)]
@@ -59,9 +57,6 @@ pub enum Message {
 
     NiriIpcEvent(niri_ipc::Event),
     NiriAction(niri_ipc::Action),
-
-    SysTrayEvent(system_tray::client::Event),
-    SysTrayAction(SysTrayAction),
 
     CavaUpdate(Result<String, CavaError>),
 
@@ -84,7 +79,6 @@ pub struct Bar {
     niri_module: NiriModule,
     mpris_module: MprisModule,
     cava_module: CavaModule,
-    systray_module: SysTrayModule,
 
     tooltips: HashMap<container::Id, Tooltip>,
     tooltip_canvas: Id,
@@ -110,7 +104,6 @@ impl Bar {
                 niri_module: NiriModule::new(icon_cache.clone()),
                 mpris_module: MprisModule::new(),
                 cava_module: CavaModule::new(),
-                systray_module: SysTrayModule::new(icon_cache).await,
             },
             Task::batch(vec![
                 // create_client(),
@@ -137,10 +130,6 @@ impl Bar {
         subscriptions.push(
             subscription::from_recipe(MprisListener).map(Message::MprisEvent),
         );
-        if let Some(client) = self.systray_module.client.clone() {
-            subscriptions
-                .push(subscription::from_recipe(SysTraySubscription { client }));
-        }
         subscriptions.push(
             subscription::from_recipe(CavaEvents {
                 config_path: write_temp_cava_config()
@@ -246,28 +235,6 @@ impl Bar {
                     MouseEvent::Workspace(id) => {
                         self.niri_module.hovered_workspace_id = Some(id);
                     }
-                    MouseEvent::SysTrayItem(address) => 'block: {
-                        let Some(item) = self.systray_module.items.get(&address)
-                        else {
-                            break 'block;
-                        };
-                        let id = item.id.clone();
-                        let tooltip = self
-                            .tooltips
-                            .entry(id.clone())
-                            .or_insert_with(|| Tooltip::default());
-
-                        if tooltip.state == TooltipState::Hidden {
-                            tooltip.content = Some(item.tooltip());
-                            tooltip.state = TooltipState::Measuring(0);
-
-                            return container::visible_bounds(id.clone()).map(
-                                move |rect| {
-                                    Message::TooltipMeasured(id.clone(), rect)
-                                },
-                            );
-                        }
-                    }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id)
                             && tooltip.state == TooltipState::Hidden
@@ -353,20 +320,6 @@ impl Bar {
                     MouseEvent::Workspace(..) => {
                         self.niri_module.hovered_workspace_id = None;
                     }
-                    MouseEvent::SysTrayItem(address) => {
-                        if let Some(id) = self
-                            .systray_module
-                            .items
-                            .get(&address)
-                            .and_then(|item| Some(&item.id))
-                        {
-                            let tooltip = self
-                                .tooltips
-                                .entry(id.clone())
-                                .or_insert_with(|| Tooltip::default());
-                            tooltip.state = TooltipState::Hidden;
-                        }
-                    }
                     MouseEvent::Tooltip(id) => {
                         if let Some(tooltip) = self.tooltips.get_mut(&id) {
                             tooltip.state = TooltipState::Hidden;
@@ -409,22 +362,18 @@ impl Bar {
             Message::ChangeVolume(delta_percent) => {
                 let sign = if delta_percent >= 0 { "+" } else { "-" };
                 let value = delta_percent.abs();
-                Task::perform(
-                    async move {
-                        let _ = TokioCommand::new("wpctl")
-                            .args(&[
-                                "set-volume",
-                                "@DEFAULT_SINK@",
-                                &format!("{value}%{sign}"),
-                            ])
-                            .output()
-                            .await;
-                    },
-                    |_| Message::NoOp,
-                )
+                thread::spawn(move || {
+                    let _ = Command::new("wpctl")
+                        .args([
+                            "set-volume",
+                            "@DEFAULT_SINK@",
+                            &format!("{value}%{sign}"),
+                        ])
+                        .output();
+                });
+
+                Task::none()
             }
-            Message::SysTrayEvent(event) => self.systray_module.on_event(event),
-            // Message::SysTrayAction(action) => self.systray_module.on_event(event),
             Message::NoOp => Task::none(),
             _ => unreachable!(),
         }
@@ -448,9 +397,7 @@ impl Bar {
 
         let middle_section = self.niri_module.to_widget();
 
-        let bottom_section = self.systray_module.to_widget();
-
-        let layout = stack![top_section, middle_section, bottom_section];
+        let layout = stack![top_section, middle_section];
 
         let bar = Container::new(layout)
             .width(Length::Fixed(BAR_WIDTH as f32 - GAPS as f32 * 2.0))

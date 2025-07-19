@@ -13,6 +13,7 @@ use std::{
     hash::Hash,
     io::{self, BufRead},
     process::{Command, Stdio},
+    thread,
 };
 
 use crate::{bar::Message, config::VOLUME_PERCENT};
@@ -175,9 +176,9 @@ impl subscription::Recipe for CavaEvents {
         _input: subscription::EventStream,
     ) -> iced_runtime::futures::BoxStream<Self::Output> {
         Box::pin(async_stream::stream! {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let (tx, rx) = smol::channel::unbounded::<Result<String, CavaError>>();
 
-            tokio::task::spawn_blocking(move || {
+            thread::spawn(move || {
                 let mut command = match Command::new("cava")
                     .arg("-p")
                     .arg(&self.config_path)
@@ -187,7 +188,7 @@ impl subscription::Recipe for CavaEvents {
                 {
                     Ok(cmd) => cmd,
                     Err(e) => {
-                        let _ = tx.send(Err(CavaError::CommandFailed(e.to_string())));
+                        let _ = tx.send_blocking(Err(CavaError::CommandFailed(e.to_string())));
                         return;
                     }
                 };
@@ -195,16 +196,17 @@ impl subscription::Recipe for CavaEvents {
                 let stdout = match command.stdout.take() {
                     Some(pipe) => pipe,
                     Option::None => {
-                        let _ = tx.send(Err(CavaError::PipeFailed));
+                        let _ = tx.send_blocking(Err(CavaError::PipeFailed));
                         return;
                     }
                 };
 
                 let reader = io::BufReader::new(stdout);
+
                 for line in reader.lines() {
                     match line {
                         Ok(line_str) => {
-                            if tx.send(Ok(line_str)).is_err() {
+                            if tx.send_blocking(Ok(line_str)).is_err() {
                                 break;
                             }
                         }
@@ -215,7 +217,7 @@ impl subscription::Recipe for CavaEvents {
                 let _ = command.kill();
             });
 
-            while let Some(result) = rx.recv().await {
+            while let Ok(result) = rx.recv().await {
                 yield result;
             }
         })

@@ -313,8 +313,8 @@ async fn add_player_listener(
         let playback_stream = player_proxy
             .receive_playback_status_changed()
             .await
-            .map(move |p| {
-                let player_name = player_name.clone();
+            .map(|p| {
+        let player_name = player_name.clone();
                 async move {
                     let status = p.get().await?;
                     Ok(MprisEvent::PlaybackStatusChanged {
