@@ -29,7 +29,7 @@ use crate::{
         battery::BatteryModule,
         cava::{CavaError, CavaEvents, CavaModule, write_temp_cava_config},
         mpris::{MprisEvent, MprisListener, MprisModule},
-        niri::{NiriModule, NiriSubscriptionRecipe},
+        niri::{NiriModule, NiriOutput, NiriSubscriptionRecipe},
         time::TimeModule,
     },
     style::{rounded_corners, tooltip_style},
@@ -55,7 +55,7 @@ pub enum Message {
     MouseExited(MouseEvent),
     MouseExitedBar,
 
-    NiriIpcEvent(niri_ipc::Event),
+    NiriOutput(NiriOutput),
     NiriAction(niri_ipc::Action),
 
     CavaUpdate(Result<String, CavaError>),
@@ -125,7 +125,7 @@ impl Bar {
 
         subscriptions.push(
             subscription::from_recipe(NiriSubscriptionRecipe)
-                .map(Message::NiriIpcEvent),
+                .map(Message::NiriOutput),
         );
         subscriptions.push(
             subscription::from_recipe(MprisListener).map(Message::MprisEvent),
@@ -178,8 +178,8 @@ impl Bar {
                 self.battery_module.fetch_battery_info();
                 Task::none()
             }
-            Message::NiriIpcEvent(event) => {
-                self.niri_module.handle_ipc_event(event)
+            Message::NiriOutput(output) => {
+                self.niri_module.handle_niri_output(output)
             }
             Message::NiriAction(action) => self.niri_module.handle_action(action),
             Message::MouseEntered(event) => {

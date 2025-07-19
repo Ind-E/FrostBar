@@ -176,7 +176,7 @@ impl subscription::Recipe for CavaEvents {
         _input: subscription::EventStream,
     ) -> iced_runtime::futures::BoxStream<Self::Output> {
         Box::pin(async_stream::stream! {
-            let (tx, rx) = smol::channel::unbounded::<Result<String, CavaError>>();
+            let (tx, rx) = async_channel::unbounded::<Result<String, CavaError>>();
 
             thread::spawn(move || {
                 let mut command = match Command::new("cava")

@@ -2,7 +2,7 @@ use iced::{
     Element, Length,
     advanced::subscription,
     alignment::{Horizontal, Vertical},
-    futures::Stream,
+    futures::{self, FutureExt, Stream, StreamExt, channel::mpsc},
     mouse::Interaction,
     padding::top,
     widget::{
@@ -20,7 +20,6 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
 };
-use tokio::sync::mpsc::{self};
 
 use crate::{
     bar::{Message, MouseEvent},
@@ -126,30 +125,28 @@ fn map_window(window: &NiriWindow, icon_cache: Arc<Mutex<IconCache>>) -> Window 
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum NiriOutput {
+    Ready(mpsc::Sender<Request>),
+    Event(Event),
+}
+
 pub struct NiriModule {
     workspaces: HashMap<u64, Workspace>,
     pub windows: HashMap<u64, NiriWindow>,
     pub hovered_workspace_id: Option<u64>,
     icon_cache: Arc<Mutex<IconCache>>,
-    sender: Arc<tokio::sync::mpsc::Sender<Request>>,
+    sender: Option<mpsc::Sender<Request>>,
 }
 
 impl NiriModule {
     pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
-        let (request_tx, request_rx) = mpsc::channel(32);
-        let request_socket = match niri_ipc::socket::Socket::connect() {
-            Ok(sock) => sock,
-            Err(e) => panic!("Failed to create niri request socket: {}", e),
-        };
-
-        tokio::spawn(run_niri_request_handler(request_rx, request_socket));
-
         Self {
             workspaces: HashMap::new(),
             windows: HashMap::new(),
             hovered_workspace_id: None,
             icon_cache,
-            sender: Arc::new(request_tx),
+            sender: None,
         }
     }
 
@@ -178,11 +175,14 @@ impl NiriModule {
     }
 
     pub fn handle_action(&mut self, action: Action) -> iced::Task<Message> {
+        let Some(sender) = &self.sender else {
+            return iced::Task::none();
+        };
         let request = Request::Action(action);
         {
-            let sender = self.sender.clone();
+            let mut sender = sender.clone();
             iced::Task::perform(
-                async move { sender.send(request).await },
+                async move { sender.try_send(request) },
                 |result| {
                     if let Err(e) = result {
                         log::error!("{e}");
@@ -193,7 +193,22 @@ impl NiriModule {
         }
     }
 
-    pub fn handle_ipc_event(&mut self, event: Event) -> iced::Task<Message> {
+    pub fn handle_niri_output(
+        &mut self,
+        output: NiriOutput,
+    ) -> iced::Task<Message> {
+        match output {
+            NiriOutput::Ready(sender) => {
+                self.sender = Some(sender);
+                return iced::Task::none();
+            }
+            NiriOutput::Event(event) => {
+                return self.handle_ipc_event(event);
+            }
+        }
+    }
+
+    fn handle_ipc_event(&mut self, event: Event) -> iced::Task<Message> {
         match event {
             Event::WorkspacesChanged { workspaces } => {
                 self.workspaces = workspaces
@@ -300,7 +315,7 @@ impl NiriModule {
     }
 }
 
-fn run_event_listener(tx: tokio::sync::mpsc::UnboundedSender<Event>) {
+fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
     let mut sock = match niri_ipc::socket::Socket::connect() {
         Ok(s) => s,
         Err(e) => {
@@ -327,7 +342,7 @@ fn run_event_listener(tx: tokio::sync::mpsc::UnboundedSender<Event>) {
 
     loop {
         match read_event() {
-            Ok(event) => match tx.send(event) {
+            Ok(event) => match tx.unbounded_send(event) {
                 Err(e) => return log::error!("{e}"),
                 Ok(_) => {}
             },
@@ -338,20 +353,9 @@ fn run_event_listener(tx: tokio::sync::mpsc::UnboundedSender<Event>) {
     }
 }
 
-async fn run_niri_request_handler(
-    mut request_rx: mpsc::Receiver<Request>,
-    mut socket: Socket,
-) {
-    while let Some(request) = request_rx.recv().await {
-        if let Err(e) = socket.send(request) {
-            log::error!("{e}");
-        }
-    }
-}
-
 pub struct NiriSubscriptionRecipe;
 impl subscription::Recipe for NiriSubscriptionRecipe {
-    type Output = Event;
+    type Output = NiriOutput;
 
     fn hash(&self, state: &mut subscription::Hasher) {
         std::any::TypeId::of::<Self>().hash(state);
@@ -360,19 +364,41 @@ impl subscription::Recipe for NiriSubscriptionRecipe {
     fn stream(
         self: Box<Self>,
         _input: subscription::EventStream,
-    ) -> Pin<
-        Box<(dyn Stream<Item = niri_ipc::Event> + std::marker::Send + 'static)>,
-    > {
+    ) -> Pin<Box<dyn Stream<Item = Self::Output> + std::marker::Send>> {
         Box::pin(async_stream::stream! {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let (request_tx, mut request_rx) =  mpsc::channel(32);
+            let (event_tx, mut event_rx) = mpsc::unbounded();
+            yield NiriOutput::Ready(request_tx);
 
-            tokio::task::spawn_blocking(|| {
-                run_event_listener(tx);
+            std::thread::spawn(move || {
+                run_event_listener(event_tx);
             });
 
-            while let Some(event_result) = rx.recv().await {
-                yield event_result;
+            let mut socket = Socket::connect().unwrap();
+            loop{
+                futures::select! {
+                    event = event_rx.next().fuse() => {
+                        if let Some(event) = event {
+                            yield NiriOutput::Event(event);
+                        } else {
+                            break;
+                        }
+                    },
+
+                    request = request_rx.next().fuse() => {
+                        if let Some(request) = request {
+                            if let Err(e) = socket.send(request) {
+                                log::error!("Failed to send niri request: {e}");
+                            }
+                        } else {
+                            break;
+                        }
+                    },
+
+                    complete => break,
+                }
             }
+
         })
     }
 }
