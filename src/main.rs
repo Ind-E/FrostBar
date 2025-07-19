@@ -1,6 +1,5 @@
 use crate::config::{BAR_WIDTH, FIRA_CODE, FIRA_CODE_BYTES, GAPS};
 
-use iced::futures::executor::block_on;
 use iced_layershell::{
     build_pattern::{MainSettings, daemon},
     reexport::{Anchor, KeyboardInteractivity, Layer},
@@ -18,7 +17,7 @@ mod style;
 mod tooltip;
 
 pub fn main() -> Result<(), iced_layershell::Error> {
-    let (bar, task) = block_on(Bar::new());
+    let (bar, task) = Bar::new();
     daemon(Bar::namespace, Bar::update, Bar::view, Bar::remove_id)
         .subscription(Bar::subscription)
         .style(Bar::style)

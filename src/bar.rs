@@ -85,7 +85,7 @@ pub struct Bar {
 }
 
 impl Bar {
-    pub async fn new() -> (Self, Task<Message>) {
+    pub fn new() -> (Self, Task<Message>) {
         let time_module = TimeModule::new();
         let battery_module = BatteryModule::new();
 
