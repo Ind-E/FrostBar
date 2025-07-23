@@ -444,7 +444,8 @@ impl Bar {
                                 Text::new(line)
                                     .size(TEXT_SIZE)
                                     .color_maybe(text_color)
-                                    .line_height(1.0),
+                                    .line_height(1.0)
+                                    .shaping(text::Shaping::Advanced),
                             )
                             .width(Length::Shrink)
                             .height(TEXT_SIZE)
