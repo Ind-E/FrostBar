@@ -75,17 +75,13 @@ impl BatteryModule {
             return stack![].into();
         }
 
-        let total_percentage: f32 =
-            self.batteries.iter().map(|b| b.percentage).sum();
+        let total_percentage: f32 = self.batteries.iter().map(|b| b.percentage).sum();
         let avg_percentage = total_percentage / self.batteries.len() as f32;
 
         let icon = get_battery_icon(avg_percentage);
 
         let is_charging = self.batteries.iter().all(|b| {
-            !matches!(
-                b.state,
-                battery::State::Discharging | battery::State::Empty
-            )
+            !matches!(b.state, battery::State::Discharging | battery::State::Empty)
         });
 
         let icon_widget = Container::new(text(icon).size(BATTERY_ICON_SIZE))
@@ -93,16 +89,15 @@ impl BatteryModule {
             .id(self.id.clone());
 
         let icon_widget: Element<'a, Message> = if is_charging {
-            let charging_overlay =
-                Container::new(text("󱐋").size(CHARGING_OVERLAY_SIZE))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .padding(Padding {
-                        top: 7.0,
-                        left: 27.0,
-                        right: 0.0,
-                        bottom: 0.0,
-                    });
+            let charging_overlay = Container::new(text("󱐋").size(CHARGING_OVERLAY_SIZE))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(Padding {
+                    top: 7.0,
+                    left: 27.0,
+                    right: 0.0,
+                    bottom: 0.0,
+                });
             stack![icon_widget, charging_overlay].into()
         } else {
             icon_widget.into()

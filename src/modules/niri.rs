@@ -1,7 +1,16 @@
 use iced::{
-    advanced::subscription, alignment::{Horizontal, Vertical}, futures::{self, channel::mpsc, FutureExt, Stream, StreamExt}, mouse::Interaction, padding::top, widget::{
-        column, container::{self}, scrollable::{Direction, Scrollbar}, text, Column, Container, Image, MouseArea, Scrollable, Svg
-    }, Element, Length
+    Element, Length,
+    advanced::subscription,
+    alignment::{Horizontal, Vertical},
+    futures::{self, FutureExt, Stream, StreamExt, channel::mpsc},
+    mouse::Interaction,
+    padding::top,
+    widget::{
+        Column, Container, Image, MouseArea, Scrollable, Svg, column,
+        container::{self},
+        scrollable::{Direction, Scrollbar},
+        text,
+    },
 };
 use itertools::Itertools;
 use niri_ipc::{Action, Event, Request, WorkspaceReferenceArg, socket::Socket};
@@ -38,9 +47,7 @@ impl<'a> Window {
 
         let container = Container::new(
             MouseArea::new(icon)
-                .on_right_press(Message::NiriAction(Action::FocusWindow {
-                    id: self.id,
-                }))
+                .on_right_press(Message::NiriAction(Action::FocusWindow { id: self.id }))
                 .on_enter(Message::MouseEntered(MouseEvent::Window(self.id)))
                 .on_exit(Message::MouseExited(MouseEvent::Window(self.id))),
         );
@@ -147,9 +154,9 @@ impl NiriModule {
             .iter()
             .sorted_by_key(|(_, ws)| ws.idx)
             .fold(Column::new(), |col, (_, ws)| {
-                col.push(ws.to_widget(
-                    self.hovered_workspace_id.is_some_and(|id| id == ws.id),
-                ))
+                col.push(
+                    ws.to_widget(self.hovered_workspace_id.is_some_and(|id| id == ws.id)),
+                )
             })
             .align_x(Horizontal::Center)
             .spacing(10);
@@ -172,22 +179,16 @@ impl NiriModule {
         let request = Request::Action(action);
         {
             let mut sender = sender.clone();
-            iced::Task::perform(
-                async move { sender.try_send(request) },
-                |result| {
-                    if let Err(e) = result {
-                        log::error!("{e}");
-                    }
-                    Message::NoOp
-                },
-            )
+            iced::Task::perform(async move { sender.try_send(request) }, |result| {
+                if let Err(e) = result {
+                    log::error!("{e}");
+                }
+                Message::NoOp
+            })
         }
     }
 
-    pub fn handle_niri_output(
-        &mut self,
-        output: NiriOutput,
-    ) -> iced::Task<Message> {
+    pub fn handle_niri_output(&mut self, output: NiriOutput) -> iced::Task<Message> {
         match output {
             NiriOutput::Ready(sender) => {
                 self.sender = Some(sender);
@@ -213,12 +214,7 @@ impl NiriModule {
                             .windows
                             .values()
                             .filter(|w| w.inner.workspace_id == Some(ws.id))
-                            .map(|w| {
-                                (
-                                    w.inner.id,
-                                    map_window(w, self.icon_cache.clone()),
-                                )
-                            })
+                            .map(|w| (w.inner.id, map_window(w, self.icon_cache.clone())))
                             .collect(),
                     })
                     .map(|ws| (ws.id, ws))
@@ -235,9 +231,7 @@ impl NiriModule {
                         .windows
                         .values()
                         .filter(|w| w.inner.workspace_id == Some(ws.id))
-                        .map(|w| {
-                            (w.inner.id, map_window(&w, self.icon_cache.clone()))
-                        })
+                        .map(|w| (w.inner.id, map_window(&w, self.icon_cache.clone())))
                         .collect()
                 });
             }

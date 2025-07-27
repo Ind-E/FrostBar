@@ -9,9 +9,7 @@ use base64::engine::general_purpose;
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
 use iced::{
     Color,
-    advanced::graphics::image::image_rs::{
-        ImageBuffer, Rgb, load_from_memory, open,
-    },
+    advanced::graphics::image::image_rs::{ImageBuffer, Rgb, load_from_memory, open},
     widget::{
         image::{self},
         svg,
@@ -41,14 +39,10 @@ pub fn client_icon_path(
             if file.exists() { Some(file) } else { None }
         })
         .map(
-            |df| -> Result<
-                Option<PathBuf>,
-                freedesktop_desktop_entry::DecodeError,
-            > {
+            |df| -> Result<Option<PathBuf>, freedesktop_desktop_entry::DecodeError> {
                 let content = std::fs::read_to_string(&df)?;
 
-                let entry =
-                    DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
+                let entry = DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
 
                 Ok(entry.desktop_entry("Icon").and_then(|icon_name| {
                     icon_finder::find_icon(icon_name.to_string(), 128, 1)
@@ -72,9 +66,7 @@ pub struct IconCache {
 fn load_icon_from_path(path: &Path) -> Option<Icon> {
     match path.extension().and_then(|s| s.to_str()) {
         Some("svg") => Some(Icon::Svg(svg::Handle::from_path(&path))),
-        Some("png") | Some("jpg") => {
-            Some(Icon::Raster(image::Handle::from_path(&path)))
-        }
+        Some("png") | Some("jpg") => Some(Icon::Raster(image::Handle::from_path(&path))),
         _ => {
             eprintln!(
                 "Warning: Unrecognized or missing icon extension at path: {path:?}"
@@ -191,9 +183,7 @@ fn generate_gradient(
     Some(gradient)
 }
 
-fn extract_gradient(
-    buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>,
-) -> Option<Vec<Color>> {
+fn extract_gradient(buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Option<Vec<Color>> {
     match color_thief::get_palette(buffer.as_raw(), ColorFormat::Rgb, 10, 3) {
         Ok(palette) => generate_gradient(palette, CAVA_BARS * 2),
         Err(_) => None,

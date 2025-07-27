@@ -64,9 +64,7 @@ impl MprisModule {
                         .players
                         .iter()
                         .filter(|(_, p)| {
-                            p.colors.is_some()
-                                && p.status == "Playing"
-                                && p.name != name
+                            p.colors.is_some() && p.status == "Playing" && p.name != name
                         })
                         .collect::<Vec<_>>();
                     if let Some((_, player)) = players_w_colors.get(0) {
@@ -109,8 +107,7 @@ impl MprisModule {
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 
-type EventStream =
-    Pin<Box<dyn Stream<Item = Result<MprisEvent, zbus::Error>> + Send>>;
+type EventStream = Pin<Box<dyn Stream<Item = Result<MprisEvent, zbus::Error>> + Send>>;
 
 #[derive(Clone, Debug)]
 pub enum MprisEvent {
@@ -194,8 +191,7 @@ impl MprisPlayer {
     }
 
     pub fn tooltip(&self) -> String {
-        let raw_artists =
-            self.artists.clone().unwrap_or_else(|| "[]".to_string());
+        let raw_artists = self.artists.clone().unwrap_or_else(|| "[]".to_string());
         let raw_title = self.title.clone().unwrap_or_else(|| "\"\"".to_string());
 
         let artists = raw_artists
@@ -334,10 +330,7 @@ impl subscription::Recipe for MprisListener {
     }
 }
 
-async fn get_initial_player_state(
-    connection: &Connection,
-    name: &str,
-) -> MprisEvent {
+async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisEvent {
     let proxy = PlayerProxy::new(connection, name).await.unwrap();
     let status = proxy.playback_status().await.unwrap();
     let metadata = proxy.metadata().await.unwrap();

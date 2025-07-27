@@ -29,10 +29,7 @@ pub fn tooltip_style<'a>(opacity: f32) -> container::StyleFn<'a, Theme> {
     })
 }
 
-pub fn workspace_style<'a>(
-    active: bool,
-    hovered: bool,
-) -> container::StyleFn<'a, Theme> {
+pub fn workspace_style<'a>(active: bool, hovered: bool) -> container::StyleFn<'a, Theme> {
     Box::new(move |_| container::Style {
         border: Border {
             color: if active {

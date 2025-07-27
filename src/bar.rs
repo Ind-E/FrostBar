@@ -70,6 +70,8 @@ pub enum Message {
     CreateTooltipCanvas,
     TooltipMeasured(container::Id, Option<Rectangle>),
 
+    Command(String),
+
     ErrorMessage(String),
     NoOp,
 }
@@ -125,25 +127,19 @@ impl Bar {
         subscriptions.push(event::listen().map(Message::IcedEvent));
 
         subscriptions.push(
-            subscription::from_recipe(NiriSubscriptionRecipe)
-                .map(Message::NiriOutput),
+            subscription::from_recipe(NiriSubscriptionRecipe).map(Message::NiriOutput),
         );
-        subscriptions.push(
-            subscription::from_recipe(MprisListener).map(Message::MprisEvent),
-        );
+        subscriptions
+            .push(subscription::from_recipe(MprisListener).map(Message::MprisEvent));
         subscriptions.push(
             subscription::from_recipe(CavaEvents {
-                config_path: write_temp_cava_config()
-                    .unwrap()
-                    .display()
-                    .to_string(),
+                config_path: write_temp_cava_config().unwrap().display().to_string(),
             })
             .map(Message::CavaUpdate),
         );
 
         subscriptions.push(
-            time::every(Duration::from_secs(1))
-                .map(|_| Message::Tick(Local::now())),
+            time::every(Duration::from_secs(1)).map(|_| Message::Tick(Local::now())),
         );
 
         Subscription::batch(subscriptions)
@@ -155,10 +151,7 @@ impl Bar {
                 settings: NewLayerShellSettings {
                     size: None,
                     layer: Layer::Top,
-                    anchor: Anchor::Left
-                        | Anchor::Right
-                        | Anchor::Top
-                        | Anchor::Bottom,
+                    anchor: Anchor::Left | Anchor::Right | Anchor::Top | Anchor::Bottom,
                     exclusive_zone: Some(-1),
                     margin: None,
                     keyboard_interactivity: KeyboardInteractivity::None,
@@ -179,15 +172,12 @@ impl Bar {
                 self.battery_module.fetch_battery_info();
                 Task::none()
             }
-            Message::NiriOutput(output) => {
-                self.niri_module.handle_niri_output(output)
-            }
+            Message::NiriOutput(output) => self.niri_module.handle_niri_output(output),
             Message::NiriAction(action) => self.niri_module.handle_action(action),
             Message::MouseEntered(event) => {
                 match event {
                     MouseEvent::MprisPlayer(name) => 'block: {
-                        let Some(player) = self.mpris_module.players.get(&name)
-                        else {
+                        let Some(player) = self.mpris_module.players.get(&name) else {
                             break 'block;
                         };
                         let id = player.id.clone();
@@ -199,15 +189,12 @@ impl Bar {
                             tooltip.state = TooltipState::Measuring(0);
 
                             return container::visible_bounds(id.clone()).map(
-                                move |rect| {
-                                    Message::TooltipMeasured(id.clone(), rect)
-                                },
+                                move |rect| Message::TooltipMeasured(id.clone(), rect),
                             );
                         }
                     }
                     MouseEvent::Window(w_id) => 'block: {
-                        let Some(window) = self.niri_module.windows.get(&w_id)
-                        else {
+                        let Some(window) = self.niri_module.windows.get(&w_id) else {
                             break 'block;
                         };
                         let id = window.container_id.clone();
@@ -227,9 +214,7 @@ impl Bar {
                             tooltip.state = TooltipState::Measuring(0);
 
                             return container::visible_bounds(id.clone()).map(
-                                move |rect| {
-                                    Message::TooltipMeasured(id.clone(), rect)
-                                },
+                                move |rect| Message::TooltipMeasured(id.clone(), rect),
                             );
                         }
                     }
@@ -249,9 +234,7 @@ impl Bar {
                             };
                             tooltip.state = TooltipState::Measuring(0);
                             return container::visible_bounds(id.clone()).map(
-                                move |rect| {
-                                    Message::TooltipMeasured(id.clone(), rect)
-                                },
+                                move |rect| Message::TooltipMeasured(id.clone(), rect),
                             );
                         }
                     }
@@ -268,10 +251,11 @@ impl Bar {
                         Option::None => {
                             tooltip.state = TooltipState::Measuring(retries + 1);
                             if retries < TOOLTIP_RETRIES {
-                                return container::visible_bounds(id.clone())
-                                    .map(move |rect| {
+                                return container::visible_bounds(id.clone()).map(
+                                    move |rect| {
                                         Message::TooltipMeasured(id.clone(), rect)
-                                    });
+                                    },
+                                );
                             } else {
                                 None
                             }
@@ -343,9 +327,7 @@ impl Bar {
             Message::PlayPause(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) =
-                            PlayerProxy::new(&connection, player).await
-                        {
+                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
                             let _ = player.play_pause().await;
                         };
                     };
@@ -355,26 +337,35 @@ impl Bar {
             Message::NextSong(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) =
-                            PlayerProxy::new(&connection, player).await
-                        {
+                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
                             let _ = player.next().await;
                         };
                     };
                 },
                 |_| Message::NoOp,
             ),
+            Message::Command(cmd) => {
+                thread::spawn(|| {
+                    if let Err(e) = Command::new(cmd).status() {
+                        log::error!("{e}");
+                    }
+                });
+                Task::none()
+            }
             Message::ChangeVolume(delta_percent) => {
                 let sign = if delta_percent >= 0 { "+" } else { "-" };
                 let value = delta_percent.abs();
                 thread::spawn(move || {
-                    let _ = Command::new("wpctl")
+                    if let Err(e) = Command::new("wpctl")
                         .args([
                             "set-volume",
                             "@DEFAULT_SINK@",
                             &format!("{value}%{sign}"),
                         ])
-                        .output();
+                        .output()
+                    {
+                        log::error!("{e}");
+                    }
                 });
 
                 Task::none()
@@ -436,8 +427,7 @@ impl Bar {
                             (None, tooltip_style(1.0))
                         };
 
-                    let position =
-                        tooltip.position.unwrap_or(Point::new(0.0, 0.0));
+                    let position = tooltip.position.unwrap_or(Point::new(0.0, 0.0));
 
                     const TOOLTIP_PADDING: u16 = 7;
                     const TEXT_SIZE: u16 = 16;
@@ -459,8 +449,7 @@ impl Bar {
                         .fold(Column::new(), |col, text| col.push(text));
 
                     let y_offset = position.y
-                        - content.lines().count() as f32
-                            * (TEXT_SIZE as f32 / 2.0)
+                        - content.lines().count() as f32 * (TEXT_SIZE as f32 / 2.0)
                         - TOOLTIP_PADDING as f32;
 
                     let widget = Container::new(

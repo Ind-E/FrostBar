@@ -67,10 +67,7 @@ impl CavaModule {
         self.cache.clear();
     }
 
-    pub fn update(
-        &mut self,
-        update: Result<String, CavaError>,
-    ) -> iced::Task<Message> {
+    pub fn update(&mut self, update: Result<String, CavaError>) -> iced::Task<Message> {
         match update {
             Ok(line) => {
                 self.bars = line
@@ -106,6 +103,8 @@ impl CavaModule {
                     }
                 })
             })
+            .on_press(Message::Command("pavucontrol".to_string()))
+            .on_right_press(Message::Command("blueman-manager".to_string()))
             .into()
     }
 }
@@ -121,60 +120,56 @@ impl<Message> Program<Message> for CavaModule {
         bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<Geometry<Renderer>> {
-        let bars =
-            self.cache
-                .draw(renderer, bounds.size(), |frame: &mut Frame| {
-                    let center_x = frame.center().x;
+        let bars = self
+            .cache
+            .draw(renderer, bounds.size(), |frame: &mut Frame| {
+                let center_x = frame.center().x;
 
-                    let bars_per_channel = self.bars.len() / 2;
+                let bars_per_channel = self.bars.len() / 2;
 
-                    if bars_per_channel == 0 {
-                        return;
+                if bars_per_channel == 0 {
+                    return;
+                }
+
+                let bar_thickness_total = frame.height() / bars_per_channel as f32;
+                let spacing = bar_thickness_total * CAVA_BAR_SPACING_PERCENT;
+                let bar_thickness = bar_thickness_total - spacing;
+
+                for i in 0..bars_per_channel {
+                    let left_val = self.bars[i];
+                    let right_val = self.bars[2 * bars_per_channel - i - 1];
+
+                    let max_bar_width = center_x;
+                    let left_width =
+                        max_bar_width * (left_val as f32 / MAX_BAR_HEIGHT as f32);
+                    let right_width =
+                        max_bar_width * (right_val as f32 / MAX_BAR_HEIGHT as f32);
+
+                    let y_pos = i as f32 * bar_thickness_total + spacing / 2.0;
+
+                    let color_index = (i * self.colors.len()) / bars_per_channel;
+
+                    let bar_color = self.colors.get(color_index).unwrap_or(&Color::WHITE);
+
+                    if left_val > 0 {
+                        let top_left = Point {
+                            x: center_x - left_width,
+                            y: y_pos,
+                        };
+                        let bar_size = Size::new(left_width, bar_thickness);
+                        frame.fill_rectangle(top_left, bar_size, *bar_color);
                     }
 
-                    let bar_thickness_total =
-                        frame.height() / bars_per_channel as f32;
-                    let spacing = bar_thickness_total * CAVA_BAR_SPACING_PERCENT;
-                    let bar_thickness = bar_thickness_total - spacing;
-
-                    for i in 0..bars_per_channel {
-                        let left_val = self.bars[i];
-                        let right_val = self.bars[2 * bars_per_channel - i - 1];
-
-                        let max_bar_width = center_x;
-                        let left_width = max_bar_width
-                            * (left_val as f32 / MAX_BAR_HEIGHT as f32);
-                        let right_width = max_bar_width
-                            * (right_val as f32 / MAX_BAR_HEIGHT as f32);
-
-                        let y_pos =
-                            i as f32 * bar_thickness_total + spacing / 2.0;
-
-                        let color_index =
-                            (i * self.colors.len()) / bars_per_channel;
-
-                        let bar_color =
-                            self.colors.get(color_index).unwrap_or(&Color::WHITE);
-
-                        if left_val > 0 {
-                            let top_left = Point {
-                                x: center_x - left_width,
-                                y: y_pos,
-                            };
-                            let bar_size = Size::new(left_width, bar_thickness);
-                            frame.fill_rectangle(top_left, bar_size, *bar_color);
-                        }
-
-                        if right_val > 0 {
-                            let top_left = Point {
-                                x: center_x,
-                                y: y_pos,
-                            };
-                            let bar_size = Size::new(right_width, bar_thickness);
-                            frame.fill_rectangle(top_left, bar_size, *bar_color);
-                        }
+                    if right_val > 0 {
+                        let top_left = Point {
+                            x: center_x,
+                            y: y_pos,
+                        };
+                        let bar_size = Size::new(right_width, bar_thickness);
+                        frame.fill_rectangle(top_left, bar_size, *bar_color);
                     }
-                });
+                }
+            });
 
         vec![bars]
     }
