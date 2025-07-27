@@ -71,7 +71,7 @@ impl BatteryModule {
 
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         if self.batteries.is_empty() {
-            log::error!("No batteries found to display");
+            log::warn!("No batteries found to display");
             return stack![].into();
         }
 

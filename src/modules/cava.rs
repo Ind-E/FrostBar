@@ -16,7 +16,10 @@ use std::{
     thread,
 };
 
-use crate::{bar::Message, config::VOLUME_PERCENT};
+use crate::{
+    bar::Message,
+    config::{CAVA_BAR_SPACING_PERCENT, CAVA_BARS, VOLUME_PERCENT},
+};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
@@ -35,17 +38,33 @@ pub fn write_temp_cava_config() -> std::io::Result<std::path::PathBuf> {
     Ok(tmp_path)
 }
 
+fn default_gradient() -> Vec<Color> {
+    (0..20)
+        .map(|i| {
+            let intensity = 0.8 + (i as f32 / 20.0) * 0.2;
+            Color::from_rgb(intensity, intensity, intensity)
+        })
+        .collect()
+}
+
 pub struct CavaModule {
-    pub bars: Vec<u8>,
-    pub cache: Cache,
+    bars: Vec<u8>,
+    cache: Cache,
+    colors: Vec<Color>,
 }
 
 impl CavaModule {
     pub fn new() -> Self {
         Self {
-            bars: vec![0; 10],
+            bars: vec![0; CAVA_BARS],
             cache: Cache::new(),
+            colors: default_gradient(),
         }
+    }
+
+    pub fn update_gradient(&mut self, colors: Option<Vec<Color>>) {
+        self.colors = colors.unwrap_or_else(default_gradient);
+        self.cache.clear();
     }
 
     pub fn update(
@@ -105,9 +124,6 @@ impl<Message> Program<Message> for CavaModule {
         let bars =
             self.cache
                 .draw(renderer, bounds.size(), |frame: &mut Frame| {
-                    let left_color = Color::from_rgb(0.4, 0.9, 0.6);
-                    let right_color = Color::from_rgb(0.9, 0.6, 0.4);
-
                     let center_x = frame.center().x;
 
                     let bars_per_channel = self.bars.len() / 2;
@@ -118,7 +134,7 @@ impl<Message> Program<Message> for CavaModule {
 
                     let bar_thickness_total =
                         frame.height() / bars_per_channel as f32;
-                    let spacing = bar_thickness_total * 0.15;
+                    let spacing = bar_thickness_total * CAVA_BAR_SPACING_PERCENT;
                     let bar_thickness = bar_thickness_total - spacing;
 
                     for i in 0..bars_per_channel {
@@ -134,13 +150,19 @@ impl<Message> Program<Message> for CavaModule {
                         let y_pos =
                             i as f32 * bar_thickness_total + spacing / 2.0;
 
+                        let color_index =
+                            (i * self.colors.len()) / bars_per_channel;
+
+                        let bar_color =
+                            self.colors.get(color_index).unwrap_or(&Color::WHITE);
+
                         if left_val > 0 {
                             let top_left = Point {
                                 x: center_x - left_width,
                                 y: y_pos,
                             };
                             let bar_size = Size::new(left_width, bar_thickness);
-                            frame.fill_rectangle(top_left, bar_size, left_color);
+                            frame.fill_rectangle(top_left, bar_size, *bar_color);
                         }
 
                         if right_val > 0 {
@@ -149,7 +171,7 @@ impl<Message> Program<Message> for CavaModule {
                                 y: y_pos,
                             };
                             let bar_size = Size::new(right_width, bar_thickness);
-                            frame.fill_rectangle(top_left, bar_size, right_color);
+                            frame.fill_rectangle(top_left, bar_size, *bar_color);
                         }
                     }
                 });

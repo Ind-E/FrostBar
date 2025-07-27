@@ -17,6 +17,7 @@ mod style;
 mod tooltip;
 
 pub fn main() -> Result<(), iced_layershell::Error> {
+    pretty_env_logger::init();
     let (bar, task) = Bar::new();
     daemon(Bar::namespace, Bar::update, Bar::view, Bar::remove_id)
         .subscription(Bar::subscription)

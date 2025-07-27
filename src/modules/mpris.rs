@@ -37,30 +37,64 @@ impl MprisModule {
                 metadata,
             } => {
                 let mut player = MprisPlayer::new(name.clone(), status);
-                player.update_metadata(&metadata, &mut self.art_cache);
+                let task = player.update_metadata(&metadata, &mut self.art_cache);
                 self.players.insert(name, player);
+                task
             }
             MprisEvent::PlayerVanished { name } => {
                 self.players.remove(&name);
+                iced::Task::none()
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
                 status,
             } => {
                 if let Some(player) = self.players.get_mut(&player_name) {
+                    if status == "Playing" {
+                        player.status = status;
+                        let colors = player.colors.clone();
+                        return iced::Task::perform(
+                            async move { colors },
+                            Message::CavaColorUpdate,
+                        );
+                    }
                     player.status = status;
+                    let name = player.name.clone();
+                    let players_w_colors = self
+                        .players
+                        .iter()
+                        .filter(|(_, p)| {
+                            p.colors.is_some()
+                                && p.status == "Playing"
+                                && p.name != name
+                        })
+                        .collect::<Vec<_>>();
+                    if let Some((_, player)) = players_w_colors.get(0) {
+                        let colors = player.colors.clone();
+                        return iced::Task::perform(
+                            async move { colors },
+                            Message::CavaColorUpdate,
+                        );
+                    } else {
+                        return iced::Task::perform(
+                            async move { None },
+                            Message::CavaColorUpdate,
+                        );
+                    }
                 }
+                iced::Task::none()
             }
             MprisEvent::MetadataChanged {
                 player_name,
                 metadata,
             } => {
                 if let Some(player) = self.players.get_mut(&player_name) {
-                    player.update_metadata(&metadata, &mut self.art_cache);
+                    player.update_metadata(&metadata, &mut self.art_cache)
+                } else {
+                    iced::Task::none()
                 }
             }
-        };
-        iced::Task::none()
+        }
     }
 
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
@@ -105,6 +139,7 @@ pub struct MprisPlayer {
     artists: Option<String>,
     title: Option<String>,
     art: Option<image::Handle>,
+    colors: Option<Vec<Color>>,
     pub id: container::Id,
 }
 
@@ -113,26 +148,37 @@ impl MprisPlayer {
         &mut self,
         metadata: &HashMap<String, OwnedValue>,
         art_cache: &mut MprisArtCache,
-    ) {
+    ) -> iced::Task<Message> {
         if let Some(val) = metadata.get("xesam:title") {
             self.title = Some(val.to_string());
         }
         if let Some(val) = metadata.get("xesam:artist") {
             self.artists = Some(val.to_string());
         }
-        if let Some(val) = metadata.get("mpris:artUrl") {
-            self.art = art_cache
-                .get_art(
-                    &val.to_string()
-                        .strip_prefix("\"")
-                        .unwrap()
-                        .strip_suffix("\"")
-                        .unwrap(),
+
+        let task = if let Some(val) = metadata.get("mpris:artUrl") {
+            let art_url = val.to_string().trim_matches('"').to_string();
+            let (handle, colors) = art_cache.get_art(&art_url);
+
+            self.art = handle.clone();
+            self.colors = colors.clone();
+
+            if self.status == "Playing" {
+                let captured_colors = colors.clone();
+
+                iced::Task::perform(
+                    async move { captured_colors },
+                    Message::CavaColorUpdate,
                 )
-                .clone();
+            } else {
+                iced::Task::none()
+            }
         } else {
-            self.art = None
-        }
+            self.art = None;
+            self.colors = None;
+            iced::Task::perform(async { None }, Message::CavaColorUpdate)
+        };
+        task
     }
 
     pub fn new(name: String, status: String) -> Self {
@@ -142,6 +188,7 @@ impl MprisPlayer {
             artists: None,
             title: None,
             art: None,
+            colors: None,
             id: container::Id::unique(),
         }
     }
@@ -348,16 +395,3 @@ async fn create_player_stream(
 
     Ok(select_all(streams).boxed())
 }
-
-// async fn poll_player_streams(
-//     player_streams: &mut HashMap<String, EventStream>,
-// ) -> Option<Result<MprisEvent, zbus::Error>> {
-//     if player_streams.is_empty() {
-//         futures::future::pending::<()>().await;
-//         return None;
-//     }
-//
-//     let mut all = select_all(player_streams.values_mut());
-//
-//     all.next().await
-// }

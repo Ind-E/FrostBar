@@ -59,6 +59,7 @@ pub enum Message {
     NiriAction(niri_ipc::Action),
 
     CavaUpdate(Result<String, CavaError>),
+    CavaColorUpdate(Option<Vec<Color>>),
 
     MprisEvent(MprisEvent),
     PlayPause(String),
@@ -334,6 +335,10 @@ impl Bar {
                 Task::none()
             }
             Message::CavaUpdate(update) => self.cava_module.update(update),
+            Message::CavaColorUpdate(gradient) => {
+                self.cava_module.update_gradient(gradient);
+                Task::none()
+            }
             Message::MprisEvent(event) => self.mpris_module.on_event(event),
             Message::PlayPause(player) => Task::perform(
                 async {

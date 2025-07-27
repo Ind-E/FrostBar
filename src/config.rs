@@ -23,3 +23,6 @@ pub const BAR_NAMESPACE: &str = "Iced Bar";
 
 pub const BATTERY_ICON_SIZE: u16 = 22;
 pub const CHARGING_OVERLAY_SIZE: u16 = 13;
+
+pub const CAVA_BAR_SPACING_PERCENT: f32 = 0.1;
+pub const CAVA_BARS: usize = 10;

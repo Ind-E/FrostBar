@@ -8,6 +8,7 @@ async-channel = "2.5.0"
 async-stream = "0.3.6"
 base64 = "0.22.1"
 chrono = { version = "0.4.41", default-features = false, features = ["std", "iana-time-zone", "js-sys", "wasmbind", "android-tzdata", "wasm-bindgen", "oldtime", "now", "clock", "alloc"] }
+color-thief = "0.2.2"
 freedesktop-desktop-entry = { version = "0.7.13", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { version = "0.13.1", default-features = false, features = ["svg", "advanced", "canvas", "image", "wgpu", "lazy", "smol"] }
@@ -16,6 +17,7 @@ iced_runtime = { version = "0.13.2", default-features = false }
 itertools = { version = "0.14.0", default-features = false, features = ["use_alloc"] }
 log = "0.4.27"
 niri-ipc = {git = "https://github.com/YaLTeR/niri/", branch = "main"}
+pretty_env_logger = "0.5.0"
 starship-battery = { version = "0.10.2", default-features = false }
 thiserror = { version = "2.0.12", default-features = false }
 url = "2.5.4"

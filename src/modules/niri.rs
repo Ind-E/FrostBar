@@ -1,16 +1,7 @@
 use iced::{
-    Element, Length,
-    advanced::subscription,
-    alignment::{Horizontal, Vertical},
-    futures::{self, FutureExt, Stream, StreamExt, channel::mpsc},
-    mouse::Interaction,
-    padding::top,
-    widget::{
-        Column, Container, Image, MouseArea, Scrollable, Svg,
-        container::{self},
-        scrollable::{Direction, Scrollbar},
-        text,
-    },
+    advanced::subscription, alignment::{Horizontal, Vertical}, futures::{self, channel::mpsc, FutureExt, Stream, StreamExt}, mouse::Interaction, padding::top, widget::{
+        column, container::{self}, scrollable::{Direction, Scrollbar}, text, Column, Container, Image, MouseArea, Scrollable, Svg
+    }, Element, Length
 };
 use itertools::Itertools;
 use niri_ipc::{Action, Event, Request, WorkspaceReferenceArg, socket::Socket};
@@ -42,7 +33,7 @@ impl<'a> Window {
             Some(Icon::Raster(handle)) => {
                 Image::new(handle.clone()).height(24).width(24).into()
             }
-            Option::None => unreachable!(),
+            Option::None => column![].into(),
         };
 
         let container = Container::new(
