@@ -20,7 +20,7 @@ impl TimeModule {
     }
 
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
-        let time = self.time.format("%H\n%M").to_string();
+        let time = self.time.format("%I\n%M").to_string();
         MouseArea::new(Container::new(text(time).size(16)).id(self.id.clone()))
             .on_enter(Message::MouseEntered(MouseEvent::Tooltip(self.id.clone())))
             .on_exit(Message::MouseExited(MouseEvent::Tooltip(self.id.clone())))
