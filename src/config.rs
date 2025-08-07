@@ -4,7 +4,7 @@ use iced::{
 };
 
 pub const BAR_WIDTH: u32 = 45;
-pub const GAPS: u16 = 3;
+pub const GAPS: u16 = 2;
 pub const VOLUME_PERCENT: i32 = 3;
 
 pub const FIRA_CODE_BYTES: &[u8] =
