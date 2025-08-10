@@ -1,15 +1,10 @@
-use iced::{
-    Background, Border, Color, Theme,
-    border::{Radius, rounded},
-    widget::container,
-};
+use iced::{Background, Color, Theme, border::rounded, widget::container};
 
-pub fn base(_theme: &Theme) -> container::Style {
+pub fn bg(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
         ..Default::default()
     }
-
 }
 
 pub fn rounded_corners(_theme: &Theme) -> container::Style {
@@ -38,22 +33,12 @@ pub fn tooltip_style<'a>(opacity: f32) -> container::StyleFn<'a, Theme> {
 }
 
 pub fn workspace_style<'a>(active: bool, hovered: bool) -> container::StyleFn<'a, Theme> {
-    Box::new(move |_| container::Style {
-        border: Border {
-            color: if active {
-                Color::WHITE
-            } else {
-                Color::TRANSPARENT
-            },
-            width: 2.0,
-            radius: Radius::new(3),
-            ..Default::default()
-        },
-        background: Some(Background::Color(if hovered {
-            Color::from_rgba(0.8, 0.8, 0.8, 0.015)
-        } else {
-            Color::TRANSPARENT
-        })),
-        ..Default::default()
-    })
+    let mut base = container::Style::default();
+    if hovered {
+        base = base.background(Color::from_rgba(0.25, 0.25, 0.25, 0.2))
+    };
+    if active {
+        base = base.color(Color::from_rgb8(220, 20, 60));
+    };
+    Box::new(move |_| base)
 }

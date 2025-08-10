@@ -32,7 +32,7 @@ use crate::{
         niri::{NiriModule, NiriOutput, NiriSubscriptionRecipe},
         time::TimeModule,
     },
-    style::{base, rounded_corners, tooltip_style},
+    style::{bg, rounded_corners, tooltip_style},
     tooltip::{Tooltip, TooltipState},
 };
 
@@ -398,7 +398,7 @@ impl Bar {
         let bar = Container::new(layout)
             .width(Length::Fixed(BAR_WIDTH as f32 - GAPS as f32 * 2.0))
             .height(Length::Fill)
-            .style(base);
+            .style(bg);
         // .style(rounded_corners);
 
         Container::new(bar)
