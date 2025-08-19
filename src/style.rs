@@ -1,5 +1,7 @@
 use iced::{Background, Color, Theme, border::rounded, widget::container};
 
+use crate::config::BORDER_RADIUS;
+
 pub fn bg(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
@@ -10,7 +12,7 @@ pub fn bg(_theme: &Theme) -> container::Style {
 pub fn rounded_corners(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
-        border: rounded(12),
+        border: rounded(BORDER_RADIUS),
         ..Default::default()
     }
 }
@@ -38,7 +40,11 @@ pub fn workspace_style<'a>(active: bool, hovered: bool) -> container::StyleFn<'a
         base = base.background(Color::from_rgba(0.25, 0.25, 0.25, 0.2))
     };
     if active {
-        base = base.color(Color::from_rgb8(220, 20, 60));
+        base = base.border(
+            rounded(BORDER_RADIUS)
+                .color(Color::WHITE)
+                .width(2)
+        );
     };
     Box::new(move |_| base)
 }

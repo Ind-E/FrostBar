@@ -13,7 +13,10 @@ use iced::{
     },
 };
 use itertools::Itertools;
-use niri_ipc::{Action, Event, Request, WorkspaceReferenceArg, socket::Socket};
+use niri_ipc::{
+    Action, Event, Request, WindowLayout, WorkspaceReferenceArg, socket::Socket,
+};
+use std::cmp::Ordering;
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -27,10 +30,49 @@ use crate::{
     style::workspace_style,
 };
 
+#[derive(Debug, Eq, PartialEq)]
+enum Layout {
+    Floating,
+    Scrolling(usize, usize),
+}
+
+impl PartialOrd for Layout {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Layout {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Layout::Floating, Layout::Floating) => Ordering::Equal,
+            (Layout::Floating, Layout::Scrolling(_, _)) => Ordering::Less,
+            (Layout::Scrolling(_, _), Layout::Floating) => Ordering::Greater,
+            (Layout::Scrolling(r1, c1), Layout::Scrolling(r2, c2)) => {
+                r1.cmp(r2).then_with(|| c1.cmp(c2))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
 struct Window {
     id: u64,
-    icon: Option<Icon>,
     container_id: container::Id,
+    icon: Option<Icon>,
+    layout: Layout,
+}
+
+impl PartialOrd for Window {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Window {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.layout.cmp(&other.layout)
+    }
 }
 
 impl<'a> Window {
@@ -83,16 +125,13 @@ impl<'a> Workspace {
         Container::new(
             MouseArea::new(
                 Container::new(
-                    self.windows
-                        .values()
-                        .sorted_by(|w1, w2| w1.id.cmp(&w2.id))
-                        .fold(
-                            Column::new()
-                                .align_x(Horizontal::Center)
-                                .spacing(5)
-                                .push(text(self.idx - 1).size(20)),
-                            |col, w| col.push(w.to_widget()),
-                        ),
+                    self.windows.values().sorted_unstable().fold(
+                        Column::new()
+                            .align_x(Horizontal::Center)
+                            .spacing(5)
+                            .push(text(self.idx - 1).size(20)),
+                        |col, w| col.push(w.to_widget()),
+                    ),
                 )
                 .style(workspace_style(self.is_active, hovered))
                 .padding(top(5).bottom(5))
@@ -120,6 +159,15 @@ fn map_window(window: &NiriWindow, icon_cache: Arc<Mutex<IconCache>>) -> Window 
             .as_ref()
             .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
         container_id: window.container_id.clone(),
+        layout: window.inner.layout.clone().into(),
+    }
+}
+
+impl From<WindowLayout> for Layout {
+    fn from(layout: WindowLayout) -> Self {
+        layout
+            .pos_in_scrolling_layout
+            .map_or(Layout::Floating, |l| Layout::Scrolling(l.0, l.1))
     }
 }
 
@@ -295,6 +343,22 @@ impl NiriModule {
             } => {}
             Event::KeyboardLayoutSwitched { idx: _ } => {}
             Event::OverviewOpenedOrClosed { is_open: _ } => {}
+            Event::WindowLayoutsChanged { changes } => {
+                for (id, layout) in changes {
+                    if let Some(window) = self.windows.get_mut(&id) {
+                        window.inner.layout = layout.into()
+                    }
+                }
+
+                self.workspaces.values_mut().for_each(|ws| {
+                    ws.windows = self
+                        .windows
+                        .values()
+                        .filter(|w| w.inner.workspace_id == Some(ws.id))
+                        .map(|w| (w.inner.id, map_window(&w, self.icon_cache.clone())))
+                        .collect()
+                });
+            }
         };
         iced::Task::none()
     }

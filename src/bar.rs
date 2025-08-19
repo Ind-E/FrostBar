@@ -398,8 +398,8 @@ impl Bar {
         let bar = Container::new(layout)
             .width(Length::Fixed(BAR_WIDTH as f32 - GAPS as f32 * 2.0))
             .height(Length::Fill)
-            .style(bg);
-        // .style(rounded_corners);
+            // .style(bg);
+            .style(rounded_corners);
 
         Container::new(bar)
             .width(Length::Fill)
