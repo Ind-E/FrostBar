@@ -1,6 +1,7 @@
 use iced::{
     Color, Element, Length, Point, Renderer, Size,
     advanced::subscription,
+    futures::Stream,
     mouse::ScrollDelta,
     widget::{
         Canvas, MouseArea,
@@ -12,12 +13,13 @@ use std::{
     fs,
     hash::Hash,
     io::{self, BufRead},
+    pin::Pin,
     process::{Command, Stdio},
     thread,
 };
 
 use crate::{
-    bar::Message,
+    Message,
     config::{CAVA_BAR_SPACING_PERCENT, CAVA_BARS, VOLUME_PERCENT},
 };
 
@@ -116,7 +118,7 @@ impl<Message> Program<Message> for CavaModule {
         &self,
         _state: &Self::State,
         renderer: &Renderer,
-        _theme: &iced_runtime::core::Theme,
+        _theme: &iced::Theme,
         bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<Geometry<Renderer>> {
@@ -191,7 +193,7 @@ impl subscription::Recipe for CavaEvents {
     fn stream(
         self: Box<Self>,
         _input: subscription::EventStream,
-    ) -> iced_runtime::futures::BoxStream<Self::Output> {
+    ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
         Box::pin(async_stream::stream! {
             let (tx, rx) = async_channel::unbounded::<Result<String, CavaError>>();
 

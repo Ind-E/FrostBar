@@ -1,5 +1,5 @@
 {
-  description = "iced bar";
+  description = "frostbar";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -45,7 +45,7 @@
         in
         {
           build = rustPlatform.buildRustPackage {
-            pname = "iced_bar";
+            pname = "frostbar";
             version = "0.1.0";
             src = self;
             cargoLock = {

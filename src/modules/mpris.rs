@@ -11,9 +11,9 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use crate::{
     BAR_WIDTH,
-    bar::{Message, MouseEvent},
     dbus_proxy::PlayerProxy,
     icon_cache::MprisArtCache,
+    {Message, MouseEvent},
 };
 
 pub struct MprisModule {
@@ -220,8 +220,8 @@ impl MprisPlayer {
                     .center(),
             )
             .padding(5)
-            .width(BAR_WIDTH as u16 - 16)
-            .height(BAR_WIDTH as u16 - 16)
+            .width(BAR_WIDTH - 16)
+            .height(BAR_WIDTH - 16)
             .style(|_| container::Style {
                 border: Border {
                     color: Color::WHITE,
@@ -243,6 +243,7 @@ impl MprisPlayer {
                 )))
                 .on_release(Message::PlayPause(self.name.clone()))
                 .on_right_release(Message::NextSong(self.name.clone()))
+                .on_middle_release(Message::StopPlayer(self.name.clone()))
                 .interaction(Interaction::Pointer),
         )
         .id(self.id.clone())
@@ -262,7 +263,7 @@ impl subscription::Recipe for MprisListener {
     fn stream(
         self: Box<Self>,
         _input: subscription::EventStream,
-    ) -> iced_runtime::futures::BoxStream<Self::Output> {
+    ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
         Box::pin(async_stream::stream! {
 
             let connection = match Connection::session().await {

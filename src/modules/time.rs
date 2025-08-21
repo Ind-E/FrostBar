@@ -4,7 +4,7 @@ use iced::{
     widget::{Container, MouseArea, container, text},
 };
 
-use crate::bar::{Message, MouseEvent};
+use crate::{Message, MouseEvent};
 
 pub struct TimeModule {
     pub time: DateTime<Local>,

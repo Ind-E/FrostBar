@@ -138,7 +138,7 @@ fn lerp_color(c1: Color, c2: Color, factor: f32) -> Color {
     let r = c1.r * (1.0 - factor) + c2.r * factor;
     let g = c1.g * (1.0 - factor) + c2.g * factor;
     let b = c1.b * (1.0 - factor) + c2.b * factor;
-    Color::new(r, g, b, 1.0)
+    Color::from_rgba(r, g, b, 1.0)
 }
 
 fn generate_gradient(

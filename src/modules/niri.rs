@@ -6,7 +6,7 @@ use iced::{
     mouse::Interaction,
     padding::top,
     widget::{
-        Column, Container, Image, MouseArea, Scrollable, Svg, column,
+        Column, Container, Image, MouseArea, Responsive, Scrollable, Svg, column,
         container::{self},
         scrollable::{Direction, Scrollbar},
         text,
@@ -25,9 +25,9 @@ use std::{
 };
 
 use crate::{
-    bar::{Message, MouseEvent},
     icon_cache::{Icon, IconCache},
     style::workspace_style,
+    {Message, MouseEvent},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -196,7 +196,7 @@ impl NiriModule {
         }
     }
 
-    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
+    pub fn to_widget<'a>(&'a self) -> Element<'a, Message> {
         let ws = self
             .workspaces
             .iter()
@@ -208,13 +208,12 @@ impl NiriModule {
             })
             .align_x(Horizontal::Center)
             .spacing(10);
-
         Container::new(
             Scrollable::with_direction(
                 Container::new(ws).align_y(Vertical::Center),
                 Direction::Vertical(Scrollbar::new().scroller_width(0).width(0)),
             )
-            .height(570),
+            .height(600),
         )
         .center_y(Length::Fill)
         .into()
@@ -413,7 +412,7 @@ impl subscription::Recipe for NiriSubscriptionRecipe {
     fn stream(
         self: Box<Self>,
         _input: subscription::EventStream,
-    ) -> Pin<Box<dyn Stream<Item = Self::Output> + std::marker::Send>> {
+    ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
         Box::pin(async_stream::stream! {
             let (request_tx, mut request_rx) =  mpsc::channel(32);
             let (event_tx, mut event_rx) = mpsc::unbounded();

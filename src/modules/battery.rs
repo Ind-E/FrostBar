@@ -4,8 +4,8 @@ use iced::{
 };
 
 use crate::{
-    bar::{Message, MouseEvent},
     config::{BATTERY_ICON_SIZE, CHARGING_OVERLAY_SIZE},
+    {Message, MouseEvent},
 };
 extern crate starship_battery as battery;
 
