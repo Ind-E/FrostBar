@@ -151,7 +151,7 @@ impl Bar {
 
         let (tooltip_canvas, open_tooltip_canvas) =
             iced::window::open(iced::window::Settings {
-                size: Size::new(10.0, 10.0),
+                size: Size::new(0.0, 0.0),
                 decorations: false,
                 resizable: false,
                 minimizable: false,
@@ -535,7 +535,7 @@ impl Bar {
                             .width(Length::Shrink)
                             .clip(true),
                     )
-                    .padding(top(y_offset).left(position.x));
+                    .padding(top(y_offset + GAPS as f32).left(position.x));
 
                     stack.push(widget)
                 }),

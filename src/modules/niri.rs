@@ -6,7 +6,7 @@ use iced::{
     mouse::Interaction,
     padding::top,
     widget::{
-        Column, Container, Image, MouseArea, Responsive, Scrollable, Svg, column,
+        Column, Container, Image, MouseArea, Scrollable, Svg, column,
         container::{self},
         scrollable::{Direction, Scrollbar},
         text,
