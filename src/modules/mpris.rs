@@ -10,10 +10,8 @@ use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use crate::{
-    BAR_WIDTH,
-    dbus_proxy::PlayerProxy,
+    BAR_WIDTH, Message, MouseEvent, config::GAPS, dbus_proxy::PlayerProxy,
     icon_cache::MprisArtCache,
-    {Message, MouseEvent},
 };
 
 pub struct MprisModule {
@@ -214,14 +212,15 @@ impl MprisPlayer {
         } else {
             Container::new(
                 text("󰝚")
-                    .size(18)
+                    .size(20)
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .center(),
             )
             .padding(5)
-            .width(BAR_WIDTH - 16)
-            .height(BAR_WIDTH - 16)
+            .width(BAR_WIDTH - GAPS as u32 * 4)
+            .height(BAR_WIDTH - GAPS as u32 * 4)
+            .center_x(Length::Fill)
             .style(|_| container::Style {
                 border: Border {
                     color: Color::WHITE,

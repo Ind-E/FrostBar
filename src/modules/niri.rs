@@ -213,7 +213,7 @@ impl NiriModule {
                 Container::new(ws).align_y(Vertical::Center),
                 Direction::Vertical(Scrollbar::new().scroller_width(0).width(0)),
             )
-            .height(600),
+            .height(590),
         )
         .center_y(Length::Fill)
         .into()

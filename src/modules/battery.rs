@@ -1,6 +1,6 @@
 use iced::{
     Element, Length, Padding,
-    widget::{Container, MouseArea, container, stack, text},
+    widget::{Container, MouseArea, Text, container, stack},
 };
 
 use crate::{
@@ -72,7 +72,7 @@ impl BatteryModule {
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         if self.batteries.is_empty() {
             log::warn!("No batteries found to display");
-            return stack![].into();
+            return Text::new("?").size(CHARGING_OVERLAY_SIZE).into();
         }
 
         let total_percentage: f32 = self.batteries.iter().map(|b| b.percentage).sum();
@@ -84,20 +84,21 @@ impl BatteryModule {
             !matches!(b.state, battery::State::Discharging | battery::State::Empty)
         });
 
-        let icon_widget = Container::new(text(icon).size(BATTERY_ICON_SIZE))
+        let icon_widget = Container::new(Text::new(icon).size(BATTERY_ICON_SIZE))
             .center_x(Length::Fill)
             .id(self.id.clone());
 
         let icon_widget: Element<'a, Message> = if is_charging {
-            let charging_overlay = Container::new(text("󱐋").size(CHARGING_OVERLAY_SIZE))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(Padding {
-                    top: 7.0,
-                    left: 27.0,
-                    right: 0.0,
-                    bottom: 0.0,
-                });
+            let charging_overlay =
+                Container::new(Text::new("󱐋").size(CHARGING_OVERLAY_SIZE))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(Padding {
+                        top: 7.0,
+                        left: 27.0,
+                        right: 0.0,
+                        bottom: 0.0,
+                    });
             stack![icon_widget, charging_overlay].into()
         } else {
             icon_widget.into()

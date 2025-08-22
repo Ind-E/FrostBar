@@ -194,6 +194,50 @@ impl subscription::Recipe for CavaEvents {
         self: Box<Self>,
         _input: subscription::EventStream,
     ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
+        // let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        //
+        // thread::spawn(move || {
+        //     let mut command = match Command::new("cava")
+        //         .arg("-p")
+        //         .arg(&self.config_path)
+        //         .stdout(Stdio::piped())
+        //         .stderr(Stdio::null())
+        //         .spawn()
+        //     {
+        //         Ok(cmd) => cmd,
+        //         Err(e) => {
+        //             let _ = tx.send(Err(CavaError::CommandFailed(e.to_string())));
+        //             return;
+        //         }
+        //     };
+        //
+        //     let stdout = match command.stdout.take() {
+        //         Some(pipe) => pipe,
+        //         None => {
+        //             let _ = tx.send(Err(CavaError::PipeFailed));
+        //             return;
+        //         }
+        //     };
+        //
+        //     let reader = io::BufReader::new(stdout);
+        //
+        //     for line in reader.lines() {
+        //         match line {
+        //             Ok(line_str) => {
+        //                 if tx.send(Ok(line_str)).is_err() {
+        //                     break;
+        //                 }
+        //             }
+        //             Err(_) => break,
+        //         }
+        //     }
+        //
+        //     let _ = command.kill();
+        // });
+        //
+        // Box::pin(UnboundedReceiverStream::new(rx))
+        // }
+
         Box::pin(async_stream::stream! {
             let (tx, rx) = async_channel::unbounded::<Result<String, CavaError>>();
 
