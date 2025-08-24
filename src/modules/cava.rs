@@ -17,6 +17,7 @@ use std::{
     process::{Command, Stdio},
     thread,
 };
+use tracing::error;
 
 use crate::{
     Message,
@@ -79,7 +80,7 @@ impl CavaModule {
                 self.cache.clear();
             }
             Err(e) => {
-                log::error!("cava error: {e}");
+                error!("cava error: {e}");
             }
         };
         iced::Task::none()

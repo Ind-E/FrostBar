@@ -2,6 +2,7 @@ use iced::{
     Element, Length, Padding,
     widget::{Container, Text, container, stack},
 };
+use tracing::{warn, error};
 
 use crate::{
     Message,
@@ -27,7 +28,7 @@ impl BatteryModule {
         let manager = match battery::Manager::new() {
             Ok(manager) => Some(manager),
             Err(e) => {
-                log::error!("{e}");
+                error!("{e}");
                 None
             }
         };
@@ -42,23 +43,23 @@ impl BatteryModule {
     pub fn fetch_battery_info(&mut self) {
         let manager = match &self.manager {
             Some(manager) => manager,
-            Option::None => return log::error!("No battery manager"),
+            Option::None => return error!("No battery manager"),
         };
 
         let batteries = match manager.batteries() {
             Ok(batteries) => batteries,
-            Err(e) => return log::error!("{e}"),
+            Err(e) => return error!("{e}"),
         };
 
         let mut info = Vec::with_capacity(2);
         for battery in batteries {
             let mut bat = match battery {
                 Ok(bat) => bat,
-                Err(e) => return log::error!("{e}"),
+                Err(e) => return error!("{e}"),
             };
 
             if let Err(e) = manager.refresh(&mut bat) {
-                return log::error!("{e}");
+                return error!("{e}");
             }
 
             info.push(BatteryInfo {
@@ -72,7 +73,7 @@ impl BatteryModule {
 
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         if self.batteries.is_empty() {
-            log::warn!("No batteries found to display");
+            warn!("No batteries found to display");
             return Text::new("?").size(CHARGING_OVERLAY_SIZE).into();
         }
 
@@ -128,7 +129,7 @@ impl BatteryModule {
 fn get_battery_icon(percentage: f32) -> &'static str {
     match percentage {
         p if !(0.0..=1.0).contains(&p) => {
-            log::warn!("Battery percentage {} is out of range [0.0, 1.0]", p);
+            warn!("Battery percentage {} is out of range [0.0, 1.0]", p);
             "?"
         }
         p if p < 0.1 => "󰁺",

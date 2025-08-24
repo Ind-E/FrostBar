@@ -20,6 +20,8 @@ use std::{
 };
 use zbus::Connection;
 
+use tracing::error;
+
 use crate::{
     config::{BAR_NAMESPACE, BAR_WIDTH, FIRA_CODE, FIRA_CODE_BYTES, GAPS},
     dbus_proxy::PlayerProxy,
@@ -41,7 +43,10 @@ mod modules;
 mod style;
 
 pub fn main() -> iced::Result {
-    pretty_env_logger::init();
+    if let Err(e) = tracing_log::LogTracer::init() {
+        eprintln!("{}", e);
+    }
+    tracing_subscriber::fmt::init();
     iced::daemon(Bar::new, Bar::update, Bar::view)
         .subscription(Bar::subscription)
         .style(Bar::style)
@@ -222,7 +227,7 @@ impl Bar {
                 Task::none()
             }
             Message::ErrorMessage(msg) => {
-                log::error!("error message: {}", msg);
+                error!("error message: {}", msg);
                 Task::none()
             }
             Message::CavaUpdate(update) => self.cava_module.update(update),
@@ -264,7 +269,7 @@ impl Bar {
             Message::Command(cmd) => {
                 thread::spawn(|| {
                     if let Err(e) = Command::new(cmd).status() {
-                        log::error!("{e}");
+                        error!("{e}");
                     }
                 });
                 Task::none()
@@ -281,7 +286,7 @@ impl Bar {
                         ])
                         .output()
                     {
-                        log::error!("{e}");
+                        error!("{e}");
                     }
                 });
 

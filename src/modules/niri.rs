@@ -12,6 +12,7 @@ use iced::{
         text,
     },
 };
+
 use itertools::Itertools;
 use niri_ipc::{
     Action, Event, Request, WindowLayout, WorkspaceReferenceArg, socket::Socket,
@@ -23,6 +24,7 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
 };
+use tracing::error;
 
 use crate::{
     Message, MouseEvent,
@@ -232,7 +234,7 @@ impl NiriModule {
             let mut sender = sender.clone();
             iced::Task::perform(async move { sender.try_send(request) }, |result| {
                 if let Err(e) = result {
-                    log::error!("{e}");
+                    error!("{e}");
                 }
                 Message::NoOp
             })
@@ -371,7 +373,7 @@ fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
     let mut sock = match niri_ipc::socket::Socket::connect() {
         Ok(s) => s,
         Err(e) => {
-            return log::error!("Failed to connect to socket: {e}");
+            return error!("Failed to connect to socket: {e}");
         }
     };
 
@@ -379,14 +381,14 @@ fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
         Ok(sent) => match sent {
             Ok(niri_ipc::Response::Handled) => {}
             Ok(other) => {
-                return log::error!("Niri responded unexpectedly {other:?}");
+                return error!("Niri responded unexpectedly {other:?}");
             }
             Err(e) => {
-                return log::error!("Niri handshake failed: {e}");
+                return error!("Niri handshake failed: {e}");
             }
         },
         Err(e) => {
-            return log::error!("Failed to send {e}");
+            return error!("Failed to send {e}");
         }
     }
 
@@ -395,11 +397,11 @@ fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
     loop {
         match read_event() {
             Ok(event) => match tx.unbounded_send(event) {
-                Err(e) => return log::error!("{e}"),
+                Err(e) => return error!("{e}"),
                 Ok(_) => {}
             },
             Err(e) => {
-                return log::error!("Failed to read event: {e}");
+                return error!("Failed to read event: {e}");
             }
         }
     }
@@ -440,7 +442,7 @@ impl subscription::Recipe for NiriSubscriptionRecipe {
                     request = request_rx.next().fuse() => {
                         if let Some(request) = request {
                             if let Err(e) = socket.send(request) {
-                                log::error!("Failed to send niri request: {e}");
+                                error!("Failed to send niri request: {e}");
                             }
                         } else {
                             break;

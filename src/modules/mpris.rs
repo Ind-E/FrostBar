@@ -9,6 +9,8 @@ use iced::{
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
+use tracing::error;
+
 use crate::{
     BAR_WIDTH, Message, config::GAPS, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
     style::styled_tooltip,
@@ -261,7 +263,7 @@ impl subscription::Recipe for MprisListener {
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {
-                    log::error!("mpris stream error: {e}");
+                    error!("mpris stream error: {e}");
                     return;
                 }
             };
