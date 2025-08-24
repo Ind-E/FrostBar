@@ -1,11 +1,12 @@
 use iced::{
     Element, Length, Padding,
-    widget::{Container, MouseArea, Text, container, stack},
+    widget::{Container, Text, container, stack},
 };
 
 use crate::{
+    Message,
     config::{BATTERY_ICON_SIZE, CHARGING_OVERLAY_SIZE},
-    {Message, MouseEvent},
+    style::styled_tooltip,
 };
 extern crate starship_battery as battery;
 
@@ -88,7 +89,7 @@ impl BatteryModule {
             .center_x(Length::Fill)
             .id(self.id.clone());
 
-        let icon_widget: Element<'a, Message> = if is_charging {
+        let content: Element<'a, Message> = if is_charging {
             let charging_overlay =
                 Container::new(Text::new("󱐋").size(CHARGING_OVERLAY_SIZE))
                     .width(Length::Fill)
@@ -104,26 +105,23 @@ impl BatteryModule {
             icon_widget.into()
         };
 
-        return MouseArea::new(icon_widget)
-            .on_enter(Message::MouseEntered(MouseEvent::Tooltip(self.id.clone())))
-            .on_exit(Message::MouseExited(MouseEvent::Tooltip(self.id.clone())))
-            .into();
-    }
+        let tooltip = Text::new(
+            self.batteries
+                .iter()
+                .enumerate()
+                .map(|(i, bat)| {
+                    format!(
+                        "Battery {}: {}% ({})",
+                        i + 1,
+                        (bat.percentage * 100.0).floor(),
+                        bat.state
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
 
-    pub fn tooltip(&self) -> String {
-        self.batteries
-            .iter()
-            .enumerate()
-            .map(|(i, bat)| {
-                format!(
-                    "Battery {}: {}% ({})",
-                    i + 1,
-                    (bat.percentage * 100.0).floor(),
-                    bat.state
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        styled_tooltip(content, tooltip)
     }
 }
 

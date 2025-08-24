@@ -6,7 +6,7 @@ use iced::{
     mouse::Interaction,
     padding::top,
     widget::{
-        Column, Container, Image, MouseArea, Scrollable, Svg, column,
+        Column, Container, Image, MouseArea, Scrollable, Svg, Text, column,
         container::{self},
         scrollable::{Direction, Scrollbar},
         text,
@@ -25,9 +25,9 @@ use std::{
 };
 
 use crate::{
+    Message, MouseEvent,
     icon_cache::{Icon, IconCache},
-    style::workspace_style,
-    {Message, MouseEvent},
+    style::{styled_tooltip, workspace_style},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -61,6 +61,7 @@ struct Window {
     container_id: container::Id,
     icon: Option<Icon>,
     layout: Layout,
+    title: String,
 }
 
 impl PartialOrd for Window {
@@ -87,14 +88,16 @@ impl<'a> Window {
             Option::None => column![].into(),
         };
 
-        let container = Container::new(
+        let content = Container::new(
             MouseArea::new(icon)
-                .on_right_press(Message::NiriAction(Action::FocusWindow { id: self.id }))
-                .on_enter(Message::MouseEntered(MouseEvent::Window(self.id)))
-                .on_exit(Message::MouseExited(MouseEvent::Window(self.id))),
-        );
+                .on_right_press(Message::NiriAction(Action::FocusWindow { id: self.id })),
+        )
+        .center_x(Length::Fill)
+        .id(self.container_id.clone());
 
-        container.id(self.container_id.clone()).into()
+        let tooltip = Text::new(self.title.clone());
+
+        styled_tooltip(content, tooltip)
     }
 }
 
@@ -160,6 +163,7 @@ fn map_window(window: &NiriWindow, icon_cache: Arc<Mutex<IconCache>>) -> Window 
             .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
         container_id: window.container_id.clone(),
         layout: window.inner.layout.clone().into(),
+        title: window.inner.title.clone().unwrap_or("N/A".to_string()),
     }
 }
 

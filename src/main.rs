@@ -1,14 +1,11 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Color, Element, Event, Length, Point, Rectangle, Settings, Size, Subscription, Task,
-    Theme,
+    Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme,
     advanced::{mouse, subscription},
     alignment::{Horizontal, Vertical},
-    event,
-    padding::top,
-    theme,
+    event, theme,
     time::{self, Duration},
-    widget::{Column, Container, Stack, Text, column, container, stack, text},
+    widget::{Container, column, stack, text},
     window::{
         Id,
         settings::{
@@ -17,7 +14,6 @@ use iced::{
     },
 };
 use std::{
-    collections::HashMap,
     process::Command,
     sync::{Arc, Mutex},
     thread,
@@ -25,9 +21,7 @@ use std::{
 use zbus::Connection;
 
 use crate::{
-    config::{
-        BAR_NAMESPACE, BAR_WIDTH, FIRA_CODE, FIRA_CODE_BYTES, GAPS, TOOLTIP_RETRIES,
-    },
+    config::{BAR_NAMESPACE, BAR_WIDTH, FIRA_CODE, FIRA_CODE_BYTES, GAPS},
     dbus_proxy::PlayerProxy,
     icon_cache::IconCache,
     modules::{
@@ -37,8 +31,7 @@ use crate::{
         niri::{NiriModule, NiriOutput, NiriSubscriptionRecipe},
         time::TimeModule,
     },
-    style::{rounded_corners, tooltip_style},
-    tooltip::{Tooltip, TooltipState},
+    style::rounded_corners,
 };
 
 mod config;
@@ -46,7 +39,6 @@ mod dbus_proxy;
 mod icon_cache;
 mod modules;
 mod style;
-mod tooltip;
 
 pub fn main() -> iced::Result {
     pretty_env_logger::init();
@@ -67,9 +59,6 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 pub enum MouseEvent {
     Workspace(u64),
-    Window(u64),
-    MprisPlayer(String),
-    Tooltip(container::Id),
 }
 
 #[derive(Debug, Clone)]
@@ -95,7 +84,6 @@ pub enum Message {
     ChangeVolume(i32),
 
     OpenWindow(Id),
-    TooltipMeasured(container::Id, Option<Rectangle>),
 
     Command(String),
 
@@ -110,19 +98,12 @@ pub struct Bar {
     niri_module: NiriModule,
     mpris_module: MprisModule,
     cava_module: CavaModule,
-
-    tooltips: HashMap<container::Id, Tooltip>,
-    tooltip_canvas: Id,
 }
 
 impl Bar {
     pub fn new() -> (Self, Task<Message>) {
         let time_module = TimeModule::new();
         let battery_module = BatteryModule::new();
-
-        let mut tooltips = HashMap::new();
-        tooltips.insert(battery_module.id.clone(), Tooltip::default());
-        tooltips.insert(time_module.id.clone(), Tooltip::default());
 
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
@@ -135,10 +116,12 @@ impl Bar {
             platform_specific: PlatformSpecific {
                 layer_shell: LayerShellSettings {
                     layer: Some(Layer::Top),
-                    anchor: Some(Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM),
+                    anchor: Some(
+                        Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
+                    ),
                     exclusive_zone: Some(BAR_WIDTH as i32),
                     margin: Some((GAPS, GAPS, GAPS, GAPS)),
-                    input_region: None,
+                    input_region: Some((0, 0, BAR_WIDTH as i32, 1200)),
                     keyboard_interactivity: Some(KeyboardInteractivity::None),
                     namespace: Some(String::from(BAR_NAMESPACE)),
                     ..Default::default()
@@ -149,44 +132,16 @@ impl Bar {
             ..Default::default()
         });
 
-        let (tooltip_canvas, open_tooltip_canvas) =
-            iced::window::open(iced::window::Settings {
-                size: Size::new(0.0, 0.0),
-                decorations: false,
-                resizable: false,
-                minimizable: false,
-                transparent: true,
-                platform_specific: PlatformSpecific {
-                    layer_shell: LayerShellSettings {
-                        layer: Some(Layer::Top),
-                        anchor: Some(
-                            Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
-                        ),
-                        input_region: Some((0, 0, 0, 0)),
-                        keyboard_interactivity: Some(KeyboardInteractivity::None),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                exit_on_close_request: false,
-                ..Default::default()
-            });
-
         (
             Self {
                 id,
-                tooltips,
-                tooltip_canvas,
                 time_module,
                 battery_module,
                 niri_module: NiriModule::new(icon_cache.clone()),
                 mpris_module: MprisModule::new(),
                 cava_module: CavaModule::new(),
             },
-            Task::batch(vec![
-                open.map(Message::OpenWindow),
-                open_tooltip_canvas.map(Message::OpenWindow),
-            ]),
+            Task::batch(vec![open.map(Message::OpenWindow)]),
         )
     }
 
@@ -225,7 +180,7 @@ impl Bar {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::OpenWindow(id) => {
-                if id != self.id && id != self.tooltip_canvas {
+                if id != self.id {
                     unreachable!();
                 };
                 Task::none()
@@ -246,139 +201,21 @@ impl Bar {
             Message::NiriAction(action) => self.niri_module.handle_action(action),
             Message::MouseEntered(event) => {
                 match event {
-                    MouseEvent::MprisPlayer(name) => 'block: {
-                        let Some(player) = self.mpris_module.players.get(&name) else {
-                            break 'block;
-                        };
-                        let id = player.id.clone();
-                        let Some(tooltip) = self.tooltips.get_mut(&id) else {
-                            break 'block;
-                        };
-                        if tooltip.state == TooltipState::Hidden {
-                            tooltip.content = Some(player.tooltip());
-                            tooltip.state = TooltipState::Measuring(0);
-
-                            return container::visible_bounds(id.clone()).map(
-                                move |rect| Message::TooltipMeasured(id.clone(), rect),
-                            );
-                        }
-                    }
-                    MouseEvent::Window(w_id) => 'block: {
-                        let Some(window) = self.niri_module.windows.get(&w_id) else {
-                            break 'block;
-                        };
-                        let id = window.container_id.clone();
-                        let tooltip = self
-                            .tooltips
-                            .entry(id.clone())
-                            .or_insert_with(|| Tooltip::default());
-
-                        if tooltip.state == TooltipState::Hidden
-                            && let Some(window) = self
-                                .niri_module
-                                .windows
-                                .values()
-                                .find(|w| w.inner.id == w_id)
-                        {
-                            tooltip.content = window.inner.title.clone();
-                            tooltip.state = TooltipState::Measuring(0);
-
-                            return container::visible_bounds(id.clone()).map(
-                                move |rect| Message::TooltipMeasured(id.clone(), rect),
-                            );
-                        }
-                    }
                     MouseEvent::Workspace(id) => {
                         self.niri_module.hovered_workspace_id = Some(id);
-                    }
-                    MouseEvent::Tooltip(id) => {
-                        if let Some(tooltip) = self.tooltips.get_mut(&id)
-                            && tooltip.state == TooltipState::Hidden
-                        {
-                            tooltip.content = if id == self.battery_module.id {
-                                Some(self.battery_module.tooltip())
-                            } else if id == self.time_module.id {
-                                Some(self.time_module.tooltip())
-                            } else {
-                                unreachable!()
-                            };
-                            tooltip.state = TooltipState::Measuring(0);
-                            return container::visible_bounds(id.clone()).map(
-                                move |rect| Message::TooltipMeasured(id.clone(), rect),
-                            );
-                        }
                     }
                 };
 
                 Task::none()
             }
-            Message::TooltipMeasured(id, rect) => {
-                if let Some(tooltip) = self.tooltips.get_mut(&id)
-                    && let TooltipState::Measuring(retries) = tooltip.state
-                {
-                    tooltip.position = match rect {
-                        Some(rect) => Some(Point::new(0.0, rect.center().y)),
-                        Option::None => {
-                            tooltip.state = TooltipState::Measuring(retries + 1);
-                            if retries < TOOLTIP_RETRIES {
-                                return container::visible_bounds(id.clone()).map(
-                                    move |rect| {
-                                        Message::TooltipMeasured(id.clone(), rect)
-                                    },
-                                );
-                            } else {
-                                None
-                            }
-                        }
-                    };
-                    tooltip.state = TooltipState::Visible;
-                }
-                Task::none()
-            }
             Message::MouseExitedBar => {
-                self.tooltips.values_mut().for_each(|tip| {
-                    tip.state = TooltipState::Hidden;
-                });
                 self.niri_module.hovered_workspace_id = None;
                 Task::none()
             }
             Message::MouseExited(event) => {
                 match event {
-                    MouseEvent::MprisPlayer(name) => {
-                        if let Some(id) = self
-                            .mpris_module
-                            .players
-                            .get(&name)
-                            .and_then(|p| Some(&p.id))
-                        {
-                            let tooltip = self
-                                .tooltips
-                                .entry(id.clone())
-                                .or_insert_with(|| Tooltip::default());
-                            tooltip.state = TooltipState::Hidden;
-                        }
-                    }
-                    MouseEvent::Window(w_id) => {
-                        if let Some(id) = self
-                            .niri_module
-                            .windows
-                            .get(&w_id)
-                            .and_then(|w| Some(&w.container_id))
-                        {
-                            let tooltip = self
-                                .tooltips
-                                .entry(id.clone())
-                                .or_insert_with(|| Tooltip::default());
-                            tooltip.state = TooltipState::Hidden;
-                        }
-                    }
                     MouseEvent::Workspace(..) => {
                         self.niri_module.hovered_workspace_id = None;
-                    }
-                    MouseEvent::Tooltip(id) => {
-                        if let Some(tooltip) = self.tooltips.get_mut(&id) {
-                            tooltip.state = TooltipState::Hidden;
-                        }
                     }
                 };
 
@@ -483,72 +320,8 @@ impl Bar {
         bar.into()
     }
 
-    fn view_canvas(&self) -> Element<Message> {
-        Container::new(
-            self.tooltips
-                .iter()
-                .filter(|(_id, tooltip)| tooltip.state != TooltipState::Hidden)
-                .fold(Stack::new(), |stack, (_id, tooltip)| {
-                    let Some(content) = tooltip.content.as_ref() else {
-                        return stack;
-                    };
-
-                    let is_measuring =
-                        matches!(tooltip.state, TooltipState::Measuring(_));
-
-                    let (text_color, style) =
-                        if is_measuring || tooltip.position.is_none() {
-                            (Some(Color::TRANSPARENT), tooltip_style(0.0))
-                        } else {
-                            (None, tooltip_style(1.0))
-                        };
-
-                    let position = tooltip.position.unwrap_or(Point::new(0.0, 0.0));
-
-                    const TOOLTIP_PADDING: u16 = 7;
-                    const TEXT_SIZE: u32 = 16;
-
-                    let content_column = content
-                        .lines()
-                        .map(|line| {
-                            Container::new(
-                                Text::new(line)
-                                    .size(TEXT_SIZE)
-                                    .color_maybe(text_color)
-                                    .line_height(1.0)
-                                    .shaping(text::Shaping::Advanced),
-                            )
-                            .width(Length::Shrink)
-                            .height(TEXT_SIZE)
-                            .clip(true)
-                        })
-                        .fold(Column::new(), |col, text| col.push(text));
-
-                    let y_offset = position.y
-                        - content.lines().count() as f32 * (TEXT_SIZE as f32 / 2.0)
-                        - TOOLTIP_PADDING as f32;
-
-                    let widget = Container::new(
-                        Container::new(content_column)
-                            .style(style)
-                            .padding(TOOLTIP_PADDING)
-                            .width(Length::Shrink)
-                            .clip(true),
-                    )
-                    .padding(top(y_offset + GAPS as f32).left(position.x));
-
-                    stack.push(widget)
-                }),
-        )
-        .into()
-    }
-
-    pub fn view(&self, id: Id) -> Element<Message> {
-        if id == self.tooltip_canvas {
-            return self.view_canvas();
-        } else {
-            self.view_bar()
-        }
+    pub fn view(&self, _id: Id) -> Element<Message> {
+        self.view_bar()
     }
 
     pub fn style(&self, theme: &Theme) -> theme::Style {

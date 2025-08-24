@@ -4,14 +4,14 @@ use iced::{
     border::Radius,
     futures::{self, FutureExt, Stream, StreamExt, stream::select_all},
     mouse::Interaction,
-    widget::{Column, Container, Image, MouseArea, container, image, text},
+    widget::{Column, Container, Image, MouseArea, Text, container, image, text},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use crate::{
-    BAR_WIDTH, Message, MouseEvent, config::GAPS, dbus_proxy::PlayerProxy,
-    icon_cache::MprisArtCache,
+    BAR_WIDTH, Message, config::GAPS, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
+    style::styled_tooltip,
 };
 
 pub struct MprisModule {
@@ -188,24 +188,6 @@ impl MprisPlayer {
         }
     }
 
-    pub fn tooltip(&self) -> String {
-        let raw_artists = self.artists.clone().unwrap_or_else(|| "[]".to_string());
-        let raw_title = self.title.clone().unwrap_or_else(|| "\"\"".to_string());
-
-        let artists = raw_artists
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .split(',')
-            .map(|s| s.trim().trim_matches('"'))
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let title = raw_title.trim().trim_matches('"');
-
-        format!("{} - {}", artists, title)
-    }
-
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &self.art {
             Container::new(Image::new(art)).into()
@@ -232,21 +214,32 @@ impl MprisPlayer {
             .into()
         };
 
-        Container::new(
+        let raw_artists = self.artists.clone().unwrap_or_else(|| "[]".to_string());
+        let raw_title = self.title.clone().unwrap_or_else(|| "\"\"".to_string());
+
+        let artists = raw_artists
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(',')
+            .map(|s| s.trim().trim_matches('"'))
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let title = raw_title.trim().trim_matches('"');
+
+        let tooltip = Text::new(format!("{} - {}", artists, title));
+
+        let content = Container::new(
             MouseArea::new(content)
-                .on_enter(Message::MouseEntered(MouseEvent::MprisPlayer(
-                    self.name.clone(),
-                )))
-                .on_exit(Message::MouseExited(MouseEvent::MprisPlayer(
-                    self.name.clone(),
-                )))
                 .on_release(Message::PlayPause(self.name.clone()))
                 .on_right_release(Message::NextSong(self.name.clone()))
                 .on_middle_release(Message::StopPlayer(self.name.clone()))
                 .interaction(Interaction::Pointer),
         )
-        .id(self.id.clone())
-        .into()
+        .id(self.id.clone());
+
+        styled_tooltip(content, tooltip)
     }
 }
 

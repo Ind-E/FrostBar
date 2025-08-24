@@ -1,10 +1,10 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Element,
-    widget::{Container, MouseArea, container, text},
+    Element, Length,
+    widget::{Container, Text, container, text},
 };
 
-use crate::{Message, MouseEvent};
+use crate::{Message, style::styled_tooltip};
 
 pub struct TimeModule {
     pub time: DateTime<Local>,
@@ -21,13 +21,11 @@ impl TimeModule {
 
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         let time = self.time.format("%I\n%M").to_string();
-        MouseArea::new(Container::new(text(time).size(16)).id(self.id.clone()))
-            .on_enter(Message::MouseEntered(MouseEvent::Tooltip(self.id.clone())))
-            .on_exit(Message::MouseExited(MouseEvent::Tooltip(self.id.clone())))
-            .into()
-    }
+        let tooltip = Text::new(self.time.format("%a %b %-d\n%-m/%-d/%y").to_string());
+        let content = Container::new(text(time).size(16))
+            .center_x(Length::Fill)
+            .id(self.id.clone());
 
-    pub fn tooltip(&self) -> String {
-        self.time.format("%a %b %-d\n%-m/%-d/%y").to_string()
+        styled_tooltip(content, tooltip)
     }
 }

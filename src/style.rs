@@ -1,6 +1,10 @@
-use iced::{Background, Color, Theme, border::rounded, widget::container};
+use iced::{
+    Background, Color, Element, Theme,
+    border::rounded,
+    widget::{Container, Tooltip, container, tooltip::Position},
+};
 
-use crate::config::BORDER_RADIUS;
+use crate::{Message, config::BORDER_RADIUS};
 
 pub fn bg(_theme: &Theme) -> container::Style {
     container::Style {
@@ -17,21 +21,22 @@ pub fn rounded_corners(_theme: &Theme) -> container::Style {
     }
 }
 
-pub fn tooltip_style<'a>(opacity: f32) -> container::StyleFn<'a, Theme> {
-    Box::new(move |_| container::Style {
-        background: Some(Background::Color(Color::from_rgba(
-            0.0,
-            0.0,
-            0.0,
-            opacity * 0.8,
-        ))),
-        // border: Border {
-        //     radius: top_right(12).bottom_right(12),
-        //     width: 0.0,
-        //     ..Default::default()
-        // },
-        ..Default::default()
-    })
+pub fn styled_tooltip<'a>(
+    content: impl Into<Element<'a, Message>>,
+    tooltip: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    Tooltip::new(
+        content,
+        Container::new(tooltip)
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
+
+                ..Default::default()
+            })
+            .padding(5),
+        Position::Right,
+    )
+    .into()
 }
 
 pub fn workspace_style<'a>(active: bool, hovered: bool) -> container::StyleFn<'a, Theme> {
@@ -40,11 +45,7 @@ pub fn workspace_style<'a>(active: bool, hovered: bool) -> container::StyleFn<'a
         base = base.background(Color::from_rgba(0.25, 0.25, 0.25, 0.2))
     };
     if active {
-        base = base.border(
-            rounded(BORDER_RADIUS)
-                .color(Color::WHITE)
-                .width(2)
-        );
+        base = base.border(rounded(BORDER_RADIUS).color(Color::WHITE).width(2));
     };
     Box::new(move |_| base)
 }
