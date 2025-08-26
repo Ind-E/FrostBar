@@ -17,7 +17,7 @@ use iced::{
 };
 use xdgkit::icon_finder;
 
-use crate::config::CAVA_BARS;
+use crate::config::Cava;
 
 pub const DEFAULT_ICON: &str =
     "/usr/share/icons/Adwaita/16x16/apps/help-contents-symbolic.symbolic.png";
@@ -94,12 +94,14 @@ impl IconCache {
 
 pub struct MprisArtCache {
     inner: BTreeMap<String, (Option<image::Handle>, Option<Vec<Color>>)>,
+    config: Cava,
 }
 
 impl MprisArtCache {
-    pub fn new() -> Self {
+    pub fn new(config: Cava) -> Self {
         Self {
             inner: BTreeMap::new(),
+            config,
         }
     }
 
@@ -119,13 +121,13 @@ impl MprisArtCache {
                 let handle = image::Handle::from_bytes(image_bytes.clone());
                 let gradient = load_from_memory(&image_bytes)
                     .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8()));
+                    .and_then(|img| extract_gradient(&img.to_rgb8(), self.config.bars));
                 (Some(handle), gradient)
             } else if let Some(url) = art_url.strip_prefix("file://") {
                 let handle = image::Handle::from_path(url);
                 let gradient = open(url)
                     .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8()));
+                    .and_then(|img| extract_gradient(&img.to_rgb8(), self.config.bars));
                 (Some(handle), gradient)
             } else {
                 (None, None)
@@ -183,9 +185,12 @@ fn generate_gradient(
     Some(gradient)
 }
 
-fn extract_gradient(buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Option<Vec<Color>> {
+fn extract_gradient(
+    buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>,
+    bars: usize,
+) -> Option<Vec<Color>> {
     match color_thief::get_palette(buffer.as_raw(), ColorFormat::Rgb, 10, 3) {
-        Ok(palette) => generate_gradient(palette, CAVA_BARS * 2),
+        Ok(palette) => generate_gradient(palette, bars * 2),
         Err(_) => None,
     }
 }

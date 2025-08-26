@@ -1,0 +1,21 @@
+layout {
+
+    width 42
+    gaps 3
+    border-radius 4
+}
+
+modules {
+
+    cava {
+        volume-percent 3
+        spacing 0.1
+        bars 10
+    }
+
+    battery {
+        icon-size 22
+        overlay-icon-size 13
+    }
+
+}

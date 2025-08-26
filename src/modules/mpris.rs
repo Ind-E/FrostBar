@@ -12,7 +12,10 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 use tracing::error;
 
 use crate::{
-    BAR_WIDTH, Message, config::GAPS, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
+    Message,
+    config::{Cava, Layout},
+    dbus_proxy::PlayerProxy,
+    icon_cache::MprisArtCache,
     style::styled_tooltip,
 };
 
@@ -22,10 +25,10 @@ pub struct MprisModule {
 }
 
 impl MprisModule {
-    pub fn new() -> Self {
+    pub fn new(cava: Cava) -> Self {
         Self {
             players: HashMap::new(),
-            art_cache: MprisArtCache::new(),
+            art_cache: MprisArtCache::new(cava),
         }
     }
 
@@ -95,11 +98,11 @@ impl MprisModule {
         }
     }
 
-    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
+    pub fn to_widget<'a>(&self, layout: &Layout) -> Element<'a, Message> {
         self.players
             .values()
             .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(player.to_widget())
+                col.push(player.to_widget(&layout))
             })
             .into()
     }
@@ -190,7 +193,7 @@ impl MprisPlayer {
         }
     }
 
-    pub fn to_widget<'a>(&self) -> Element<'a, Message> {
+    pub fn to_widget<'a>(&self, layout: &Layout) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &self.art {
             Container::new(Image::new(art)).into()
         } else {
@@ -202,8 +205,8 @@ impl MprisPlayer {
                     .center(),
             )
             .padding(5)
-            .width(BAR_WIDTH - GAPS as u32 * 4)
-            .height(BAR_WIDTH - GAPS as u32 * 4)
+            .width(layout.width - layout.gaps as u32 * 4)
+            .height(layout.width - layout.gaps as u32 * 4)
             .center_x(Length::Fill)
             .style(|_| container::Style {
                 border: Border {

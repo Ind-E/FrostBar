@@ -126,7 +126,7 @@ struct Workspace {
 }
 
 impl<'a> Workspace {
-    fn to_widget(&self, hovered: bool) -> Element<'a, Message> {
+    fn to_widget(&self, hovered: bool, radius: u16) -> Element<'a, Message> {
         Container::new(
             MouseArea::new(
                 Container::new(
@@ -138,7 +138,7 @@ impl<'a> Workspace {
                         |col, w| col.push(w.to_widget()),
                     ),
                 )
-                .style(workspace_style(self.is_active, hovered))
+                .style(workspace_style(self.is_active, hovered, radius))
                 .padding(top(5).bottom(5))
                 .width(Length::Fill)
                 .align_x(Horizontal::Center),
@@ -202,15 +202,16 @@ impl NiriModule {
         }
     }
 
-    pub fn to_widget<'a>(&'a self) -> Element<'a, Message> {
+    pub fn to_widget<'a>(&'a self, radius: u16) -> Element<'a, Message> {
         let ws = self
             .workspaces
             .iter()
             .sorted_by_key(|(_, ws)| ws.idx)
             .fold(Column::new(), |col, (_, ws)| {
-                col.push(
-                    ws.to_widget(self.hovered_workspace_id.is_some_and(|id| id == ws.id)),
-                )
+                col.push(ws.to_widget(
+                    self.hovered_workspace_id.is_some_and(|id| id == ws.id),
+                    radius,
+                ))
             })
             .align_x(Horizontal::Center)
             .spacing(10);

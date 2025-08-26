@@ -1,17 +1,11 @@
 use chrono::{DateTime, Local};
+use directories::ProjectDirs;
 use iced::{
-    Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme,
-    advanced::{mouse, subscription},
-    alignment::{Horizontal, Vertical},
-    event, theme,
-    time::{self, Duration},
-    widget::{Container, column, stack, text},
-    window::{
-        Id,
+    advanced::{mouse, subscription}, alignment::{Horizontal, Vertical}, border::rounded, event, theme, time::{self, Duration}, widget::{column, container, stack, text, Container}, window::{
         settings::{
             Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
-        },
-    },
+        }, Id
+    }, Background, Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme
 };
 use std::{
     process::Command,
@@ -23,7 +17,8 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{BAR_NAMESPACE, BAR_WIDTH, FIRA_CODE, FIRA_CODE_BYTES, GAPS},
+    config::Config,
+    constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     icon_cache::IconCache,
     modules::{
@@ -33,32 +28,50 @@ use crate::{
         niri::{NiriModule, NiriOutput, NiriSubscriptionRecipe},
         time::TimeModule,
     },
-    style::rounded_corners,
 };
 
 mod config;
+mod constants;
 mod dbus_proxy;
 mod icon_cache;
 mod modules;
 mod style;
 
 pub fn main() -> iced::Result {
-    if let Err(e) = tracing_log::LogTracer::init() {
-        eprintln!("{}", e);
-    }
     tracing_subscriber::fmt::init();
-    iced::daemon(Bar::new, Bar::update, Bar::view)
-        .subscription(Bar::subscription)
-        .style(Bar::style)
-        .title(Bar::title)
-        .theme(Bar::theme)
-        .settings(Settings {
-            fonts: vec![FIRA_CODE_BYTES.into()],
-            default_font: FIRA_CODE,
-            antialiasing: false,
-            ..Default::default()
-        })
-        .run()
+    iced::daemon(
+        || {
+            let config = {
+                let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
+                    std::process::exit(1);
+                };
+                let config_path =
+                    project_dir.config_dir().to_path_buf().join("config.kdl");
+                match Config::load_or_create(&config_path) {
+                    Err(e) => {
+                        eprintln!("{e}");
+                        std::process::exit(1)
+                    }
+                    Ok(config) => config,
+                }
+            };
+
+            Bar::new(config)
+        },
+        Bar::update,
+        Bar::view,
+    )
+    .subscription(Bar::subscription)
+    .style(Bar::style)
+    .title(Bar::title)
+    .theme(Bar::theme)
+    .settings(Settings {
+        fonts: vec![FIRA_CODE_BYTES.into()],
+        default_font: FIRA_CODE,
+        antialiasing: false,
+        ..Default::default()
+    })
+    .run()
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +111,7 @@ pub enum Message {
 
 pub struct Bar {
     id: Id,
+    config: Config,
     time_module: TimeModule,
     battery_module: BatteryModule,
     niri_module: NiriModule,
@@ -106,14 +120,14 @@ pub struct Bar {
 }
 
 impl Bar {
-    pub fn new() -> (Self, Task<Message>) {
+    pub fn new(config: Config) -> (Self, Task<Message>) {
         let time_module = TimeModule::new();
-        let battery_module = BatteryModule::new();
+        let battery_module = BatteryModule::new(config.modules.battery.clone());
 
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
         let (id, open) = iced::window::open(iced::window::Settings {
-            size: Size::new(BAR_WIDTH as f32, 0.0),
+            size: Size::new(config.layout.width as f32, 0.0),
             decorations: false,
             resizable: false,
             minimizable: false,
@@ -124,9 +138,14 @@ impl Bar {
                     anchor: Some(
                         Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
                     ),
-                    exclusive_zone: Some(BAR_WIDTH as i32),
-                    margin: Some((GAPS, GAPS, GAPS, GAPS)),
-                    input_region: Some((0, 0, BAR_WIDTH as i32, 1200)),
+                    exclusive_zone: Some(config.layout.width as i32),
+                    margin: Some((
+                        config.layout.gaps,
+                        config.layout.gaps,
+                        config.layout.gaps,
+                        config.layout.gaps,
+                    )),
+                    input_region: Some((0, 0, config.layout.width as i32, 1200)),
                     keyboard_interactivity: Some(KeyboardInteractivity::None),
                     namespace: Some(String::from(BAR_NAMESPACE)),
                     ..Default::default()
@@ -143,8 +162,9 @@ impl Bar {
                 time_module,
                 battery_module,
                 niri_module: NiriModule::new(icon_cache.clone()),
-                mpris_module: MprisModule::new(),
-                cava_module: CavaModule::new(),
+                mpris_module: MprisModule::new(config.modules.cava.clone()),
+                cava_module: CavaModule::new(config.modules.cava.clone()),
+                config,
             },
             Task::batch(vec![open.map(Message::OpenWindow)]),
         )
@@ -303,7 +323,7 @@ impl Bar {
                 self.battery_module.to_widget(),
                 self.time_module.to_widget(),
                 self.cava_module.to_widget(),
-                self.mpris_module.to_widget(),
+                self.mpris_module.to_widget(&self.config.layout),
             ]
             .align_x(Horizontal::Center),
         )
@@ -312,15 +332,20 @@ impl Bar {
         .align_x(Horizontal::Center)
         .align_y(Vertical::Top);
 
-        let middle_section = self.niri_module.to_widget();
+        let middle_section = self.niri_module.to_widget(self.config.layout.border_radius);
 
         let layout = stack![top_section, middle_section];
 
         let bar = Container::new(layout)
-            .width(Length::Fixed(BAR_WIDTH as f32))
+            .width(Length::Fixed(self.config.layout.width as f32))
             .height(Length::Fill)
             // .style(bg);
-            .style(rounded_corners);
+            // .style(|theme| rounded_corners(theme, self.config.layout));
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
+                border: rounded(self.config.layout.border_radius),
+                ..Default::default()
+            });
 
         bar.into()
     }

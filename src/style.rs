@@ -4,19 +4,11 @@ use iced::{
     widget::{Container, Tooltip, container, tooltip::Position},
 };
 
-use crate::{Message, config::BORDER_RADIUS};
+use crate::Message;
 
 pub fn bg(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
-        ..Default::default()
-    }
-}
-
-pub fn rounded_corners(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
-        border: rounded(BORDER_RADIUS),
         ..Default::default()
     }
 }
@@ -39,13 +31,13 @@ pub fn styled_tooltip<'a>(
     .into()
 }
 
-pub fn workspace_style<'a>(active: bool, hovered: bool) -> container::StyleFn<'a, Theme> {
+pub fn workspace_style<'a>(active: bool, hovered: bool, radius: u16) -> container::StyleFn<'a, Theme> {
     let mut base = container::Style::default();
     if hovered {
         base = base.background(Color::from_rgba(0.25, 0.25, 0.25, 0.2))
     };
     if active {
-        base = base.border(rounded(BORDER_RADIUS).color(Color::WHITE).width(2));
+        base = base.border(rounded(radius).color(Color::WHITE).width(2));
     };
     Box::new(move |_| base)
 }

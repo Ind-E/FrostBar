@@ -19,10 +19,7 @@ use std::{
 };
 use tracing::error;
 
-use crate::{
-    Message,
-    config::{CAVA_BAR_SPACING_PERCENT, CAVA_BARS, VOLUME_PERCENT},
-};
+use crate::{Message, config::Cava};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
@@ -54,12 +51,14 @@ pub struct CavaModule {
     bars: Vec<u8>,
     cache: Cache,
     colors: Vec<Color>,
+    config: Cava,
 }
 
 impl CavaModule {
-    pub fn new() -> Self {
+    pub fn new(config: Cava) -> Self {
         Self {
-            bars: vec![0; CAVA_BARS],
+            bars: vec![0; config.bars],
+            config,
             cache: Cache::new(),
             colors: default_gradient(),
         }
@@ -92,16 +91,16 @@ impl CavaModule {
                 Message::ChangeVolume(match delta {
                     ScrollDelta::Lines { x, y } => {
                         if y > 0.0 || x < 0.0 {
-                            VOLUME_PERCENT
+                            self.config.volume_percent
                         } else {
-                            -VOLUME_PERCENT
+                            -self.config.volume_percent
                         }
                     }
                     ScrollDelta::Pixels { x, y } => {
                         if y > 0.0 || x < 0.0 {
-                            VOLUME_PERCENT
+                            self.config.volume_percent
                         } else {
-                            -VOLUME_PERCENT
+                            -self.config.volume_percent
                         }
                     }
                 })
@@ -135,7 +134,7 @@ impl<Message> Program<Message> for CavaModule {
                 }
 
                 let bar_thickness_total = frame.height() / bars_per_channel as f32;
-                let spacing = bar_thickness_total * CAVA_BAR_SPACING_PERCENT;
+                let spacing = bar_thickness_total * self.config.spacing;
                 let bar_thickness = bar_thickness_total - spacing;
 
                 for i in 0..bars_per_channel {

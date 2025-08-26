@@ -2,13 +2,9 @@ use iced::{
     Element, Length, Padding,
     widget::{Container, Text, container, stack},
 };
-use tracing::{warn, error};
+use tracing::{error, warn};
 
-use crate::{
-    Message,
-    config::{BATTERY_ICON_SIZE, CHARGING_OVERLAY_SIZE},
-    style::styled_tooltip,
-};
+use crate::{Message, config::Battery, style::styled_tooltip};
 extern crate starship_battery as battery;
 
 #[derive(Debug, Clone)]
@@ -21,10 +17,11 @@ pub struct BatteryModule {
     pub id: container::Id,
     manager: Option<battery::Manager>,
     batteries: Vec<BatteryInfo>,
+    config: Battery,
 }
 
 impl BatteryModule {
-    pub fn new() -> Self {
+    pub fn new(config: Battery) -> Self {
         let manager = match battery::Manager::new() {
             Ok(manager) => Some(manager),
             Err(e) => {
@@ -36,6 +33,7 @@ impl BatteryModule {
         Self {
             id: container::Id::unique(),
             manager,
+            config,
             batteries: Vec::new(),
         }
     }
@@ -74,7 +72,7 @@ impl BatteryModule {
     pub fn to_widget<'a>(&self) -> Element<'a, Message> {
         if self.batteries.is_empty() {
             warn!("No batteries found to display");
-            return Text::new("?").size(CHARGING_OVERLAY_SIZE).into();
+            return Text::new("?").size(self.config.overlay_icon_size).into();
         }
 
         let total_percentage: f32 = self.batteries.iter().map(|b| b.percentage).sum();
@@ -86,13 +84,13 @@ impl BatteryModule {
             !matches!(b.state, battery::State::Discharging | battery::State::Empty)
         });
 
-        let icon_widget = Container::new(Text::new(icon).size(BATTERY_ICON_SIZE))
+        let icon_widget = Container::new(Text::new(icon).size(self.config.icon_size))
             .center_x(Length::Fill)
             .id(self.id.clone());
 
         let content: Element<'a, Message> = if is_charging {
             let charging_overlay =
-                Container::new(Text::new("󱐋").size(CHARGING_OVERLAY_SIZE))
+                Container::new(Text::new("󱐋").size(self.config.overlay_icon_size))
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .padding(Padding {

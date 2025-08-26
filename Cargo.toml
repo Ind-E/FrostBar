@@ -13,6 +13,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "alloc",
 ] }
 color-thief = "0.2.2"
+directories = "6.0.0"
 freedesktop-desktop-entry = { version = "0.7.14", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntlet-0.13.1", features = [
@@ -27,14 +28,19 @@ iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntle
 itertools = { version = "0.14.0", default-features = false, features = [
     "use_alloc",
 ] }
+knuffel = "3.2.0"
+miette = { version = "5.1.1", features = ["fancy-no-backtrace"] }
 niri-ipc = { git = "https://github.com/YaLTeR/niri/", branch = "main" }
+notify-rust = "4.11.7"
 starship-battery = { version = "0.10.2", default-features = false }
 thiserror = { version = "2.0.16", default-features = false }
 tokio = "1.47.1"
 tokio-stream = "0.1.17"
 tracing = "0.1.41"
-tracing-log = "0.2.0"
-tracing-subscriber = { version = "0.3.19", default-features = false, features = ["fmt"] }
+tracing-subscriber = { version = "0.3.19", default-features = false, features = [
+    "fmt",
+] }
+tracy-client = "0.18.2"
 url = "2.5.7"
 xdgkit = { version = "3.2.5", default-features = false }
 zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
