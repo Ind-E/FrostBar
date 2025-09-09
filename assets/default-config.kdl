@@ -10,7 +10,6 @@ modules {
     cava {
         volume-percent 3
         spacing 0.1
-        bars 10
     }
 
     battery {

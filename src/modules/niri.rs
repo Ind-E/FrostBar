@@ -9,7 +9,7 @@ use iced::{
         Column, Container, Image, MouseArea, Scrollable, Svg, Text, column,
         container::{self},
         scrollable::{Direction, Scrollbar},
-        text,
+        text::Shaping,
     },
 };
 
@@ -97,7 +97,7 @@ impl<'a> Window {
         .center_x(Length::Fill)
         .id(self.container_id.clone());
 
-        let tooltip = Text::new(self.title.clone());
+        let tooltip = Text::new(self.title.clone()).shaping(Shaping::Advanced);
 
         styled_tooltip(content, tooltip)
     }
@@ -134,7 +134,7 @@ impl<'a> Workspace {
                         Column::new()
                             .align_x(Horizontal::Center)
                             .spacing(5)
-                            .push(text(self.idx - 1).size(20)),
+                            .push(Text::new(self.idx - 1).size(20)),
                         |col, w| col.push(w.to_widget()),
                     ),
                 )

@@ -19,9 +19,6 @@ use xdgkit::icon_finder;
 
 use crate::config::Cava;
 
-pub const DEFAULT_ICON: &str =
-    "/usr/share/icons/Adwaita/16x16/apps/help-contents-symbolic.symbolic.png";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Icon {
     Svg(svg::Handle),
@@ -53,7 +50,7 @@ pub fn client_icon_path(
         .unwrap_or_else(|| {
             icon_finder::find_icon("default-application".to_string(), 128, 1)
         })
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_ICON));
+        .unwrap_or_else(|| PathBuf::from("x.svg"));
 
     Ok(desktop_file)
 }
@@ -121,13 +118,13 @@ impl MprisArtCache {
                 let handle = image::Handle::from_bytes(image_bytes.clone());
                 let gradient = load_from_memory(&image_bytes)
                     .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8(), self.config.bars));
+                    .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
                 (Some(handle), gradient)
             } else if let Some(url) = art_url.strip_prefix("file://") {
                 let handle = image::Handle::from_path(url);
                 let gradient = open(url)
                     .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8(), self.config.bars));
+                    .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
                 (Some(handle), gradient)
             } else {
                 (None, None)

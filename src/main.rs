@@ -1,11 +1,19 @@
 use chrono::{DateTime, Local};
 use directories::ProjectDirs;
 use iced::{
-    advanced::{mouse, subscription}, alignment::{Horizontal, Vertical}, border::rounded, event, theme, time::{self, Duration}, widget::{column, container, stack, text, Container}, window::{
+    Background, Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme,
+    advanced::{mouse, subscription},
+    alignment::{Horizontal, Vertical},
+    border::rounded,
+    event, theme,
+    time::{self, Duration},
+    widget::{Container, column, container, stack, text},
+    window::{
+        Id,
         settings::{
             Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
-        }, Id
-    }, Background, Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme
+        },
+    },
 };
 use std::{
     process::Command,
@@ -39,6 +47,10 @@ mod style;
 
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
+
+    #[cfg(feature = "tracy")]
+    tracy_client::Client::start();
+
     iced::daemon(
         || {
             let config = {
@@ -339,8 +351,6 @@ impl Bar {
         let bar = Container::new(layout)
             .width(Length::Fixed(self.config.layout.width as f32))
             .height(Length::Fill)
-            // .style(bg);
-            // .style(|theme| rounded_corners(theme, self.config.layout));
             .style(|_theme| container::Style {
                 background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
                 border: rounded(self.config.layout.border_radius),

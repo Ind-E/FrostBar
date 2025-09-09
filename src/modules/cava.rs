@@ -57,7 +57,7 @@ pub struct CavaModule {
 impl CavaModule {
     pub fn new(config: Cava) -> Self {
         Self {
-            bars: vec![0; config.bars],
+            bars: vec![],
             config,
             cache: Cache::new(),
             colors: default_gradient(),

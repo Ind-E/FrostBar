@@ -82,6 +82,9 @@
                 freetype.dev
                 libGL
                 libxkbcommon
+
+                stdenv.cc.cc.lib
+
                 wayland
                 xorg.libX11
                 xorg.libXcursor

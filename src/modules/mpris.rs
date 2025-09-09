@@ -4,7 +4,9 @@ use iced::{
     border::Radius,
     futures::{self, FutureExt, Stream, StreamExt, stream::select_all},
     mouse::Interaction,
-    widget::{Column, Container, Image, MouseArea, Text, container, image, text},
+    widget::{
+        Column, Container, Image, MouseArea, Text, container, image, text::Shaping,
+    },
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
@@ -198,7 +200,7 @@ impl MprisPlayer {
             Container::new(Image::new(art)).into()
         } else {
             Container::new(
-                text("󰝚")
+                Text::new("󰝚")
                     .size(20)
                     .width(Length::Fill)
                     .height(Length::Fill)
@@ -233,7 +235,8 @@ impl MprisPlayer {
 
         let title = raw_title.trim().trim_matches('"');
 
-        let tooltip = Text::new(format!("{} - {}", artists, title));
+        let tooltip =
+            Text::new(format!("{} - {}", artists, title)).shaping(Shaping::Advanced);
 
         let content = Container::new(
             MouseArea::new(content)

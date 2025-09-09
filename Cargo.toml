@@ -40,10 +40,19 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", default-features = false, features = [
     "fmt",
 ] }
-tracy-client = "0.18.2"
+tracy-client = { version = "0.17.3", default-features = false }
 url = "2.5.7"
 xdgkit = { version = "3.2.5", default-features = false }
 zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 
 [profile.dev]
 overflow-checks = false
+
+[features]
+tracy = ["tracy-client/default"]
+tracy-ondemand = [
+    "tracy",
+    "tracy-client/ondemand",
+    "tracy-client/manual-lifetime",
+]
+tracy-allocations = ["tracy"]

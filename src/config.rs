@@ -49,8 +49,6 @@ pub struct Cava {
     pub volume_percent: i32,
     #[knuffel(child, unwrap(argument), default = 0.1)]
     pub spacing: f32,
-    #[knuffel(child, unwrap(argument), default = 10)]
-    pub bars: usize,
 }
 
 impl Default for Cava {
@@ -58,7 +56,6 @@ impl Default for Cava {
         Self {
             volume_percent: 3,
             spacing: 0.1,
-            bars: 10,
         }
     }
 }
