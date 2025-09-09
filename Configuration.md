@@ -1,0 +1,27 @@
+# Configuration
+
+FrostBar will look for a configuration file at `$XDG_CONFIG_HOME/frostbar/config.kdl`
+If no configuration file exists, a new one will be created with the contents of the [default configuration file](https://github.com/Ind-E/FrostBar/blob/main/assets/default-config.kdl)
+
+Here is an example with all currently working configuration options
+
+```kdl
+layout {
+    width 42
+    gaps 3
+    border-radius 4
+}
+
+modules {
+    cava {
+        volume-percent 3
+        spacing 0.1
+    }
+
+    battery {
+        icon-size 22
+        overlay-icon-size 13
+    }
+
+}
+```
