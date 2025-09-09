@@ -12,7 +12,7 @@
 
 <img width="1920" height="1200" alt="FrostBar Example" src="https://github.com/user-attachments/assets/ea3f2578-7c30-489f-a481-8893e970a3ed" />
 
-note: FrostBar is currently a work in progress and may have bugs or incomplete features
+note: FrostBar is currently a work in progress and under active development
 
 ## Current Features
 
