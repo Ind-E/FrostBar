@@ -7,7 +7,7 @@
   ![GitHub top language](https://img.shields.io/github/languages/top/Ind-E/FrostBar)
   [![Made with iced](https://iced.rs/badge.svg)](https://github.com/iced-rs/iced)
 
-  <a href="https://Ind-E.github.io/FrostBar/Configuration.html">Configuration</a> | <a href="https://Ind-E.github.io/FrostBar/Architecture.html">Architecture</a>
+  <a href="https://github.com/Ind-E/FrostBar/blob/main/Configuration.md">Configuration</a> | <a href="https://github.com/Ind-E/FrostBar/blob/main/Architecture.md">Architecture</a>
 </div>
 
 <img width="1920" height="1200" alt="FrostBar Example" src="https://github.com/user-attachments/assets/ea3f2578-7c30-489f-a481-8893e970a3ed" />
