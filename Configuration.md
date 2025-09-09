@@ -25,3 +25,10 @@ modules {
 
 }
 ```
+## Planned Features
+- hot reloading of config file
+- validation of config file with error notification
+- change bar position (left, top, right, bottom)
+- specify config file with cli argument
+- change colors/styles of each module
+- ability to position modules at start, middle, or end of bar, and to use any combination of modules
