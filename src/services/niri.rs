@@ -1,24 +1,11 @@
 use iced::{
-    Element, Length,
     advanced::subscription,
-    alignment::{Horizontal, Vertical},
     futures::{self, FutureExt, Stream, StreamExt, channel::mpsc},
-    mouse::Interaction,
-    padding::top,
-    widget::{
-        Column, Container, Image, MouseArea, Scrollable, Svg, Text, column,
-        container::{self},
-        scrollable::{Direction, Scrollbar},
-        text::Shaping,
-    },
 };
 
-use itertools::Itertools;
-use niri_ipc::{
-    Action, Event, Request, WindowLayout, WorkspaceReferenceArg, socket::Socket,
-};
-use std::cmp::Ordering;
+use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
 use std::{
+    cmp::Ordering,
     collections::HashMap,
     hash::Hash,
     pin::Pin,
@@ -27,13 +14,13 @@ use std::{
 use tracing::error;
 
 use crate::{
-    Message, MouseEvent,
+    Message,
     icon_cache::{Icon, IconCache},
-    style::{styled_tooltip, workspace_style},
+    services::Service,
 };
 
 #[derive(Debug, Eq, PartialEq)]
-enum Layout {
+pub enum Layout {
     Floating,
     Scrolling(usize, usize),
 }
@@ -58,12 +45,11 @@ impl Ord for Layout {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct Window {
-    id: u64,
-    container_id: container::Id,
-    icon: Option<Icon>,
-    layout: Layout,
-    title: String,
+pub struct Window {
+    pub id: u64,
+    pub icon: Option<Icon>,
+    pub layout: Layout,
+    pub title: String,
 }
 
 impl PartialOrd for Window {
@@ -78,94 +64,24 @@ impl Ord for Window {
     }
 }
 
-impl<'a> Window {
-    fn to_widget(&self) -> Element<'a, Message> {
-        let icon: Element<'a, Message> = match &self.icon {
-            Some(Icon::Svg(handle)) => {
-                Svg::new(handle.clone()).height(24).width(24).into()
-            }
-            Some(Icon::Raster(handle)) => {
-                Image::new(handle.clone()).height(24).width(24).into()
-            }
-            Option::None => column![].into(),
-        };
-
-        let content = Container::new(
-            MouseArea::new(icon)
-                .on_right_press(Message::NiriAction(Action::FocusWindow { id: self.id })),
-        )
-        .center_x(Length::Fill)
-        .id(self.container_id.clone());
-
-        let tooltip = Text::new(self.title.clone()).shaping(Shaping::Advanced);
-
-        styled_tooltip(content, tooltip)
-    }
+pub struct Workspace {
+    pub output: Option<String>,
+    pub idx: u8,
+    pub id: u64,
+    pub is_active: bool,
+    pub windows: HashMap<u64, Window>,
 }
 
-pub struct NiriWindow {
-    pub inner: niri_ipc::Window,
-    pub container_id: container::Id,
-}
-
-impl NiriWindow {
-    fn new(inner: niri_ipc::Window) -> Self {
-        Self {
-            inner,
-            container_id: container::Id::unique(),
-        }
-    }
-}
-
-struct Workspace {
-    output: Option<String>,
-    idx: u8,
-    id: u64,
-    is_active: bool,
-    windows: HashMap<u64, Window>,
-}
-
-impl<'a> Workspace {
-    fn to_widget(&self, hovered: bool, radius: u16) -> Element<'a, Message> {
-        Container::new(
-            MouseArea::new(
-                Container::new(
-                    self.windows.values().sorted_unstable().fold(
-                        Column::new()
-                            .align_x(Horizontal::Center)
-                            .spacing(5)
-                            .push(Text::new(self.idx - 1).size(20)),
-                        |col, w| col.push(w.to_widget()),
-                    ),
-                )
-                .style(workspace_style(self.is_active, hovered, radius))
-                .padding(top(5).bottom(5))
-                .width(Length::Fill)
-                .align_x(Horizontal::Center),
-            )
-            .on_press(Message::NiriAction(Action::FocusWorkspace {
-                reference: WorkspaceReferenceArg::Id(self.id),
-            }))
-            .on_enter(Message::MouseEntered(MouseEvent::Workspace(self.id)))
-            .on_exit(Message::MouseExited(MouseEvent::Workspace(self.id)))
-            .interaction(Interaction::Pointer),
-        )
-        .into()
-    }
-}
-
-fn map_window(window: &NiriWindow, icon_cache: Arc<Mutex<IconCache>>) -> Window {
+fn map_window(window: &niri_ipc::Window, icon_cache: Arc<Mutex<IconCache>>) -> Window {
     let mut icon_cache = icon_cache.lock().unwrap();
     Window {
-        id: window.inner.id,
+        id: window.id,
         icon: window
-            .inner
             .app_id
             .as_ref()
             .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
-        container_id: window.container_id.clone(),
-        layout: window.inner.layout.clone().into(),
-        title: window.inner.title.clone().unwrap_or("N/A".to_string()),
+        layout: window.layout.clone().into(),
+        title: window.title.clone().unwrap_or("N/A".to_string()),
     }
 }
 
@@ -178,20 +94,57 @@ impl From<WindowLayout> for Layout {
 }
 
 #[derive(Debug, Clone)]
-pub enum NiriOutput {
+pub enum NiriEvent {
     Ready(mpsc::Sender<Request>),
     Event(Event),
+    Action(Action),
 }
 
-pub struct NiriModule {
-    workspaces: HashMap<u64, Workspace>,
-    pub windows: HashMap<u64, NiriWindow>,
+pub struct NiriService {
+    pub workspaces: HashMap<u64, Workspace>,
+    pub windows: HashMap<u64, niri_ipc::Window>,
     pub hovered_workspace_id: Option<u64>,
-    icon_cache: Arc<Mutex<IconCache>>,
-    sender: Option<mpsc::Sender<Request>>,
+    pub icon_cache: Arc<Mutex<IconCache>>,
+    pub sender: Option<mpsc::Sender<Request>>,
 }
 
-impl NiriModule {
+impl Service for NiriService {
+    fn subscription() -> iced::Subscription<Message> {
+        subscription::from_recipe(NiriSubscriptionRecipe).map(Message::NiriEvent)
+    }
+
+    type Event = NiriEvent;
+    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
+        match event {
+            NiriEvent::Ready(sender) => {
+                self.sender = Some(sender);
+                iced::Task::none()
+            }
+            NiriEvent::Event(event) => self.handle_ipc_event(event),
+            NiriEvent::Action(action) => {
+                let Some(sender) = &self.sender else {
+                    error!("Niri action triggered before sender was ready.");
+                    return iced::Task::none();
+                };
+                let request = Request::Action(action);
+                {
+                    let mut sender = sender.clone();
+                    iced::Task::perform(
+                        async move { sender.try_send(request) },
+                        |result| {
+                            if let Err(e) = result {
+                                error!("{e}");
+                            }
+                            Message::NoOp
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+impl NiriService {
     pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
         Self {
             workspaces: HashMap::new(),
@@ -201,59 +154,6 @@ impl NiriModule {
             sender: None,
         }
     }
-
-    pub fn to_widget<'a>(&'a self, radius: u16) -> Element<'a, Message> {
-        let ws = self
-            .workspaces
-            .iter()
-            .sorted_by_key(|(_, ws)| ws.idx)
-            .fold(Column::new(), |col, (_, ws)| {
-                col.push(ws.to_widget(
-                    self.hovered_workspace_id.is_some_and(|id| id == ws.id),
-                    radius,
-                ))
-            })
-            .align_x(Horizontal::Center)
-            .spacing(10);
-        Container::new(
-            Scrollable::with_direction(
-                Container::new(ws).align_y(Vertical::Center),
-                Direction::Vertical(Scrollbar::new().scroller_width(0).width(0)),
-            )
-            .height(590),
-        )
-        .center_y(Length::Fill)
-        .into()
-    }
-
-    pub fn handle_action(&mut self, action: Action) -> iced::Task<Message> {
-        let Some(sender) = &self.sender else {
-            return iced::Task::none();
-        };
-        let request = Request::Action(action);
-        {
-            let mut sender = sender.clone();
-            iced::Task::perform(async move { sender.try_send(request) }, |result| {
-                if let Err(e) = result {
-                    error!("{e}");
-                }
-                Message::NoOp
-            })
-        }
-    }
-
-    pub fn handle_niri_output(&mut self, output: NiriOutput) -> iced::Task<Message> {
-        match output {
-            NiriOutput::Ready(sender) => {
-                self.sender = Some(sender);
-                return iced::Task::none();
-            }
-            NiriOutput::Event(event) => {
-                return self.handle_ipc_event(event);
-            }
-        }
-    }
-
     fn handle_ipc_event(&mut self, event: Event) -> iced::Task<Message> {
         match event {
             Event::WorkspacesChanged { workspaces } => {
@@ -267,35 +167,30 @@ impl NiriModule {
                         windows: self
                             .windows
                             .values()
-                            .filter(|w| w.inner.workspace_id == Some(ws.id))
-                            .map(|w| (w.inner.id, map_window(w, self.icon_cache.clone())))
+                            .filter(|w| w.workspace_id == Some(ws.id))
+                            .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
                             .collect(),
                     })
                     .map(|ws| (ws.id, ws))
                     .collect()
             }
             Event::WindowsChanged { windows } => {
-                self.windows = windows
-                    .into_iter()
-                    .map(|w| (w.id, NiriWindow::new(w)))
-                    .collect();
+                self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
 
                 self.workspaces.values_mut().for_each(|ws| {
                     ws.windows = self
                         .windows
                         .values()
-                        .filter(|w| w.inner.workspace_id == Some(ws.id))
-                        .map(|w| (w.inner.id, map_window(&w, self.icon_cache.clone())))
+                        .filter(|w| w.workspace_id == Some(ws.id))
+                        .map(|w| (w.id, map_window(&w, self.icon_cache.clone())))
                         .collect()
                 });
             }
             Event::WindowOpenedOrChanged { window } => {
                 let window_id = window.id;
 
-                let old_workspace_id = self
-                    .windows
-                    .get(&window_id)
-                    .and_then(|w| w.inner.workspace_id);
+                let old_workspace_id =
+                    self.windows.get(&window_id).and_then(|w| w.workspace_id);
                 let new_workspace_id = window.workspace_id;
 
                 if old_workspace_id != new_workspace_id {
@@ -306,7 +201,7 @@ impl NiriModule {
                     }
                 }
 
-                self.windows.insert(window_id, NiriWindow::new(window));
+                self.windows.insert(window_id, window);
 
                 if let Some(new_ws_id) = new_workspace_id
                     && let Some(new_ws) = self.workspaces.get_mut(&new_ws_id)
@@ -352,7 +247,7 @@ impl NiriModule {
             Event::WindowLayoutsChanged { changes } => {
                 for (id, layout) in changes {
                     if let Some(window) = self.windows.get_mut(&id) {
-                        window.inner.layout = layout.into()
+                        window.layout = layout.into()
                     }
                 }
 
@@ -360,8 +255,8 @@ impl NiriModule {
                     ws.windows = self
                         .windows
                         .values()
-                        .filter(|w| w.inner.workspace_id == Some(ws.id))
-                        .map(|w| (w.inner.id, map_window(&w, self.icon_cache.clone())))
+                        .filter(|w| w.workspace_id == Some(ws.id))
+                        .map(|w| (w.id, map_window(&w, self.icon_cache.clone())))
                         .collect()
                 });
             }
@@ -410,7 +305,7 @@ fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
 
 pub struct NiriSubscriptionRecipe;
 impl subscription::Recipe for NiriSubscriptionRecipe {
-    type Output = NiriOutput;
+    type Output = NiriEvent;
 
     fn hash(&self, state: &mut subscription::Hasher) {
         std::any::TypeId::of::<Self>().hash(state);
@@ -423,7 +318,7 @@ impl subscription::Recipe for NiriSubscriptionRecipe {
         Box::pin(async_stream::stream! {
             let (request_tx, mut request_rx) =  mpsc::channel(32);
             let (event_tx, mut event_rx) = mpsc::unbounded();
-            yield NiriOutput::Ready(request_tx);
+            yield NiriEvent::Ready(request_tx);
 
             std::thread::spawn(move || {
                 run_event_listener(event_tx);
@@ -434,7 +329,7 @@ impl subscription::Recipe for NiriSubscriptionRecipe {
                 futures::select! {
                     event = event_rx.next().fuse() => {
                         if let Some(event) = event {
-                            yield NiriOutput::Event(event);
+                            yield NiriEvent::Event(event);
                         } else {
                             break;
                         }

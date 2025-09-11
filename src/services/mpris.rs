@@ -1,12 +1,8 @@
 use iced::{
-    Border, Color, Element, Length,
+    Color,
     advanced::subscription,
-    border::Radius,
     futures::{self, FutureExt, Stream, StreamExt, stream::select_all},
-    mouse::Interaction,
-    widget::{
-        Column, Container, Image, MouseArea, Text, container, image, text::Shaping,
-    },
+    widget::image,
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
@@ -14,27 +10,21 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 use tracing::error;
 
 use crate::{
-    Message,
-    config::{Cava, Layout},
-    dbus_proxy::PlayerProxy,
-    icon_cache::MprisArtCache,
-    style::styled_tooltip,
+    config::Cava, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache, services::{EventStream, Service}, Message
 };
 
-pub struct MprisModule {
+pub struct MprisService {
     pub players: HashMap<String, MprisPlayer>,
     art_cache: MprisArtCache,
 }
 
-impl MprisModule {
-    pub fn new(cava: Cava) -> Self {
-        Self {
-            players: HashMap::new(),
-            art_cache: MprisArtCache::new(cava),
-        }
+impl Service for MprisService {
+    fn subscription() -> iced::Subscription<Message> {
+        subscription::from_recipe(MprisListener).map(Message::MprisEvent)
     }
 
-    pub fn on_event(&mut self, event: MprisEvent) -> iced::Task<Message> {
+    type Event = MprisEvent;
+    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
         match event {
             MprisEvent::PlayerAppeared {
                 name,
@@ -99,20 +89,18 @@ impl MprisModule {
             }
         }
     }
+}
 
-    pub fn to_widget<'a>(&self, layout: &Layout) -> Element<'a, Message> {
-        self.players
-            .values()
-            .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(player.to_widget(&layout))
-            })
-            .into()
+impl MprisService {
+    pub fn new(config: Cava) -> Self {
+        Self {
+            players: HashMap::new(),
+            art_cache: MprisArtCache::new(config),
+        }
     }
 }
 
 const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
-
-type EventStream = Pin<Box<dyn Stream<Item = Result<MprisEvent, zbus::Error>> + Send>>;
 
 #[derive(Clone, Debug)]
 pub enum MprisEvent {
@@ -136,13 +124,12 @@ pub enum MprisEvent {
 
 #[derive(Clone, Debug)]
 pub struct MprisPlayer {
-    name: String,
-    status: String,
-    artists: Option<String>,
-    title: Option<String>,
-    art: Option<image::Handle>,
-    colors: Option<Vec<Color>>,
-    pub id: container::Id,
+    pub name: String,
+    pub status: String,
+    pub artists: Option<String>,
+    pub title: Option<String>,
+    pub art: Option<image::Handle>,
+    pub colors: Option<Vec<Color>>,
 }
 
 impl MprisPlayer {
@@ -191,63 +178,7 @@ impl MprisPlayer {
             title: None,
             art: None,
             colors: None,
-            id: container::Id::unique(),
         }
-    }
-
-    pub fn to_widget<'a>(&self, layout: &Layout) -> Element<'a, Message> {
-        let content: Element<'a, Message> = if let Some(art) = &self.art {
-            Container::new(Image::new(art)).into()
-        } else {
-            Container::new(
-                Text::new("󰝚")
-                    .size(20)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center(),
-            )
-            .padding(5)
-            .width(layout.width - layout.gaps as u32 * 4)
-            .height(layout.width - layout.gaps as u32 * 4)
-            .center_x(Length::Fill)
-            .style(|_| container::Style {
-                border: Border {
-                    color: Color::WHITE,
-                    width: 1.0,
-                    radius: Radius::new(1),
-                },
-                ..Default::default()
-            })
-            .into()
-        };
-
-        let raw_artists = self.artists.clone().unwrap_or_else(|| "[]".to_string());
-        let raw_title = self.title.clone().unwrap_or_else(|| "\"\"".to_string());
-
-        let artists = raw_artists
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .split(',')
-            .map(|s| s.trim().trim_matches('"'))
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let title = raw_title.trim().trim_matches('"');
-
-        let tooltip =
-            Text::new(format!("{} - {}", artists, title)).shaping(Shaping::Advanced);
-
-        let content = Container::new(
-            MouseArea::new(content)
-                .on_release(Message::PlayPause(self.name.clone()))
-                .on_right_release(Message::NextSong(self.name.clone()))
-                .on_middle_release(Message::StopPlayer(self.name.clone()))
-                .interaction(Interaction::Pointer),
-        )
-        .id(self.id.clone());
-
-        styled_tooltip(content, tooltip)
     }
 }
 
@@ -344,9 +275,9 @@ async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisE
 async fn create_player_stream(
     connection: &Connection,
     name: String,
-) -> Result<EventStream, zbus::Error> {
+) -> Result<EventStream<MprisEvent, zbus::Error>, zbus::Error> {
     let player_proxy = PlayerProxy::new(&connection, name.clone()).await?;
-    let mut streams: Vec<EventStream> = vec![];
+    let mut streams: Vec<EventStream<MprisEvent, zbus::Error>> = vec![];
     {
         let name = name.clone();
         let playback_stream = player_proxy

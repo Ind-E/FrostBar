@@ -7,7 +7,7 @@ use zbus::object_server::Interface;
 use zbus::object_server::SignalEmitter;
 use zbus::{Connection, export::ordered_stream::OrderedStreamExt, interface};
 
-use crate::modules::systray::{ITEM_OBJECT, WATCHER_BUS, WATCHER_OBJECT};
+use crate::services::systray::{ITEM_OBJECT, WATCHER_BUS, WATCHER_OBJECT};
 
 /// An instance of [`org.kde.StatusNotifierWatcher`]. It only tracks what tray items and trays
 /// exist, and doesn't have any logic for displaying items (for that, see [`Host`][`crate::Host`]).

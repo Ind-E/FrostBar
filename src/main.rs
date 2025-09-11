@@ -1,13 +1,13 @@
 use chrono::{DateTime, Local};
+
 use directories::ProjectDirs;
 use iced::{
     Background, Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme,
-    advanced::{mouse, subscription},
+    advanced::mouse,
     alignment::{Horizontal, Vertical},
     border::rounded,
     event, theme,
-    time::{self, Duration},
-    widget::{Container, column, container, stack, text},
+    widget::{Column, Container, Text, container, stack},
     window::{
         Id,
         settings::{
@@ -29,12 +29,17 @@ use crate::{
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     icon_cache::IconCache,
-    modules::{
-        battery::BatteryModule,
-        cava::{CavaError, CavaEvents, CavaModule, write_temp_cava_config},
-        mpris::{MprisEvent, MprisListener, MprisModule},
-        niri::{NiriModule, NiriOutput, NiriSubscriptionRecipe},
-        time::TimeModule,
+    services::{
+        Service,
+        battery::BatteryService,
+        cava::{CavaError, CavaService},
+        mpris::{MprisEvent, MprisService},
+        niri::{NiriEvent, NiriService},
+        time::TimeService,
+    },
+    views::{
+        battery::BatteryView, cava::CavaView, mpris::MprisView, niri::NiriView,
+        time::TimeView,
     },
 };
 
@@ -42,8 +47,9 @@ mod config;
 mod constants;
 mod dbus_proxy;
 mod icon_cache;
-mod modules;
+mod services;
 mod style;
+mod views;
 
 pub fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
@@ -96,13 +102,13 @@ pub enum Message {
     IcedEvent(Event),
 
     Tick(DateTime<Local>),
+    UpdateBattery,
 
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
     MouseExitedBar,
 
-    NiriOutput(NiriOutput),
-    NiriAction(niri_ipc::Action),
+    NiriEvent(NiriEvent),
 
     CavaUpdate(Result<String, CavaError>),
     CavaColorUpdate(Option<Vec<Color>>),
@@ -124,19 +130,41 @@ pub enum Message {
 pub struct Bar {
     id: Id,
     config: Config,
-    time_module: TimeModule,
-    battery_module: BatteryModule,
-    niri_module: NiriModule,
-    mpris_module: MprisModule,
-    cava_module: CavaModule,
+
+    time_views: Vec<TimeView>,
+    time_service: Option<TimeService>,
+
+    battery_views: Vec<BatteryView>,
+    battery_service: Option<BatteryService>,
+
+    niri_views: Vec<NiriView>,
+    niri_service: Option<NiriService>,
+
+    mpris_views: Vec<MprisView>,
+    mpris_service: Option<MprisService>,
+
+    cava_views: Vec<CavaView>,
+    cava_service: Option<CavaService>,
 }
 
 impl Bar {
     pub fn new(config: Config) -> (Self, Task<Message>) {
-        let time_module = TimeModule::new();
-        let battery_module = BatteryModule::new(config.modules.battery.clone());
-
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
+
+        let time_service = TimeService::new();
+        let time_views = vec![TimeView::new()];
+
+        let battery_service = BatteryService::new();
+        let battery_views = vec![BatteryView::new()];
+
+        let niri_service = NiriService::new(icon_cache.clone());
+        let niri_views = vec![NiriView::new()];
+
+        let mpris_service = MprisService::new(config.modules.cava.clone());
+        let mpris_views = vec![MprisView::new()];
+
+        let cava_service = CavaService::new();
+        let cava_views = vec![CavaView::new()];
 
         let (id, open) = iced::window::open(iced::window::Settings {
             size: Size::new(config.layout.width as f32, 0.0),
@@ -168,22 +196,26 @@ impl Bar {
             ..Default::default()
         });
 
-        (
-            Self {
-                id,
-                time_module,
-                battery_module,
-                niri_module: NiriModule::new(icon_cache.clone()),
-                mpris_module: MprisModule::new(config.modules.cava.clone()),
-                cava_module: CavaModule::new(config.modules.cava.clone()),
-                config,
-            },
-            Task::batch(vec![open.map(Message::OpenWindow)]),
-        )
+        let bar = Self {
+            id,
+            time_service: Some(time_service),
+            time_views,
+            battery_service: Some(battery_service),
+            battery_views,
+            niri_service: Some(niri_service),
+            niri_views,
+            mpris_service: Some(mpris_service),
+            mpris_views,
+            cava_service: Some(cava_service),
+            cava_views,
+            config,
+        };
+
+        (bar, Task::batch(vec![open.map(Message::OpenWindow)]))
     }
 
     fn title(&self, _id: Id) -> String {
-        String::from("feralice")
+        String::from("FrostBar")
     }
 
     pub fn namespace(&self) -> String {
@@ -195,21 +227,25 @@ impl Bar {
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
 
-        subscriptions.push(
-            subscription::from_recipe(NiriSubscriptionRecipe).map(Message::NiriOutput),
-        );
-        subscriptions
-            .push(subscription::from_recipe(MprisListener).map(Message::MprisEvent));
-        subscriptions.push(
-            subscription::from_recipe(CavaEvents {
-                config_path: write_temp_cava_config().unwrap().display().to_string(),
-            })
-            .map(Message::CavaUpdate),
-        );
+        if self.time_service.is_some() {
+            subscriptions.push(TimeService::subscription());
+        }
 
-        subscriptions.push(
-            time::every(Duration::from_secs(1)).map(|_| Message::Tick(Local::now())),
-        );
+        if self.battery_service.is_some() {
+            subscriptions.push(BatteryService::subscription());
+        }
+
+        if self.niri_service.is_some() {
+            subscriptions.push(NiriService::subscription());
+        }
+
+        if self.mpris_service.is_some() {
+            subscriptions.push(MprisService::subscription());
+        }
+
+        if self.cava_service.is_some() {
+            subscriptions.push(CavaService::subscription());
+        }
 
         Subscription::batch(subscriptions)
     }
@@ -217,9 +253,7 @@ impl Bar {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::OpenWindow(id) => {
-                if id != self.id {
-                    unreachable!();
-                };
+                debug_assert!(id == self.id);
                 Task::none()
             }
             Message::IcedEvent(event) => {
@@ -229,30 +263,44 @@ impl Bar {
                 // println!("{event:?}");
                 Task::none()
             }
-            Message::Tick(time) => {
-                self.time_module.time = time;
-                self.battery_module.fetch_battery_info();
-                Task::none()
-            }
-            Message::NiriOutput(output) => self.niri_module.handle_niri_output(output),
-            Message::NiriAction(action) => self.niri_module.handle_action(action),
+            Message::Tick(time) => self
+                .time_service
+                .as_mut()
+                .map(|ts| ts.handle_event(time))
+                .unwrap_or_else(iced::Task::none),
+            Message::UpdateBattery => self
+                .battery_service
+                .as_mut()
+                .map(|bs| bs.handle_event(()))
+                .unwrap_or_else(iced::Task::none),
+            Message::NiriEvent(event) => self
+                .niri_service
+                .as_mut()
+                .map(|ns| ns.handle_event(event))
+                .unwrap_or_else(iced::Task::none),
             Message::MouseEntered(event) => {
                 match event {
                     MouseEvent::Workspace(id) => {
-                        self.niri_module.hovered_workspace_id = Some(id);
+                        self.niri_service
+                            .as_mut()
+                            .map(|s| s.hovered_workspace_id = Some(id));
                     }
                 };
 
                 Task::none()
             }
             Message::MouseExitedBar => {
-                self.niri_module.hovered_workspace_id = None;
+                self.niri_service
+                    .as_mut()
+                    .map(|s| s.hovered_workspace_id = None);
                 Task::none()
             }
             Message::MouseExited(event) => {
                 match event {
                     MouseEvent::Workspace(..) => {
-                        self.niri_module.hovered_workspace_id = None;
+                        self.niri_service
+                            .as_mut()
+                            .map(|s| s.hovered_workspace_id = None);
                     }
                 };
 
@@ -262,12 +310,21 @@ impl Bar {
                 error!("error message: {}", msg);
                 Task::none()
             }
-            Message::CavaUpdate(update) => self.cava_module.update(update),
-            Message::CavaColorUpdate(gradient) => {
-                self.cava_module.update_gradient(gradient);
-                Task::none()
-            }
-            Message::MprisEvent(event) => self.mpris_module.on_event(event),
+            Message::CavaUpdate(event) => self
+                .cava_service
+                .as_mut()
+                .map(|cs| cs.handle_event(event))
+                .unwrap_or_else(iced::Task::none),
+            Message::CavaColorUpdate(gradient) => self
+                .cava_service
+                .as_mut()
+                .map(|cs| cs.update_gradient(gradient))
+                .unwrap_or_else(iced::Task::none),
+            Message::MprisEvent(event) => self
+                .mpris_service
+                .as_mut()
+                .map(|ms| ms.handle_event(event))
+                .unwrap_or_else(iced::Task::none),
             Message::PlayPause(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await {
@@ -329,24 +386,78 @@ impl Bar {
     }
 
     fn view_bar(&self) -> Element<Message> {
-        let top_section = Container::new(
-            column![
-                text("󱄅").size(28),
-                self.battery_module.to_widget(),
-                self.time_module.to_widget(),
-                self.cava_module.to_widget(),
-                self.mpris_module.to_widget(&self.config.layout),
-            ]
-            .align_x(Horizontal::Center),
+        let mut top_views: Vec<Element<Message>> = vec![];
+
+        top_views.push(Text::new("󱄅").size(28).into());
+
+        if let Some(battery_service) = &self.battery_service {
+            top_views.extend(
+                self.battery_views
+                    .iter()
+                    .map(|v| v.view(battery_service, &self.config)),
+            )
+        }
+
+        if let Some(time_service) = &self.time_service {
+            top_views.extend(
+                self.time_views
+                    .iter()
+                    .map(|v| v.view(time_service, &self.config)),
+            )
+        }
+
+        if let Some(cava_service) = &self.cava_service {
+            top_views.extend(
+                self.cava_views
+                    .iter()
+                    .map(|v| v.view(cava_service, &self.config)),
+            )
+        }
+
+        if let Some(mpris_service) = &self.mpris_service {
+            top_views.extend(
+                self.mpris_views
+                    .iter()
+                    .map(|v| v.view(mpris_service, &self.config)),
+            )
+        }
+
+        let top_section =
+            Container::new(Column::with_children(top_views).align_x(Horizontal::Center))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Top);
+
+        let mut middle_views: Vec<Element<Message>> = vec![];
+
+        if let Some(niri_service) = &self.niri_service {
+            middle_views.extend(
+                self.niri_views
+                    .iter()
+                    .map(|v| v.view(niri_service, &self.config)),
+            )
+        }
+
+        let middle_section = Container::new(
+            Column::with_children(middle_views).align_x(Horizontal::Center),
         )
         .width(Length::Fill)
         .height(Length::Fill)
         .align_x(Horizontal::Center)
-        .align_y(Vertical::Top);
+        .align_y(Vertical::Center);
 
-        let middle_section = self.niri_module.to_widget(self.config.layout.border_radius);
+        let mut bottom_views: Vec<Element<Message>> = vec![];
 
-        let layout = stack![top_section, middle_section];
+        let bottom_section = Container::new(
+            Column::with_children(bottom_views).align_x(Horizontal::Center),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Bottom);
+
+        let layout = stack![top_section, middle_section, bottom_section];
 
         let bar = Container::new(layout)
             .width(Length::Fixed(self.config.layout.width as f32))
