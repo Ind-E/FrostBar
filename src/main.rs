@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use tracing::warn;
 
 use directories::ProjectDirs;
 use iced::{
@@ -15,7 +16,9 @@ use iced::{
         },
     },
 };
+use notify_rust::Notification;
 use std::{
+    path::PathBuf,
     process::Command,
     sync::{Arc, Mutex},
     thread,
@@ -28,6 +31,7 @@ use crate::{
     config::Config,
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
+    file_watcher::{FileWatcherEvent, watch_file},
     icon_cache::IconCache,
     services::{
         Service,
@@ -46,7 +50,7 @@ use crate::{
 mod config;
 mod constants;
 mod dbus_proxy;
-// mod file_watcher;
+mod file_watcher;
 mod icon_cache;
 mod services;
 mod style;
@@ -60,22 +64,31 @@ pub fn main() -> iced::Result {
 
     iced::daemon(
         || {
+            let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
+                std::process::exit(1);
+            };
+
+            let config_path: PathBuf =
+                project_dir.config_dir().to_path_buf().join("config.kdl");
             let config = {
-                let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
-                    std::process::exit(1);
-                };
-                let config_path =
-                    project_dir.config_dir().to_path_buf().join("config.kdl");
                 match Config::load_or_create(&config_path) {
                     Err(e) => {
-                        eprintln!("{e}");
-                        std::process::exit(1)
+                        if let Err(e) = Notification::new()
+                            .summary(BAR_NAMESPACE)
+                            .body("Failed to parse config file, using default config")
+                            .show()
+                        {
+                            error!("{e}");
+                        };
+                        eprintln!("\nFailed to parse config file, using default config");
+                        eprintln!("{e:?}");
+                        Config::default()
                     }
                     Ok(config) => config,
                 }
             };
 
-            Bar::new(config)
+            Bar::new(config, config_path)
         },
         Bar::update,
         Bar::view,
@@ -105,6 +118,8 @@ pub enum Message {
     Tick(DateTime<Local>),
     UpdateBattery,
 
+    FileWatcherEvent(FileWatcherEvent),
+
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
     MouseExitedBar,
@@ -131,6 +146,7 @@ pub enum Message {
 pub struct Bar {
     id: Id,
     config: Config,
+    config_path: PathBuf,
 
     time_views: Vec<TimeView>,
     time_service: Option<TimeService>,
@@ -149,7 +165,7 @@ pub struct Bar {
 }
 
 impl Bar {
-    pub fn new(config: Config) -> (Self, Task<Message>) {
+    pub fn new(config: Config, config_path: PathBuf) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
         let time_service = TimeService::new();
@@ -210,6 +226,7 @@ impl Bar {
             cava_service: Some(cava_service),
             cava_views,
             config,
+            config_path,
         };
 
         (bar, Task::batch(vec![open.map(Message::OpenWindow)]))
@@ -227,6 +244,7 @@ impl Bar {
         let mut subscriptions: Vec<Subscription<Message>> = Vec::with_capacity(8);
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
+        subscriptions.push(watch_file(self.config_path.clone()));
 
         if self.time_service.is_some() {
             subscriptions.push(TimeService::subscription());
@@ -255,6 +273,38 @@ impl Bar {
         match message {
             Message::OpenWindow(id) => {
                 debug_assert!(id == self.id);
+                Task::none()
+            }
+            Message::FileWatcherEvent(event) => {
+                match event {
+                    FileWatcherEvent::Changed => match Config::load(&self.config_path) {
+                        Ok(config) => self.config = config,
+                        Err(e) => {
+                            eprintln!("{e:?}");
+                            if let Err(e) = Notification::new()
+                                .summary(&self.namespace())
+                                .body(&format!("Failed to parse config file"))
+                                .show()
+                            {
+                                warn!(
+                                    "Failed to send config parse error notification: {e:?}"
+                                )
+                            }
+                        }
+                    },
+                    FileWatcherEvent::Missing => {
+                        if let Err(e) = Notification::new()
+                            .summary(&format!(
+                                "Config file not found at {:?}",
+                                self.config_path
+                            ))
+                            .show()
+                        {
+                            warn!("Failed to send config parse error notification: {e:?}")
+                        }
+                    }
+                };
+
                 Task::none()
             }
             Message::IcedEvent(event) => {

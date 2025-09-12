@@ -88,8 +88,7 @@ impl Config {
                 .and_then(OsStr::to_str)
                 .unwrap_or("config.kdl"),
             &contents,
-        )
-        .context("error parsing config")?;
+        )?;
 
         Ok(config)
     }
@@ -98,8 +97,7 @@ impl Config {
         match knuffel::parse::<Config>(filename, text) {
             Ok(config) => Ok(config),
             Err(e) => {
-                println!("{:?}", miette::Report::new(e));
-                std::process::exit(1);
+                return Err(miette::Report::new(e));
             }
         }
     }
