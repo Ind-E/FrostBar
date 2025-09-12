@@ -46,6 +46,7 @@ use crate::{
 mod config;
 mod constants;
 mod dbus_proxy;
+// mod file_watcher;
 mod icon_cache;
 mod services;
 mod style;

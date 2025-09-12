@@ -13,7 +13,6 @@ pub mod time;
 pub type EventStream<T, E> = Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>;
 
 pub trait Service {
-
     fn subscription() -> Subscription<Message>;
 
     type Event;

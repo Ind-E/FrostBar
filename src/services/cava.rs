@@ -1,10 +1,8 @@
-use iced::{Color, advanced::subscription, futures::Stream};
+use iced::{Color, Subscription};
 use std::{
     env::temp_dir,
     fs,
-    hash::Hash,
     io::{self, BufRead},
-    pin::Pin,
     process::{Command, Stdio},
     thread,
 };
@@ -44,10 +42,56 @@ pub struct CavaService {
 
 impl Service for CavaService {
     fn subscription() -> iced::Subscription<Message> {
-        subscription::from_recipe(CavaEvents {
-            config_path: write_temp_cava_config().unwrap().display().to_string(),
-        })
-        .map(Message::CavaUpdate)
+        Subscription::run(|| {
+            async_stream::stream! {
+                let (tx, rx) = async_channel::unbounded::<Result<String, CavaError>>();
+
+                let config_path = write_temp_cava_config().unwrap().display().to_string();
+
+                thread::spawn(move || {
+                    let mut command = match Command::new("cava")
+                        .arg("-p")
+                        .arg(&config_path)
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::null())
+                        .spawn()
+                    {
+                        Ok(cmd) => cmd,
+                        Err(e) => {
+                            let _ = tx.send_blocking(Err(CavaError::CommandFailed(e.to_string())));
+                            return;
+                        }
+                    };
+
+                    let stdout = match command.stdout.take() {
+                        Some(pipe) => pipe,
+                        Option::None => {
+                            let _ = tx.send_blocking(Err(CavaError::PipeFailed));
+                            return;
+                        }
+                    };
+
+                    let reader = io::BufReader::new(stdout);
+
+                    for line in reader.lines() {
+                        match line {
+                            Ok(line_str) => {
+                                if tx.send_blocking(Ok(line_str)).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+
+                    let _ = command.kill();
+                });
+
+                while let Ok(result) = rx.recv().await {
+                    yield result;
+                }
+            }
+        }).map(Message::CavaUpdate)
     }
 
     type Event = Result<String, CavaError>;
@@ -78,71 +122,5 @@ impl CavaService {
     pub fn update_gradient(&mut self, colors: Option<Vec<Color>>) -> iced::Task<Message> {
         self.colors = colors.unwrap_or_else(default_gradient);
         iced::Task::none()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CavaEvents {
-    pub config_path: String,
-}
-
-impl subscription::Recipe for CavaEvents {
-    type Output = Result<String, CavaError>;
-
-    fn hash(&self, state: &mut subscription::Hasher) {
-        std::any::TypeId::of::<Self>().hash(state);
-        self.config_path.hash(state);
-    }
-
-    fn stream(
-        self: Box<Self>,
-        _input: subscription::EventStream,
-    ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
-        Box::pin(async_stream::stream! {
-            let (tx, rx) = async_channel::unbounded::<Result<String, CavaError>>();
-
-            thread::spawn(move || {
-                let mut command = match Command::new("cava")
-                    .arg("-p")
-                    .arg(&self.config_path)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .spawn()
-                {
-                    Ok(cmd) => cmd,
-                    Err(e) => {
-                        let _ = tx.send_blocking(Err(CavaError::CommandFailed(e.to_string())));
-                        return;
-                    }
-                };
-
-                let stdout = match command.stdout.take() {
-                    Some(pipe) => pipe,
-                    Option::None => {
-                        let _ = tx.send_blocking(Err(CavaError::PipeFailed));
-                        return;
-                    }
-                };
-
-                let reader = io::BufReader::new(stdout);
-
-                for line in reader.lines() {
-                    match line {
-                        Ok(line_str) => {
-                            if tx.send_blocking(Ok(line_str)).is_err() {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-
-                let _ = command.kill();
-            });
-
-            while let Ok(result) = rx.recv().await {
-                yield result;
-            }
-        })
     }
 }

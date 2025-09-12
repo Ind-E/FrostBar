@@ -1,14 +1,12 @@
 use iced::{
-    advanced::subscription,
-    futures::{self, FutureExt, Stream, StreamExt, channel::mpsc},
+    Subscription,
+    futures::{self, FutureExt, StreamExt, channel::mpsc},
 };
 
 use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
 use std::{
     cmp::Ordering,
     collections::HashMap,
-    hash::Hash,
-    pin::Pin,
     sync::{Arc, Mutex},
 };
 use tracing::error;
@@ -110,7 +108,44 @@ pub struct NiriService {
 
 impl Service for NiriService {
     fn subscription() -> iced::Subscription<Message> {
-        subscription::from_recipe(NiriSubscriptionRecipe).map(Message::NiriEvent)
+        Subscription::run(|| {
+            async_stream::stream! {
+                let (request_tx, mut request_rx) =  mpsc::channel(32);
+                let (event_tx, mut event_rx) = mpsc::unbounded();
+                yield NiriEvent::Ready(request_tx);
+
+                std::thread::spawn(move || {
+                    run_event_listener(event_tx);
+                });
+
+                let mut socket = Socket::connect().unwrap();
+                loop{
+                    futures::select! {
+                        event = event_rx.next().fuse() => {
+                            if let Some(event) = event {
+                                yield NiriEvent::Event(event);
+                            } else {
+                                break;
+                            }
+                        },
+
+                        request = request_rx.next().fuse() => {
+                            if let Some(request) = request {
+                                if let Err(e) = socket.send(request) {
+                                    error!("Failed to send niri request: {e}");
+                                }
+                            } else {
+                                break;
+                            }
+                        },
+
+                        complete => break,
+                    }
+                }
+
+            }
+        })
+        .map(Message::NiriEvent)
     }
 
     type Event = NiriEvent;
@@ -300,55 +335,5 @@ fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
                 return error!("Failed to read event: {e}");
             }
         }
-    }
-}
-
-pub struct NiriSubscriptionRecipe;
-impl subscription::Recipe for NiriSubscriptionRecipe {
-    type Output = NiriEvent;
-
-    fn hash(&self, state: &mut subscription::Hasher) {
-        std::any::TypeId::of::<Self>().hash(state);
-    }
-
-    fn stream(
-        self: Box<Self>,
-        _input: subscription::EventStream,
-    ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
-        Box::pin(async_stream::stream! {
-            let (request_tx, mut request_rx) =  mpsc::channel(32);
-            let (event_tx, mut event_rx) = mpsc::unbounded();
-            yield NiriEvent::Ready(request_tx);
-
-            std::thread::spawn(move || {
-                run_event_listener(event_tx);
-            });
-
-            let mut socket = Socket::connect().unwrap();
-            loop{
-                futures::select! {
-                    event = event_rx.next().fuse() => {
-                        if let Some(event) = event {
-                            yield NiriEvent::Event(event);
-                        } else {
-                            break;
-                        }
-                    },
-
-                    request = request_rx.next().fuse() => {
-                        if let Some(request) = request {
-                            if let Err(e) = socket.send(request) {
-                                error!("Failed to send niri request: {e}");
-                            }
-                        } else {
-                            break;
-                        }
-                    },
-
-                    complete => break,
-                }
-            }
-
-        })
     }
 }

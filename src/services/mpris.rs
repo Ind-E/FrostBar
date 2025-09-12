@@ -1,16 +1,19 @@
 use iced::{
-    Color,
-    advanced::subscription,
-    futures::{self, FutureExt, Stream, StreamExt, stream::select_all},
+    Color, Subscription,
+    futures::{self, FutureExt, StreamExt, stream::select_all},
     widget::image,
 };
-use std::{collections::HashMap, hash::Hash, pin::Pin};
+use std::collections::HashMap;
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use tracing::error;
 
 use crate::{
-    config::Cava, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache, services::{EventStream, Service}, Message
+    Message,
+    config::Cava,
+    dbus_proxy::PlayerProxy,
+    icon_cache::MprisArtCache,
+    services::{EventStream, Service},
 };
 
 pub struct MprisService {
@@ -20,7 +23,70 @@ pub struct MprisService {
 
 impl Service for MprisService {
     fn subscription() -> iced::Subscription<Message> {
-        subscription::from_recipe(MprisListener).map(Message::MprisEvent)
+        Subscription::run(|| {
+         async_stream::stream! {
+            let connection = match Connection::session().await {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("mpris stream error: {e}");
+                    return;
+                }
+            };
+
+            let dbus_proxy = Proxy::new(
+                &connection,
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            ).await.unwrap();
+
+            let mut player_streams = select_all(Vec::new());
+
+            if let Ok(names) = dbus_proxy.call_method("ListNames", &()).await &&
+                let Ok(names) = names.body().deserialize::<Vec<String>>() {
+                for name in names {
+                    if name.starts_with(MPRIS_PREFIX) {
+                        yield get_initial_player_state(&connection, &name).await;
+
+                        if let Ok(stream) = create_player_stream(&connection, name).await {
+                            player_streams.push(stream);
+                        }
+                    }
+                }
+            }
+
+            let mut name_owner_stream = dbus_proxy.receive_signal("NameOwnerChanged").await.unwrap();
+
+            loop {
+                futures::select! {
+                    signal = name_owner_stream.next().fuse() => {
+                        if let Some(signal) = signal && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>() {
+                            if name.starts_with(MPRIS_PREFIX) {
+
+
+                                if !new.is_empty() && old.is_empty() {
+                                    yield get_initial_player_state(&connection, &name).await;
+                                    if let Ok(stream) = create_player_stream(&connection, name).await {
+                                        player_streams.push(stream);
+                                    }
+                                } else if new.is_empty() && !old.is_empty() {
+                                    yield MprisEvent::PlayerVanished { name };
+                                }
+                            }
+                        }
+                    },
+
+                    event_result = player_streams.next().fuse() => {
+                        if let Some(Ok(event)) = event_result {
+                            yield event;
+                        }
+                    }
+
+                    complete => break,
+                }
+            }
+        }
+        }).map(Message::MprisEvent)
     }
 
     type Event = MprisEvent;
@@ -179,86 +245,6 @@ impl MprisPlayer {
             art: None,
             colors: None,
         }
-    }
-}
-
-pub struct MprisListener;
-
-impl subscription::Recipe for MprisListener {
-    type Output = MprisEvent;
-
-    fn hash(&self, state: &mut subscription::Hasher) {
-        std::any::TypeId::of::<Self>().hash(state);
-    }
-
-    fn stream(
-        self: Box<Self>,
-        _input: subscription::EventStream,
-    ) -> Pin<Box<dyn Stream<Item = Self::Output> + Send>> {
-        Box::pin(async_stream::stream! {
-
-            let connection = match Connection::session().await {
-                Ok(c) => c,
-                Err(e) => {
-                    error!("mpris stream error: {e}");
-                    return;
-                }
-            };
-
-            let dbus_proxy = Proxy::new(
-                &connection,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-            ).await.unwrap();
-
-            let mut player_streams = select_all(Vec::new());
-                // HashMap::new();
-
-        if let Ok(names) = dbus_proxy.call_method("ListNames", &()).await &&
-            let Ok(names) = names.body().deserialize::<Vec<String>>() {
-            for name in names {
-                if name.starts_with(MPRIS_PREFIX) {
-                    yield get_initial_player_state(&connection, &name).await;
-
-                    if let Ok(stream) = create_player_stream(&connection, name).await {
-                        player_streams.push(stream);
-                    }
-                }
-            }
-        }
-
-        let mut name_owner_stream = dbus_proxy.receive_signal("NameOwnerChanged").await.unwrap();
-
-            loop {
-                futures::select! {
-                    signal = name_owner_stream.next().fuse() => {
-                        if let Some(signal) = signal && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>() {
-                            if name.starts_with(MPRIS_PREFIX) {
-
-
-                                if !new.is_empty() && old.is_empty() {
-                                    yield get_initial_player_state(&connection, &name).await;
-                                    if let Ok(stream) = create_player_stream(&connection, name).await {
-                                        player_streams.push(stream);
-                                    }
-                                } else if new.is_empty() && !old.is_empty() {
-                                    yield MprisEvent::PlayerVanished { name };
-                                }
-                            }
-                        }
-                    },
-
-                    event_result = player_streams.next().fuse() => {
-                        if let Some(Ok(event)) = event_result {
-                            yield event;
-                        }
-                    }
-
-                    complete => break,
-                }
-            }
-        })
     }
 }
 
