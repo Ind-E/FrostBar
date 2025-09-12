@@ -17,8 +17,6 @@ use iced::{
 };
 use xdgkit::icon_finder;
 
-use crate::config::Cava;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Icon {
     Svg(svg::Handle),
@@ -91,14 +89,12 @@ impl IconCache {
 
 pub struct MprisArtCache {
     inner: BTreeMap<String, (Option<image::Handle>, Option<Vec<Color>>)>,
-    config: Cava,
 }
 
 impl MprisArtCache {
-    pub fn new(config: Cava) -> Self {
+    pub fn new() -> Self {
         Self {
             inner: BTreeMap::new(),
-            config,
         }
     }
 

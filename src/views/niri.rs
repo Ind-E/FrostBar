@@ -15,11 +15,11 @@ use niri_ipc::{Action, WindowLayout, WorkspaceReferenceArg};
 use std::cmp::Ordering;
 
 use crate::{
-    Message, MouseEvent,
-    config::Config,
+    Message, MouseEvent, config,
     icon_cache::Icon,
     services::niri::{NiriEvent, NiriService, Window, Workspace},
     style::{styled_tooltip, workspace_style},
+    views::BarPosition,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -98,7 +98,7 @@ impl<'a> From<&'a Workspace> for WorkspaceView<'a> {
 }
 
 impl<'a> WorkspaceView<'a> {
-    fn view(&self, hovered: bool, radius: u16) -> Element<'a, Message> {
+    fn view(&self, hovered: bool, layout: &config::Layout) -> Element<'a, Message> {
         Container::new(
             MouseArea::new(
                 Container::new(
@@ -110,7 +110,11 @@ impl<'a> WorkspaceView<'a> {
                         |col, w| col.push(<&Window as Into<WindowView>>::into(w).view()),
                     ),
                 )
-                .style(workspace_style(self.workspace.is_active, hovered, radius))
+                .style(workspace_style(
+                    self.workspace.is_active,
+                    hovered,
+                    layout.border_radius,
+                ))
                 .padding(top(5).bottom(5))
                 .width(Length::Fill)
                 .align_x(Horizontal::Center),
@@ -140,13 +144,22 @@ impl From<WindowLayout> for Layout {
     }
 }
 
-pub struct NiriView {}
+pub struct NiriView {
+    config: config::Niri,
+    position: BarPosition,
+}
+
+impl NiriView {
+    pub fn new(config: config::Niri, position: BarPosition) -> Self {
+        Self { config, position }
+    }
+}
 
 impl<'a> NiriView {
     pub fn view(
         &self,
         service: &'a NiriService,
-        config: &Config,
+        layout: &config::Layout,
     ) -> Element<'a, Message> {
         let ws = service
             .workspaces
@@ -155,17 +168,11 @@ impl<'a> NiriView {
             .fold(Column::new(), |col, (_, ws)| {
                 col.push(<&Workspace as Into<WorkspaceView>>::into(ws).view(
                     service.hovered_workspace_id.is_some_and(|id| id == ws.id),
-                    config.layout.border_radius,
+                    layout,
                 ))
             })
             .align_x(Horizontal::Center)
             .spacing(10);
         ws.into()
-    }
-}
-
-impl NiriView {
-    pub fn new() -> Self {
-        Self {}
     }
 }

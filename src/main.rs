@@ -1,7 +1,6 @@
 use chrono::{DateTime, Local};
 use tracing::warn;
 
-use directories::ProjectDirs;
 use iced::{
     Background, Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme,
     advanced::mouse,
@@ -23,6 +22,7 @@ use std::{
     sync::{Arc, Mutex},
     thread,
 };
+use tracing_subscriber::EnvFilter;
 use zbus::Connection;
 
 use tracing::error;
@@ -41,6 +41,7 @@ use crate::{
         niri::{NiriEvent, NiriService},
         time::TimeService,
     },
+    utils::{init_tracing, process_modules},
     views::{
         battery::BatteryView, cava::CavaView, mpris::MprisView, niri::NiriView,
         time::TimeView,
@@ -54,39 +55,18 @@ mod file_watcher;
 mod icon_cache;
 mod services;
 mod style;
+mod utils;
 mod views;
 
 pub fn main() -> iced::Result {
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();
 
     iced::daemon(
         || {
-            let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
-                std::process::exit(1);
-            };
-
-            let config_path: PathBuf =
-                project_dir.config_dir().to_path_buf().join("config.kdl");
-            let config = {
-                match Config::load_or_create(&config_path) {
-                    Err(e) => {
-                        if let Err(e) = Notification::new()
-                            .summary(BAR_NAMESPACE)
-                            .body("Failed to parse config file, using default config")
-                            .show()
-                        {
-                            error!("{e}");
-                        };
-                        eprintln!("\nFailed to parse config file, using default config");
-                        eprintln!("{e:?}");
-                        Config::default()
-                    }
-                    Ok(config) => config,
-                }
-            };
+            let (config, config_path) = Config::init();
 
             Bar::new(config, config_path)
         },
@@ -165,23 +145,32 @@ pub struct Bar {
 }
 
 impl Bar {
-    pub fn new(config: Config, config_path: PathBuf) -> (Self, Task<Message>) {
+    pub fn new(mut config: Config, config_path: PathBuf) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
-        let time_service = TimeService::new();
-        let time_views = vec![TimeView::new()];
-
         let battery_service = BatteryService::new();
-        let battery_views = vec![BatteryView::new()];
+        let mut battery_views = vec![];
 
-        let niri_service = NiriService::new(icon_cache.clone());
-        let niri_views = vec![NiriView::new()];
-
-        let mpris_service = MprisService::new(config.modules.cava.clone());
-        let mpris_views = vec![MprisView::new()];
+        let time_service = TimeService::new();
+        let mut time_views = vec![];
 
         let cava_service = CavaService::new();
-        let cava_views = vec![CavaView::new()];
+        let mut cava_views = vec![];
+
+        let mpris_service = MprisService::new();
+        let mut mpris_views = vec![];
+
+        let niri_service = NiriService::new(icon_cache.clone());
+        let mut niri_views = vec![];
+
+        process_modules(
+            &mut config,
+            &mut battery_views,
+            &mut time_views,
+            &mut cava_views,
+            &mut mpris_views,
+            &mut niri_views,
+        );
 
         let (id, open) = iced::window::open(iced::window::Settings {
             size: Size::new(config.layout.width as f32, 0.0),
@@ -278,7 +267,16 @@ impl Bar {
             Message::FileWatcherEvent(event) => {
                 match event {
                     FileWatcherEvent::Changed => match Config::load(&self.config_path) {
-                        Ok(config) => self.config = config,
+                        Ok(mut config) => {
+                            process_modules(
+                                &mut config,
+                                &mut self.battery_views,
+                                &mut self.time_views,
+                                &mut self.cava_views,
+                                &mut self.mpris_views,
+                                &mut self.niri_views,
+                            );
+                        }
                         Err(e) => {
                             eprintln!("{e:?}");
                             if let Err(e) = Notification::new()
@@ -442,34 +440,22 @@ impl Bar {
         top_views.push(Text::new("󱄅").size(28).into());
 
         if let Some(battery_service) = &self.battery_service {
-            top_views.extend(
-                self.battery_views
-                    .iter()
-                    .map(|v| v.view(battery_service, &self.config)),
-            )
+            top_views.extend(self.battery_views.iter().map(|v| v.view(battery_service)))
         }
 
         if let Some(time_service) = &self.time_service {
-            top_views.extend(
-                self.time_views
-                    .iter()
-                    .map(|v| v.view(time_service, &self.config)),
-            )
+            top_views.extend(self.time_views.iter().map(|v| v.view(time_service)))
         }
 
         if let Some(cava_service) = &self.cava_service {
-            top_views.extend(
-                self.cava_views
-                    .iter()
-                    .map(|v| v.view(cava_service, &self.config)),
-            )
+            top_views.extend(self.cava_views.iter().map(|v| v.view(cava_service)))
         }
 
         if let Some(mpris_service) = &self.mpris_service {
             top_views.extend(
                 self.mpris_views
                     .iter()
-                    .map(|v| v.view(mpris_service, &self.config)),
+                    .map(|v| v.view(mpris_service, &self.config.layout)),
             )
         }
 
@@ -486,7 +472,7 @@ impl Bar {
             middle_views.extend(
                 self.niri_views
                     .iter()
-                    .map(|v| v.view(niri_service, &self.config)),
+                    .map(|v| v.view(niri_service, &self.config.layout)),
             )
         }
 

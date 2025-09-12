@@ -6,33 +6,36 @@ use iced::{
 };
 
 use crate::{
-    Message,
-    config::Config,
+    Message, config,
     services::mpris::{MprisPlayer, MprisService},
     style::styled_tooltip,
+    views::BarPosition,
 };
 
-pub struct MprisView {}
+pub struct MprisView {
+    config: config::Mpris,
+    position: BarPosition,
+}
 
 impl<'a> MprisView {
     pub fn view(
         &'a self,
         service: &MprisService,
-        config: &'a Config,
+        layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         service
             .players
             .values()
             .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(MprisPlayerView::new().view(&player, &config))
+                col.push(MprisPlayerView::new().view(&player, &self.config, layout))
             })
             .into()
     }
 }
 
 impl MprisView {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: config::Mpris, position: BarPosition) -> Self {
+        Self { config, position }
     }
 }
 
@@ -50,13 +53,17 @@ impl MprisPlayerView {
 }
 
 impl<'a> MprisPlayerView {
-    fn view(&self, player: &MprisPlayer, config: &Config) -> Element<'a, Message> {
+    fn view(
+        &self,
+        player: &MprisPlayer,
+        config: &config::Mpris,
+        layout: &config::Layout,
+    ) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &player.art {
             Container::new(Image::new(art)).into()
         } else {
-            let layout = &config.layout;
             Container::new(
-                Text::new("󰝚")
+                Text::new(config.placeholder.clone())
                     .size(20)
                     .width(Length::Fill)
                     .height(Length::Fill)

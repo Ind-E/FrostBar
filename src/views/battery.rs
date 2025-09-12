@@ -5,24 +5,22 @@ use iced::{
 use tracing::warn;
 
 use crate::{
-    Message, config::Config, services::battery::BatteryService, style::styled_tooltip,
+    Message, config, services::battery::BatteryService, style::styled_tooltip,
+    views::BarPosition,
 };
 extern crate starship_battery as battery;
 
 pub struct BatteryView {
     pub id: container::Id,
+    config: config::Battery,
+    position: BarPosition,
 }
 
 impl<'a> BatteryView {
-    pub fn view(
-        &self,
-        service: &BatteryService,
-        config: &Config,
-    ) -> Element<'a, Message> {
-        let config = &config.modules.battery;
+    pub fn view(&self, service: &BatteryService) -> Element<'a, Message> {
         if service.batteries.is_empty() {
             warn!("No batteries found to display");
-            return Text::new("?").size(config.overlay_icon_size).into();
+            return Text::new("?").size(self.config.overlay_icon_size).into();
         }
 
         let total_percentage: f32 = service.batteries.iter().map(|b| b.percentage).sum();
@@ -34,13 +32,13 @@ impl<'a> BatteryView {
             !matches!(b.state, battery::State::Discharging | battery::State::Empty)
         });
 
-        let icon_widget = Container::new(Text::new(icon).size(config.icon_size))
+        let icon_widget = Container::new(Text::new(icon).size(self.config.icon_size))
             .center_x(Length::Fill)
             .id(self.id.clone());
 
         let content: Element<'a, Message> = if is_charging {
             let charging_overlay =
-                Container::new(Text::new("󱐋").size(config.overlay_icon_size))
+                Container::new(Text::new("󱐋").size(self.config.overlay_icon_size))
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .padding(Padding {
@@ -76,9 +74,11 @@ impl<'a> BatteryView {
 }
 
 impl BatteryView {
-    pub fn new() -> Self {
+    pub fn new(config: config::Battery, position: BarPosition) -> Self {
         Self {
             id: container::Id::unique(),
+            config,
+            position,
         }
     }
 }

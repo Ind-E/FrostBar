@@ -4,26 +4,25 @@ use iced::{
     widget::{Canvas, MouseArea, canvas},
 };
 
-use crate::{Message, config::Config, services::cava::CavaService};
+use crate::{Message, config, services::cava::CavaService, views::BarPosition};
 
 const MAX_BAR_HEIGHT: u32 = 12;
 
-pub struct CavaView {}
+pub struct CavaView {
+    config: config::Cava,
+    position: BarPosition,
+}
 
 impl CavaView {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(config: config::Cava, position: BarPosition) -> Self {
+        Self { config, position }
     }
 }
 
 impl<'a> CavaView {
-    pub fn view(
-        &self,
-        service: &'a CavaService,
-        config: &'a Config,
-    ) -> Element<'a, Message> {
+    pub fn view(&'a self, service: &'a CavaService) -> Element<'a, Message> {
         MouseArea::new(
-            Canvas::new(CavaCanvas::new(service, config))
+            Canvas::new(CavaCanvas::new(service, &self.config))
                 .width(Length::Fill)
                 .height(130),
         )
@@ -34,9 +33,9 @@ impl<'a> CavaView {
                 };
 
                 if y > 0.0 || x < 0.0 {
-                    config.modules.cava.volume_percent
+                    self.config.volume_percent
                 } else {
-                    -config.modules.cava.volume_percent
+                    -self.config.volume_percent
                 }
             })
         })
@@ -48,12 +47,12 @@ impl<'a> CavaView {
 
 struct CavaCanvas<'a> {
     service: &'a CavaService,
-    config: &'a Config,
+    config: &'a config::Cava,
     cache: canvas::Cache,
 }
 
 impl<'a> CavaCanvas<'a> {
-    pub fn new(service: &'a CavaService, config: &'a Config) -> Self {
+    pub fn new(service: &'a CavaService, config: &'a config::Cava) -> Self {
         Self {
             service,
             config,
@@ -85,7 +84,7 @@ impl<'a, Message> canvas::Program<Message> for CavaCanvas<'a> {
                     }
 
                     let bar_thickness_total = frame.height() / bars_per_channel as f32;
-                    let spacing = bar_thickness_total * self.config.modules.cava.spacing;
+                    let spacing = bar_thickness_total * self.config.spacing;
                     let bar_thickness = bar_thickness_total - spacing;
 
                     for i in 0..bars_per_channel {

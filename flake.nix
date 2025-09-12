@@ -29,32 +29,22 @@
         system:
         import nixpkgs {
           localSystem.system = system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [
+            (import rust-overlay)
+            self.overlays.frostbar
+          ];
         }
       );
     in
     {
-      checks = lib.mapAttrs (
-        system: pkgs:
-        let
-          toolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          rustPlatform = pkgs.makeRustPlatform {
-            cargo = toolchain;
-            rustc = toolchain;
-          };
-        in
-        {
-          build = rustPlatform.buildRustPackage {
-            pname = "frostbar";
-            version = "0.1.0";
-            src = self;
-            cargoLock = {
-              allowBuiltinFetchGit = true;
-              lockFile = ./Cargo.lock;
-            };
-          };
-        }
-      ) pkgsFor;
+      packages = eachSystem (system: {
+        inherit (pkgsFor.${system}) frostbar;
+
+        default = self.packages.${system}.frostbar;
+      });
+      checks = lib.mapAttrs (system: pkgs: {
+        inherit (self.packages.${system}) frostbar;
+      }) pkgsFor;
 
       devShells = lib.mapAttrs (system: pkgs: {
         default =
@@ -63,41 +53,33 @@
             platformRustFlagsEnv = lib.optionalString pkgs.stdenv.isLinux "-Clink-arg=-Wl,--no-rosegment";
           in
           pkgs.mkShell rec {
-            inputsFrom = [ self.checks.${system}.build ];
-            nativeBuildInputs =
-              with pkgs;
-              [
-                lld
-                rust-bin.nightly.latest.rust-analyzer
-              ]
-              ++ lib.optionals stdenv.isLinux [
-                lldb
-                pkg-config
+            inputsFrom = [ self.checks.${system}.frostbar ];
+            nativeBuildInputs = with pkgs; [
+              lld
+              lldb
+              rust-bin.nightly.latest.rust-analyzer
 
-                alsa-lib
-                pipewire
-                expat
-                fontconfig
-                freetype
-                freetype.dev
-                libGL
-                libxkbcommon
+              pkg-config
 
-                stdenv.cc.cc.lib
+              alsa-lib
+              pipewire
+              expat
+              fontconfig
+              freetype
+              freetype.dev
+              libGL
+              libxkbcommon
 
-                wayland
-                xorg.libX11
-                xorg.libXcursor
-                xorg.libXi
-                xorg.libXrandr
-                vulkan-loader
-              ];
+              stdenv.cc.cc.lib
 
-            buildInputs =
-              with pkgs;
-              lib.optionals stdenv.isLinux [
+              wayland
+              xorg.libX11
+              xorg.libXcursor
+              xorg.libXi
+              xorg.libXrandr
+              vulkan-loader
+            ];
 
-              ];
             shellHook = ''
               export RUST_BACKTRACE="1"
               export RUSTFLAGS="''${RUSTFLAGS:-""} ${commonRustFlagsEnv} ${platformRustFlagsEnv}"
@@ -107,6 +89,34 @@
 
           };
       }) pkgsFor;
+
+      overlays = {
+        frostbar = final: prev: {
+          frostbar =
+            let
+              toolchain = final.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+              rustPlatform = final.makeRustPlatform {
+                cargo = toolchain;
+                rustc = toolchain;
+              };
+            in
+            rustPlatform.buildRustPackage {
+              pname = with builtins; (fromTOML (readFile ./Cargo.toml)).package.name;
+              version = with builtins; (fromTOML (readFile ./Cargo.toml)).package.version;
+              src = self;
+              cargoLock = {
+                allowBuiltinFetchGit = true;
+                lockFile = ./Cargo.lock;
+              };
+
+              buildType = "release";
+              strictDeps = true;
+              doCheck = false;
+            };
+        };
+
+        default = self.overlays.frostbar;
+      };
 
     };
 }

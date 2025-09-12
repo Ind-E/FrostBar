@@ -2,17 +2,44 @@ use std::{
     ffi::OsStr,
     fs::{self, File},
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
+use directories::ProjectDirs;
 use miette::{Context, IntoDiagnostic};
+use notify_rust::Notification;
+use tracing::{debug, error};
+
+use crate::constants::BAR_NAMESPACE;
 
 #[derive(knuffel::Decode, Default, Debug)]
 pub struct Config {
     #[knuffel(child, default)]
     pub layout: Layout,
     #[knuffel(child, default)]
-    pub modules: Modules,
+    pub start: Start,
+    #[knuffel(child, default)]
+    pub middle: Middle,
+    #[knuffel(child, default)]
+    pub end: End,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Default)]
+pub struct Start {
+    #[knuffel(children, default)]
+    pub modules: Vec<Module>,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Default)]
+pub struct Middle {
+    #[knuffel(children, default)]
+    pub modules: Vec<Module>,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Default)]
+pub struct End {
+    #[knuffel(children, default)]
+    pub modules: Vec<Module>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
@@ -35,12 +62,14 @@ impl Default for Layout {
     }
 }
 
-#[derive(knuffel::Decode, Default, Debug)]
-pub struct Modules {
-    #[knuffel(child, default)]
-    pub cava: Cava,
-    #[knuffel(child, default)]
-    pub battery: Battery,
+#[derive(knuffel::Decode, Debug, Clone)]
+pub enum Module {
+    Cava(Cava),
+    Battery(Battery),
+    Time(Time),
+    Mpris(Mpris),
+    Niri(Niri),
+    Label(Label),
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
@@ -68,13 +97,34 @@ pub struct Battery {
     pub overlay_icon_size: u32,
 }
 
-impl Default for Battery {
-    fn default() -> Self {
-        Self {
-            icon_size: 22,
-            overlay_icon_size: 13,
-        }
-    }
+#[derive(knuffel::Decode, Debug, Clone)]
+pub struct Time {
+    #[knuffel(child, unwrap(argument), default = "%I\n%M".to_string())]
+    pub format: String,
+    #[knuffel(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
+    pub tooltip_format: String,
+}
+
+#[derive(knuffel::Decode, Debug, Clone)]
+pub struct Mpris {
+    #[knuffel(child, unwrap(argument), default = "󰝚".to_string())]
+    pub placeholder: String,
+}
+
+#[derive(knuffel::Decode, Debug, Clone)]
+pub struct Niri {
+    #[knuffel(child, unwrap(argument), default = 10)]
+    pub spacing: u16,
+}
+
+#[derive(knuffel::Decode, Debug, Clone)]
+pub struct Label {
+    #[knuffel(child, unwrap(argument), default = "text".to_string())]
+    pub text: String,
+    #[knuffel(child, unwrap(argument), default = 18)]
+    pub size: u16,
+    #[knuffel(child, unwrap(argument), default = None)]
+    pub tooltip: Option<String>,
 }
 
 impl Config {
@@ -95,7 +145,10 @@ impl Config {
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knuffel::parse::<Config>(filename, text) {
-            Ok(config) => Ok(config),
+            Ok(config) => {
+                debug!("Successfully parsed config");
+                Ok(config)
+            }
             Err(e) => {
                 return Err(miette::Report::new(e));
             }
@@ -136,5 +189,33 @@ impl Config {
     pub fn load_or_create(path: &Path) -> miette::Result<Self> {
         Config::create(path)?;
         Config::load(path)
+    }
+
+    pub fn init() -> (Config, PathBuf) {
+        let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
+            std::process::exit(1);
+        };
+
+        let config_path: PathBuf =
+            project_dir.config_dir().to_path_buf().join("config.kdl");
+        let config = {
+            match Config::load_or_create(&config_path) {
+                Err(e) => {
+                    if let Err(e) = Notification::new()
+                        .summary(BAR_NAMESPACE)
+                        .body("Failed to parse config file, using default config")
+                        .show()
+                    {
+                        error!("{e}");
+                    };
+                    eprintln!("\nFailed to parse config file, using default config");
+                    eprintln!("{e:?}");
+                    Config::default()
+                }
+                Ok(config) => config,
+            }
+        };
+
+        (config, config_path)
     }
 }

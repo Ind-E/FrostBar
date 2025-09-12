@@ -10,7 +10,6 @@ use tracing::error;
 
 use crate::{
     Message,
-    config::Cava,
     dbus_proxy::PlayerProxy,
     icon_cache::MprisArtCache,
     services::{EventStream, Service},
@@ -158,10 +157,10 @@ impl Service for MprisService {
 }
 
 impl MprisService {
-    pub fn new(config: Cava) -> Self {
+    pub fn new() -> Self {
         Self {
             players: HashMap::new(),
-            art_cache: MprisArtCache::new(config),
+            art_cache: MprisArtCache::new(),
         }
     }
 }
