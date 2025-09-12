@@ -10,7 +10,7 @@ const MAX_BAR_HEIGHT: u32 = 12;
 
 pub struct CavaView {
     config: config::Cava,
-    position: BarPosition,
+    pub position: BarPosition,
 }
 
 impl CavaView {

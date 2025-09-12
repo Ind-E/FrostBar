@@ -114,7 +114,7 @@ pub struct Mpris {
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Niri {
     #[knuffel(child, unwrap(argument), default = 10)]
-    pub spacing: u16,
+    pub spacing: u32,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
@@ -122,7 +122,7 @@ pub struct Label {
     #[knuffel(child, unwrap(argument), default = "text".to_string())]
     pub text: String,
     #[knuffel(child, unwrap(argument), default = 18)]
-    pub size: u16,
+    pub size: u32,
     #[knuffel(child, unwrap(argument), default = None)]
     pub tooltip: Option<String>,
 }

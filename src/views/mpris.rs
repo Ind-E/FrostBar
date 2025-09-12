@@ -14,7 +14,7 @@ use crate::{
 
 pub struct MprisView {
     config: config::Mpris,
-    position: BarPosition,
+    pub position: BarPosition,
 }
 
 impl<'a> MprisView {

@@ -13,7 +13,7 @@ extern crate starship_battery as battery;
 pub struct BatteryView {
     pub id: container::Id,
     config: config::Battery,
-    position: BarPosition,
+    pub position: BarPosition,
 }
 
 impl<'a> BatteryView {

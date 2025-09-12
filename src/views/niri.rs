@@ -146,7 +146,7 @@ impl From<WindowLayout> for Layout {
 
 pub struct NiriView {
     config: config::Niri,
-    position: BarPosition,
+    pub position: BarPosition,
 }
 
 impl NiriView {
@@ -172,7 +172,7 @@ impl<'a> NiriView {
                 ))
             })
             .align_x(Horizontal::Center)
-            .spacing(10);
+            .spacing(self.config.spacing);
         ws.into()
     }
 }

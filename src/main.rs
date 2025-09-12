@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use itertools::Itertools;
 use tracing::warn;
 
 use iced::{
@@ -22,7 +23,6 @@ use std::{
     sync::{Arc, Mutex},
     thread,
 };
-use tracing_subscriber::EnvFilter;
 use zbus::Connection;
 
 use tracing::error;
@@ -43,8 +43,8 @@ use crate::{
     },
     utils::{init_tracing, process_modules},
     views::{
-        battery::BatteryView, cava::CavaView, mpris::MprisView, niri::NiriView,
-        time::TimeView,
+        BarAlignment, BarPosition, battery::BatteryView, cava::CavaView,
+        label::LabelView, mpris::MprisView, niri::NiriView, time::TimeView,
     },
 };
 
@@ -142,6 +142,8 @@ pub struct Bar {
 
     cava_views: Vec<CavaView>,
     cava_service: Option<CavaService>,
+
+    label_views: Vec<LabelView>,
 }
 
 impl Bar {
@@ -163,6 +165,8 @@ impl Bar {
         let niri_service = NiriService::new(icon_cache.clone());
         let mut niri_views = vec![];
 
+        let mut label_views = vec![];
+
         process_modules(
             &mut config,
             &mut battery_views,
@@ -170,6 +174,7 @@ impl Bar {
             &mut cava_views,
             &mut mpris_views,
             &mut niri_views,
+            &mut label_views,
         );
 
         let (id, open) = iced::window::open(iced::window::Settings {
@@ -214,6 +219,7 @@ impl Bar {
             mpris_views,
             cava_service: Some(cava_service),
             cava_views,
+            label_views,
             config,
             config_path,
         };
@@ -275,6 +281,7 @@ impl Bar {
                                 &mut self.cava_views,
                                 &mut self.mpris_views,
                                 &mut self.niri_views,
+                                &mut self.label_views,
                             );
                         }
                         Err(e) => {
@@ -435,29 +442,97 @@ impl Bar {
     }
 
     fn view_bar(&self) -> Element<Message> {
-        let mut top_views: Vec<Element<Message>> = vec![];
+        let mut top_views: Vec<(Element<Message>, usize)> = vec![];
+        let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
+        let mut bottom_views: Vec<(Element<Message>, usize)> = vec![];
 
-        top_views.push(Text::new("󱄅").size(28).into());
+        let mut alignments = vec![
+            (BarAlignment::Start, &mut top_views),
+            (BarAlignment::Middle, &mut middle_views),
+            (BarAlignment::End, &mut bottom_views),
+        ];
 
-        if let Some(battery_service) = &self.battery_service {
-            top_views.extend(self.battery_views.iter().map(|v| v.view(battery_service)))
+        if let Some(service) = &self.battery_service {
+            for (pos, target) in alignments.iter_mut() {
+                target.extend(
+                    self.battery_views
+                        .iter()
+                        .filter(|v| v.position.align == *pos)
+                        .map(|v| (v.view(service), v.position.idx)),
+                );
+            }
         }
 
-        if let Some(time_service) = &self.time_service {
-            top_views.extend(self.time_views.iter().map(|v| v.view(time_service)))
+        if let Some(service) = &self.time_service {
+            for (pos, target) in alignments.iter_mut() {
+                target.extend(
+                    self.time_views
+                        .iter()
+                        .filter(|v| v.position.align == *pos)
+                        .map(|v| (v.view(service), v.position.idx)),
+                );
+            }
         }
 
-        if let Some(cava_service) = &self.cava_service {
-            top_views.extend(self.cava_views.iter().map(|v| v.view(cava_service)))
+        if let Some(service) = &self.cava_service {
+            for (pos, target) in alignments.iter_mut() {
+                target.extend(
+                    self.cava_views
+                        .iter()
+                        .filter(|v| v.position.align == *pos)
+                        .map(|v| (v.view(service), v.position.idx)),
+                );
+            }
         }
 
-        if let Some(mpris_service) = &self.mpris_service {
-            top_views.extend(
-                self.mpris_views
+        if let Some(service) = &self.mpris_service {
+            for (pos, target) in alignments.iter_mut() {
+                target.extend(
+                    self.mpris_views
+                        .iter()
+                        .filter(|v| v.position.align == *pos)
+                        .map(|v| (v.view(service, &self.config.layout), v.position.idx)),
+                );
+            }
+        }
+
+        if let Some(service) = &self.niri_service {
+            for (pos, target) in alignments.iter_mut() {
+                target.extend(
+                    self.niri_views
+                        .iter()
+                        .filter(|v| v.position.align == *pos)
+                        .map(|v| (v.view(service, &self.config.layout), v.position.idx)),
+                );
+            }
+        }
+
+        for (pos, target) in alignments.iter_mut() {
+            target.extend(
+                self.label_views
                     .iter()
-                    .map(|v| v.view(mpris_service, &self.config.layout)),
-            )
+                    .filter(|v| v.position.align == *pos)
+                    .map(|v| (v.view(), v.position.idx)),
+            );
         }
+
+        let top_views: Vec<Element<Message>> = top_views
+            .into_iter()
+            .sorted_by_key(|(_, idx)| *idx)
+            .map(|(v, _)| v)
+            .collect();
+
+        let middle_views: Vec<Element<Message>> = middle_views
+            .into_iter()
+            .sorted_by_key(|(_, idx)| *idx)
+            .map(|(v, _)| v)
+            .collect();
+
+        let bottom_views: Vec<Element<Message>> = bottom_views
+            .into_iter()
+            .sorted_by_key(|(_, idx)| *idx)
+            .map(|(v, _)| v)
+            .collect();
 
         let top_section =
             Container::new(Column::with_children(top_views).align_x(Horizontal::Center))
@@ -466,16 +541,6 @@ impl Bar {
                 .align_x(Horizontal::Center)
                 .align_y(Vertical::Top);
 
-        let mut middle_views: Vec<Element<Message>> = vec![];
-
-        if let Some(niri_service) = &self.niri_service {
-            middle_views.extend(
-                self.niri_views
-                    .iter()
-                    .map(|v| v.view(niri_service, &self.config.layout)),
-            )
-        }
-
         let middle_section = Container::new(
             Column::with_children(middle_views).align_x(Horizontal::Center),
         )
@@ -483,8 +548,6 @@ impl Bar {
         .height(Length::Fill)
         .align_x(Horizontal::Center)
         .align_y(Vertical::Center);
-
-        let mut bottom_views: Vec<Element<Message>> = vec![];
 
         let bottom_section = Container::new(
             Column::with_children(bottom_views).align_x(Horizontal::Center),

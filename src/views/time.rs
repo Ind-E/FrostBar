@@ -11,7 +11,7 @@ use crate::{
 pub struct TimeView {
     pub id: container::Id,
     config: config::Time,
-    position: BarPosition,
+    pub position: BarPosition,
 }
 
 impl<'a> TimeView {
