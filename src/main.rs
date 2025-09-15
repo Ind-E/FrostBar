@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use tokio::task;
-use tracing::warn;
+use tracing::{info, warn};
 
 use iced::{
     Background, Color, Element, Event, Length, Settings, Subscription, Task, Theme,
@@ -389,7 +389,7 @@ impl Bar {
                 |_| Message::NoOp,
             ),
             Message::Command(cmd) => {
-                dbg!(&cmd);
+                info!("{cmd}");
                 task::spawn_blocking(|| {
                     let mut command = Command::new(cmd.command);
                     if let Some(args) = cmd.args {

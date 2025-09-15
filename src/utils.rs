@@ -14,6 +14,7 @@ use iced::{
         Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
     },
 };
+use std::fmt;
 use tracing_subscriber::EnvFilter;
 
 pub fn handle_module(
@@ -197,16 +198,14 @@ pub fn maybe_mouse_interaction<'a>(
 }
 
 pub fn process_command(cmd: &config::Command) -> Message {
-    if let Some(sh) = &cmd.sh
-    {
+    if let Some(sh) = &cmd.sh {
         Message::Command(CommandSpec {
             command: String::from("sh"),
-            args: Some(vec![
-                String::from("-c"),
-                sh.to_string(),
-            ]),
+            args: Some(vec![String::from("-c"), sh.to_string()]),
         })
-    } else if let Some(args) = &cmd.command && args.len() > 0 {
+    } else if let Some(args) = &cmd.command
+        && args.len() > 0
+    {
         Message::Command(CommandSpec {
             command: String::from(args[0].clone()),
             args: args.get(1..).and_then(|v| Some(v.to_vec())),
@@ -220,4 +219,25 @@ pub fn process_command(cmd: &config::Command) -> Message {
 pub struct CommandSpec {
     pub command: String,
     pub args: Option<Vec<String>>,
+}
+
+impl fmt::Display for CommandSpec {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(args) = self.args.as_ref()
+            && !args.is_empty()
+            && args[0] == "-c"
+        {
+            let joined = args[1..].join(" ");
+            return write!(f, "{}", joined);
+        } else {
+            write!(
+                f,
+                "{}",
+                self.args
+                    .as_ref()
+                    .map(|v| format!("{} {}", self.command, v.join(" ")))
+                    .unwrap_or_default()
+            )
+        }
+    }
 }

@@ -4,7 +4,10 @@ use iced::{
     widget::{Canvas, MouseArea, canvas},
 };
 
-use crate::{Message, config, services::cava::CavaService, views::BarPosition};
+use crate::{
+    Message, config, services::cava::CavaService, utils::process_command,
+    views::BarPosition,
+};
 
 const MAX_BAR_HEIGHT: u32 = 12;
 
@@ -21,7 +24,7 @@ impl CavaView {
 
 impl<'a> CavaView {
     pub fn view(&'a self, service: &'a CavaService) -> Element<'a, Message> {
-        MouseArea::new(
+        let mut area = MouseArea::new(
             Canvas::new(CavaCanvas::new(service, &self.config))
                 .width(Length::Fill)
                 .height(130),
@@ -38,10 +41,23 @@ impl<'a> CavaView {
                     -self.config.volume_percent
                 }
             })
-        })
-        // .on_press(Message::Command("pavucontrol".to_string()))
-        // .on_right_press(Message::Command("blueman-manager".to_string()))
-        .into()
+        });
+
+        let interaction = &self.config.interaction;
+
+        if let Some(left) = &interaction.left_mouse {
+            area = area.on_release(process_command(left));
+        }
+
+        if let Some(right) = &interaction.right_mouse {
+            area = area.on_right_release(process_command(right));
+        }
+
+        if let Some(middle) = &interaction.middle_mouse {
+            area = area.on_middle_release(process_command(middle));
+        }
+
+        area.into()
     }
 }
 
