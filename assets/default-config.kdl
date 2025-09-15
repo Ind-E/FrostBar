@@ -1,20 +1,42 @@
-layout {
+// default config
 
+layout {
     width 42
     gaps 3
     border-radius 4
 }
 
-modules {
+start {
+
+    label {
+        text ""
+        size 28
+    }
+
+    battery
+
+    time {
+        format "%I\n%M"
+    }
 
     cava {
-        volume-percent 3
         spacing 0.1
     }
 
-    battery {
-        icon-size 22
-        overlay-icon-size 13
+    mpris {
+        placeholder "󰝚"
     }
 
 }
+
+middle {
+
+    niri {
+        spacing 10
+    }
+}
+
+end {
+
+}
+

@@ -6,7 +6,7 @@ use iced::{
 
 use crate::Message;
 
-pub fn bg(_theme: &Theme) -> container::Style {
+pub fn _bg(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
         ..Default::default()

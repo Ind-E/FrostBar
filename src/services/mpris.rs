@@ -6,7 +6,7 @@ use iced::{
 use std::collections::HashMap;
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     Message,
@@ -21,6 +21,7 @@ pub struct MprisService {
 }
 
 impl Service for MprisService {
+    #[tracing::instrument]
     fn subscription() -> iced::Subscription<Message> {
         Subscription::run(|| {
          async_stream::stream! {
@@ -59,6 +60,7 @@ impl Service for MprisService {
             loop {
                 futures::select! {
                     signal = name_owner_stream.next().fuse() => {
+                        // debug!("name owner event");
                         if let Some(signal) = signal && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>() {
                             if name.starts_with(MPRIS_PREFIX) {
 
@@ -76,12 +78,16 @@ impl Service for MprisService {
                     },
 
                     event_result = player_streams.next().fuse() => {
+                        // debug!("player stream event");
                         if let Some(Ok(event)) = event_result {
                             yield event;
                         }
                     }
 
-                    complete => break,
+                    complete => {
+                        debug!("break");
+                        break
+                    },
                 }
             }
         }

@@ -3,7 +3,10 @@ use iced::{
     widget::{Container, Text, container, text},
 };
 
-use crate::{Message, config, style::styled_tooltip, views::BarPosition};
+use crate::{
+    Message, config, style::styled_tooltip, utils::maybe_mouse_interaction,
+    views::BarPosition,
+};
 
 pub struct LabelView {
     pub id: container::Id,
@@ -18,12 +21,14 @@ impl<'a> LabelView {
                 .center_x(Length::Fill)
                 .id(self.id.clone());
 
-        if let Some(tooltip) = &self.config.tooltip {
+        let element = if let Some(tooltip) = &self.config.tooltip {
             let tooltip = Text::new(tooltip.clone());
             styled_tooltip(content, tooltip)
         } else {
             content.into()
-        }
+        };
+
+        maybe_mouse_interaction(element, &self.config.interaction)
     }
 }
 

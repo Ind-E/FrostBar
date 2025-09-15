@@ -17,7 +17,8 @@ pub struct TimeView {
 impl<'a> TimeView {
     pub fn view(&self, service: &TimeService) -> Element<'a, Message> {
         let time = service.time.format(&self.config.format).to_string();
-        let tooltip = Text::new(service.time.format("%a %b %-d\n%-m/%-d/%y").to_string());
+        let tooltip =
+            Text::new(service.time.format(&self.config.tooltip_format).to_string());
         let content = Container::new(text(time).size(16))
             .center_x(Length::Fill)
             .id(self.id.clone());

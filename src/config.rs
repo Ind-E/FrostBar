@@ -42,7 +42,7 @@ pub struct End {
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     #[knuffel(child, unwrap(argument), default = 42)]
     pub width: u32,
@@ -119,12 +119,33 @@ pub struct Niri {
 
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Label {
-    #[knuffel(child, unwrap(argument), default = "text".to_string())]
+    #[knuffel(child, unwrap(argument), default = "".to_string())]
     pub text: String,
     #[knuffel(child, unwrap(argument), default = 18)]
     pub size: u32,
     #[knuffel(child, unwrap(argument), default = None)]
     pub tooltip: Option<String>,
+    #[knuffel(flatten(child), default)]
+    pub interaction: MouseInteraction,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Default)]
+pub struct MouseInteraction {
+    #[knuffel(child)]
+    pub left_mouse: Option<Command>,
+    #[knuffel(child)]
+    pub right_mouse: Option<Command>,
+    #[knuffel(child)]
+    pub middle_mouse: Option<Command>,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Default)]
+pub struct Command {
+    #[knuffel(property)]
+    pub sh: Option<String>,
+
+    #[knuffel(arguments)]
+    pub command: Option<Vec<String>>,
 }
 
 impl Config {

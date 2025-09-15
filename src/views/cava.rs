@@ -39,8 +39,8 @@ impl<'a> CavaView {
                 }
             })
         })
-        .on_press(Message::Command("pavucontrol".to_string()))
-        .on_right_press(Message::Command("blueman-manager".to_string()))
+        // .on_press(Message::Command("pavucontrol".to_string()))
+        // .on_right_press(Message::Command("blueman-manager".to_string()))
         .into()
     }
 }

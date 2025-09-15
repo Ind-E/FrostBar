@@ -1,20 +1,16 @@
 use chrono::{DateTime, Local};
 use itertools::Itertools;
+use tokio::task;
 use tracing::warn;
 
 use iced::{
-    Background, Color, Element, Event, Length, Settings, Size, Subscription, Task, Theme,
+    Background, Color, Element, Event, Length, Settings, Subscription, Task, Theme,
     advanced::mouse,
     alignment::{Horizontal, Vertical},
     border::rounded,
     event, theme,
-    widget::{Column, Container, Text, container, stack},
-    window::{
-        Id,
-        settings::{
-            Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
-        },
-    },
+    widget::{Column, Container, container, stack},
+    window::Id,
 };
 use notify_rust::Notification;
 use std::{
@@ -41,10 +37,10 @@ use crate::{
         niri::{NiriEvent, NiriService},
         time::TimeService,
     },
-    utils::{init_tracing, process_modules},
+    utils::{CommandSpec, init_tracing, open_window, process_modules},
     views::{
-        BarAlignment, BarPosition, battery::BatteryView, cava::CavaView,
-        label::LabelView, mpris::MprisView, niri::NiriView, time::TimeView,
+        BarAlignment, battery::BatteryView, cava::CavaView, label::LabelView,
+        mpris::MprisView, niri::NiriView, time::TimeView,
     },
 };
 
@@ -117,7 +113,7 @@ pub enum Message {
 
     OpenWindow(Id),
 
-    Command(String),
+    Command(CommandSpec),
 
     ErrorMessage(String),
     NoOp,
@@ -177,35 +173,7 @@ impl Bar {
             &mut label_views,
         );
 
-        let (id, open) = iced::window::open(iced::window::Settings {
-            size: Size::new(config.layout.width as f32, 0.0),
-            decorations: false,
-            resizable: false,
-            minimizable: false,
-            transparent: true,
-            platform_specific: PlatformSpecific {
-                layer_shell: LayerShellSettings {
-                    layer: Some(Layer::Top),
-                    anchor: Some(
-                        Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
-                    ),
-                    exclusive_zone: Some(config.layout.width as i32),
-                    margin: Some((
-                        config.layout.gaps,
-                        config.layout.gaps,
-                        config.layout.gaps,
-                        config.layout.gaps,
-                    )),
-                    input_region: Some((0, 0, config.layout.width as i32, 1200)),
-                    keyboard_interactivity: Some(KeyboardInteractivity::None),
-                    namespace: Some(String::from(BAR_NAMESPACE)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            exit_on_close_request: false,
-            ..Default::default()
-        });
+        let (id, open_task) = open_window(&config);
 
         let bar = Self {
             id,
@@ -224,7 +192,7 @@ impl Bar {
             config_path,
         };
 
-        (bar, Task::batch(vec![open.map(Message::OpenWindow)]))
+        (bar, Task::batch(vec![open_task]))
     }
 
     fn title(&self, _id: Id) -> String {
@@ -283,6 +251,15 @@ impl Bar {
                                 &mut self.niri_views,
                                 &mut self.label_views,
                             );
+                            if self.config.layout != config.layout {
+                                self.config = config;
+                                let close = iced::window::close(self.id);
+                                let (id, open) = open_window(&self.config);
+                                self.id = id;
+                                return Task::batch([close, open]);
+                            } else {
+                                self.config = config;
+                            }
                         }
                         Err(e) => {
                             eprintln!("{e:?}");
@@ -412,8 +389,13 @@ impl Bar {
                 |_| Message::NoOp,
             ),
             Message::Command(cmd) => {
-                thread::spawn(|| {
-                    if let Err(e) = Command::new(cmd).status() {
+                dbg!(&cmd);
+                task::spawn_blocking(|| {
+                    let mut command = Command::new(cmd.command);
+                    if let Some(args) = cmd.args {
+                        command.args(args);
+                    }
+                    if let Err(e) = command.status() {
                         error!("{e}");
                     }
                 });
@@ -441,7 +423,7 @@ impl Bar {
         }
     }
 
-    fn view_bar(&self) -> Element<Message> {
+    fn view_bar(&self) -> Element<'_, Message> {
         let mut top_views: Vec<(Element<Message>, usize)> = vec![];
         let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
         let mut bottom_views: Vec<(Element<Message>, usize)> = vec![];
@@ -571,7 +553,7 @@ impl Bar {
         bar.into()
     }
 
-    pub fn view(&self, _id: Id) -> Element<Message> {
+    pub fn view(&self, _id: Id) -> Element<'_, Message> {
         self.view_bar()
     }
 

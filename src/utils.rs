@@ -1,8 +1,17 @@
 use crate::{
-    config::{Config, Module},
+    Message,
+    config::{self, Config, Module, MouseInteraction},
+    constants::BAR_NAMESPACE,
     views::{
-        BarAlignment, BarPosition, battery::BatteryView, cava::CavaView, label::LabelView,
-        mpris::MprisView, niri::NiriView, time::TimeView,
+        BarAlignment, BarPosition, battery::BatteryView, cava::CavaView,
+        label::LabelView, mpris::MprisView, niri::NiriView, time::TimeView,
+    },
+};
+use iced::{
+    Element, Size,
+    widget::MouseArea,
+    window::settings::{
+        Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
     },
 };
 use tracing_subscriber::EnvFilter;
@@ -126,4 +135,89 @@ pub fn init_tracing() {
         ))
         .with_line_number(true)
         .init();
+}
+
+pub fn open_window(config: &Config) -> (iced::window::Id, iced::Task<Message>) {
+    let (id, open_task) = iced::window::open(iced::window::Settings {
+        size: Size::new(config.layout.width as f32, 0.0),
+        decorations: false,
+        resizable: false,
+        minimizable: false,
+        transparent: true,
+        platform_specific: PlatformSpecific {
+            layer_shell: LayerShellSettings {
+                layer: Some(Layer::Top),
+                anchor: Some(Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT),
+                exclusive_zone: Some(config.layout.width as i32),
+                margin: Some((
+                    config.layout.gaps,
+                    config.layout.gaps,
+                    config.layout.gaps,
+                    config.layout.gaps,
+                )),
+                input_region: Some((0, 0, config.layout.width as i32, 1200)),
+                keyboard_interactivity: Some(KeyboardInteractivity::None),
+                namespace: Some(String::from(BAR_NAMESPACE)),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        exit_on_close_request: false,
+        ..Default::default()
+    });
+
+    (id, open_task.map(Message::OpenWindow))
+}
+
+pub fn maybe_mouse_interaction<'a>(
+    element: impl Into<Element<'a, Message>>,
+    interaction: &MouseInteraction,
+) -> Element<'a, Message> {
+    if interaction.left_mouse.is_none()
+        && interaction.right_mouse.is_none()
+        && interaction.middle_mouse.is_none()
+    {
+        return element.into();
+    } else {
+        let mut mouse_area = MouseArea::new(element);
+        if let Some(left) = &interaction.left_mouse {
+            mouse_area = mouse_area.on_release(process_command(left));
+        }
+
+        if let Some(right) = &interaction.right_mouse {
+            mouse_area = mouse_area.on_right_release(process_command(right));
+        }
+
+        if let Some(middle) = &interaction.middle_mouse {
+            mouse_area = mouse_area.on_middle_release(process_command(middle));
+        }
+
+        mouse_area.into()
+    }
+}
+
+pub fn process_command(cmd: &config::Command) -> Message {
+    if let Some(sh) = &cmd.sh
+    {
+        Message::Command(CommandSpec {
+            command: String::from("sh"),
+            args: Some(vec![
+                String::from("-c"),
+                sh.to_string(),
+            ]),
+        })
+    } else if let Some(args) = &cmd.command && args.len() > 0 {
+        Message::Command(CommandSpec {
+            command: String::from(args[0].clone()),
+            args: args.get(1..).and_then(|v| Some(v.to_vec())),
+        })
+    } else {
+        Message::NoOp
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandSpec {
+    pub command: String,
+    pub args: Option<Vec<String>>,
 }
