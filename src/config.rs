@@ -130,6 +130,10 @@ pub struct MouseInteraction {
     pub right_mouse: Option<Command>,
     #[knuffel(child)]
     pub middle_mouse: Option<Command>,
+    #[knuffel(child)]
+    pub scroll_up: Option<Command>,
+    #[knuffel(child)]
+    pub scroll_down: Option<Command>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone, Default)]

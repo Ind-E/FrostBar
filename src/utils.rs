@@ -9,6 +9,7 @@ use crate::{
 };
 use iced::{
     Element, Size,
+    mouse::ScrollDelta,
     widget::MouseArea,
     window::settings::{
         Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
@@ -172,7 +173,7 @@ pub fn open_window(config: &Config) -> (iced::window::Id, iced::Task<Message>) {
 
 pub fn maybe_mouse_interaction<'a>(
     element: impl Into<Element<'a, Message>>,
-    interaction: &MouseInteraction,
+    interaction: &'a MouseInteraction,
 ) -> Element<'a, Message> {
     if interaction.left_mouse.is_none()
         && interaction.right_mouse.is_none()
@@ -191,6 +192,25 @@ pub fn maybe_mouse_interaction<'a>(
 
         if let Some(middle) = &interaction.middle_mouse {
             mouse_area = mouse_area.on_middle_release(process_command(middle));
+        }
+
+        if interaction.scroll_up.is_some() || interaction.scroll_down.is_some() {
+            mouse_area = mouse_area.on_scroll(|delta| {
+                let (x, y) = match delta {
+                    ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
+                };
+
+                if y > 0.0 || x < 0.0 {
+                    if let Some(scroll_up) = &interaction.scroll_up {
+                        return process_command(scroll_up);
+                    }
+                } else {
+                    if let Some(scroll_down) = &interaction.scroll_down {
+                        return process_command(scroll_down);
+                    }
+                };
+                unreachable!()
+            })
         }
 
         mouse_area.into()

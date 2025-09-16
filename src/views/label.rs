@@ -15,7 +15,7 @@ pub struct LabelView {
 }
 
 impl<'a> LabelView {
-    pub fn view(&self) -> Element<'a, Message> {
+    pub fn view(&'a self) -> Element<'a, Message> {
         let content =
             Container::new(text(self.config.text.clone()).size(self.config.size))
                 .center_x(Length::Fill)

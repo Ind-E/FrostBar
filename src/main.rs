@@ -1,7 +1,8 @@
 use chrono::{DateTime, Local};
 use itertools::Itertools;
-use tokio::task;
 use tracing::{info, warn};
+
+use tokio::process::Command as TokioCommand;
 
 use iced::{
     Background, Color, Element, Event, Length, Settings, Subscription, Task, Theme,
@@ -15,9 +16,7 @@ use iced::{
 use notify_rust::Notification;
 use std::{
     path::PathBuf,
-    process::Command,
     sync::{Arc, Mutex},
-    thread,
 };
 use zbus::Connection;
 
@@ -109,7 +108,6 @@ pub enum Message {
     PlayPause(String),
     NextSong(String),
     StopPlayer(String),
-    ChangeVolume(i32),
 
     OpenWindow(Id),
 
@@ -389,35 +387,16 @@ impl Bar {
                 |_| Message::NoOp,
             ),
             Message::Command(cmd) => {
-                info!("{cmd}");
-                task::spawn_blocking(|| {
-                    let mut command = Command::new(cmd.command);
+                info!("Command: {cmd}");
+                Task::future(async move {
+                    let mut command = TokioCommand::new(cmd.command);
                     if let Some(args) = cmd.args {
                         command.args(args);
                     }
-                    if let Err(e) = command.status() {
-                        error!("{e}");
-                    }
-                });
-                Task::none()
-            }
-            Message::ChangeVolume(delta_percent) => {
-                let sign = if delta_percent >= 0 { "+" } else { "-" };
-                let value = delta_percent.abs();
-                thread::spawn(move || {
-                    if let Err(e) = Command::new("wpctl")
-                        .args([
-                            "set-volume",
-                            "@DEFAULT_SINK@",
-                            &format!("{value}%{sign}"),
-                        ])
-                        .output()
-                    {
-                        error!("{e}");
-                    }
-                });
 
-                Task::none()
+                    let _ = command.status().await;
+                    Message::NoOp
+                })
             }
             Message::NoOp => Task::none(),
         }

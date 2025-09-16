@@ -1,11 +1,10 @@
 use iced::{
     Color, Element, Length, Point, Renderer, Size,
-    mouse::ScrollDelta,
-    widget::{Canvas, MouseArea, canvas},
+    widget::{Canvas, canvas},
 };
 
 use crate::{
-    Message, config, services::cava::CavaService, utils::process_command,
+    Message, config, services::cava::CavaService, utils::maybe_mouse_interaction,
     views::BarPosition,
 };
 
@@ -24,40 +23,11 @@ impl CavaView {
 
 impl<'a> CavaView {
     pub fn view(&'a self, service: &'a CavaService) -> Element<'a, Message> {
-        let mut area = MouseArea::new(
-            Canvas::new(CavaCanvas::new(service, &self.config))
-                .width(Length::Fill)
-                .height(130),
-        )
-        .on_scroll(|delta| {
-            Message::ChangeVolume({
-                let (x, y) = match delta {
-                    ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
-                };
+        let canvas = Canvas::new(CavaCanvas::new(service, &self.config))
+            .width(Length::Fill)
+            .height(130);
 
-                if y > 0.0 || x < 0.0 {
-                    self.config.volume_percent
-                } else {
-                    -self.config.volume_percent
-                }
-            })
-        });
-
-        let interaction = &self.config.interaction;
-
-        if let Some(left) = &interaction.left_mouse {
-            area = area.on_release(process_command(left));
-        }
-
-        if let Some(right) = &interaction.right_mouse {
-            area = area.on_right_release(process_command(right));
-        }
-
-        if let Some(middle) = &interaction.middle_mouse {
-            area = area.on_middle_release(process_command(middle));
-        }
-
-        area.into()
+        maybe_mouse_interaction(canvas, &self.config.interaction)
     }
 }
 
