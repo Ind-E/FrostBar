@@ -43,9 +43,8 @@ impl BatteryService {
         }
     }
     fn fetch_battery_info(&mut self) {
-        let manager = match &self.manager {
-            Some(manager) => manager,
-            Option::None => return error!("No battery manager"),
+        let Some(manager) = &self.manager else {
+            return error!("No battery manager");
         };
 
         let batteries = match manager.batteries() {

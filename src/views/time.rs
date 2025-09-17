@@ -14,8 +14,8 @@ pub struct TimeView {
     pub position: BarPosition,
 }
 
-impl<'a> TimeView {
-    pub fn view(&self, service: &TimeService) -> Element<'a, Message> {
+impl TimeView {
+    pub fn view(&self, service: &TimeService) -> Element<'_, Message> {
         let time = service.time.format(&self.config.format).to_string();
         let tooltip =
             Text::new(service.time.format(&self.config.tooltip_format).to_string());

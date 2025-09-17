@@ -30,7 +30,7 @@ pub fn client_icon_path(
 
     let desktop_file = paths
         .find_map(|p| {
-            let file = p.join(format!("{}.desktop", app_id));
+            let file = p.join(format!("{app_id}.desktop"));
             if file.exists() { Some(file) } else { None }
         })
         .map(
@@ -61,10 +61,11 @@ pub struct IconCache {
 fn load_icon_from_path(path: &Path) -> Option<Icon> {
     match path.extension().and_then(|s| s.to_str()) {
         Some("svg") => Some(Icon::Svg(svg::Handle::from_path(path))),
-        Some("png") | Some("jpg") => Some(Icon::Raster(image::Handle::from_path(path))),
+        Some("png" | "jpg") => Some(Icon::Raster(image::Handle::from_path(path))),
         _ => {
             eprintln!(
-                "Warning: Unrecognized or missing icon extension at path: {path:?}"
+                "Warning: Unrecognized or missing icon extension at path: {}",
+                path.display()
             );
             None
         }
@@ -78,12 +79,16 @@ impl IconCache {
         }
     }
 
-    pub fn get_icon(&mut self, app_id: &str) -> &Option<Icon> {
-        self.inner.entry(app_id.to_string()).or_insert_with(|| {
-            client_icon_path(app_id)
-                .ok()
-                .and_then(|path| load_icon_from_path(&path))
-        })
+    pub fn get_icon(&mut self, app_id: &str) -> Option<Icon> {
+        self.inner
+            .entry(app_id.to_string())
+            .or_insert_with(|| {
+                client_icon_path(app_id)
+                    .ok()
+                    .and_then(|path| load_icon_from_path(&path))
+            })
+            .as_ref()
+            .cloned()
     }
 }
 

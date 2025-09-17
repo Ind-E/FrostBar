@@ -38,10 +38,10 @@ pub fn workspace_style<'a>(
 ) -> container::StyleFn<'a, Theme> {
     let mut base = container::Style::default();
     if hovered {
-        base = base.background(Color::from_rgba(0.25, 0.25, 0.25, 0.2))
-    };
+        base = base.background(Color::from_rgba(0.25, 0.25, 0.25, 0.2));
+    }
     if active {
         base = base.border(rounded(radius).color(Color::WHITE).width(2));
-    };
+    }
     Box::new(move |_| base)
 }

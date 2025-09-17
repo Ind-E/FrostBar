@@ -208,9 +208,9 @@ pub fn maybe_mouse_interaction<'a>(
                     return process_command(scroll_up);
                 } else if let Some(scroll_down) = &interaction.scroll_down {
                     return process_command(scroll_down);
-                };
+                }
                 unreachable!()
-            })
+            });
         }
 
         mouse_area.into()
@@ -228,7 +228,7 @@ pub fn process_command(cmd: &config::Command) -> Message {
     {
         Message::Command(CommandSpec {
             command: args[0].clone(),
-            args: args.get(1..).map(|v| v.to_vec()),
+            args: args.get(1..).map(<[String]>::to_vec),
         })
     } else {
         Message::NoOp
@@ -248,7 +248,7 @@ impl fmt::Display for CommandSpec {
             && args[0] == "-c"
         {
             let joined = args[1..].join(" ");
-            write!(f, "{}", joined)
+            write!(f, "{joined}")
         } else {
             write!(
                 f,

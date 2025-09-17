@@ -47,7 +47,7 @@ impl<'a> CavaCanvas<'a> {
     }
 }
 
-impl<'a, Message> canvas::Program<Message> for CavaCanvas<'a> {
+impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
     type State = ();
 
     fn draw(
@@ -79,9 +79,9 @@ impl<'a, Message> canvas::Program<Message> for CavaCanvas<'a> {
 
                         let max_bar_width = center_x;
                         let left_width =
-                            max_bar_width * (left_val as f32 / MAX_BAR_HEIGHT as f32);
-                        let right_width =
-                            max_bar_width * (right_val as f32 / MAX_BAR_HEIGHT as f32);
+                            max_bar_width * (f32::from(left_val) / MAX_BAR_HEIGHT as f32);
+                        let right_width = max_bar_width
+                            * (f32::from(right_val) / MAX_BAR_HEIGHT as f32);
 
                         let y_pos = i as f32 * bar_thickness_total + spacing / 2.0;
 

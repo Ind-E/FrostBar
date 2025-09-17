@@ -63,12 +63,9 @@ impl Service for CavaService {
                         }
                     };
 
-                    let stdout = match command.stdout.take() {
-                        Some(pipe) => pipe,
-                        Option::None => {
-                            let _ = tx.send_blocking(Err(CavaError::PipeFailed));
-                            return;
-                        }
+                    let Some(stdout) = command.stdout.take() else {
+                        let _ = tx.send_blocking(Err(CavaError::PipeFailed));
+                        return;
                     };
 
                     let reader = io::BufReader::new(stdout);
@@ -99,14 +96,14 @@ impl Service for CavaService {
         match event {
             Ok(line) => {
                 self.bars = line
-                    .split(";")
+                    .split(';')
                     .map(|s| s.parse::<u8>().unwrap_or(0))
                     .collect();
             }
             Err(e) => {
                 error!("cava error: {e}");
             }
-        };
+        }
         iced::Task::none()
     }
 }

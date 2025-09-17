@@ -112,7 +112,7 @@ pub struct Niri {
 
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Label {
-    #[knuffel(child, unwrap(argument), default = "".to_string())]
+    #[knuffel(child, unwrap(argument), default = String::new())]
     pub text: String,
     #[knuffel(child, unwrap(argument), default = 18)]
     pub size: u32,
@@ -149,7 +149,7 @@ impl Config {
     pub fn load(path: &Path) -> miette::Result<Self> {
         let contents = fs::read_to_string(path)
             .into_diagnostic()
-            .with_context(|| format!("error reading {path:?}"))?;
+            .with_context(|| format!("error reading {}", path.display()))?;
 
         let config = Self::parse(
             path.file_name()
@@ -176,7 +176,10 @@ impl Config {
             fs::create_dir_all(default_parent)
                 .into_diagnostic()
                 .with_context(|| {
-                    format!("error creating config directory {default_parent:?}")
+                    format!(
+                        "error creating config directory {}",
+                        default_parent.display()
+                    )
                 })?;
         }
 
@@ -190,14 +193,16 @@ impl Config {
             res => res,
         }
         .into_diagnostic()
-        .with_context(|| format!("error opening config file at {path:?}"))?;
+        .with_context(|| format!("error opening config file at {}", path.display()))?;
 
         let default_config = include_bytes!("../assets/default-config.kdl");
 
         new_file
             .write_all(default_config)
             .into_diagnostic()
-            .with_context(|| format!("error writing default config to {path:?}"))?;
+            .with_context(|| {
+                format!("error writing default config to {}", path.display())
+            })?;
 
         Ok(())
     }
@@ -223,7 +228,7 @@ impl Config {
                         .show()
                     {
                         error!("{e}");
-                    };
+                    }
                     eprintln!("\nFailed to parse config file, using default config");
                     eprintln!("{e:?}");
                     Config::default()

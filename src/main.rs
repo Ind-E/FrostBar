@@ -249,14 +249,14 @@ impl Bar {
                                 &mut self.niri_views,
                                 &mut self.label_views,
                             );
-                            if self.config.layout != config.layout {
+                            if self.config.layout == config.layout {
+                                self.config = config;
+                            } else {
                                 self.config = config;
                                 let close = iced::window::close(self.id);
                                 let (id, open) = open_window(&self.config);
                                 self.id = id;
                                 return Task::batch([close, open]);
-                            } else {
-                                self.config = config;
                             }
                         }
                         Err(e) => {
@@ -268,22 +268,24 @@ impl Bar {
                             {
                                 warn!(
                                     "Failed to send config parse error notification: {e:?}"
-                                )
+                                );
                             }
                         }
                     },
                     FileWatcherEvent::Missing => {
                         if let Err(e) = Notification::new()
                             .summary(&format!(
-                                "Config file not found at {:?}",
-                                self.config_path
+                                "Config file not found at {}",
+                                self.config_path.display()
                             ))
                             .show()
                         {
-                            warn!("Failed to send config parse error notification: {e:?}")
+                            warn!(
+                                "Failed to send config parse error notification: {e:?}"
+                            );
                         }
                     }
-                };
+                }
 
                 Task::none()
             }
@@ -297,13 +299,11 @@ impl Bar {
             Message::Tick(time) => self
                 .time_service
                 .as_mut()
-                .map(|ts| ts.handle_event(time))
-                .unwrap_or_else(iced::Task::none),
+                .map_or_else(iced::Task::none, |ts| ts.handle_event(time)),
             Message::UpdateBattery => self
                 .battery_service
                 .as_mut()
-                .map(|bs| bs.handle_event(()))
-                .unwrap_or_else(iced::Task::none),
+                .map_or_else(iced::Task::none, |bs| bs.handle_event(())),
             Message::NiriEvent(event) => self
                 .niri_service
                 .as_mut()
@@ -316,7 +316,7 @@ impl Bar {
                             .iter_mut()
                             .for_each(|s| s.hovered_workspace_id = Some(id));
                     }
-                };
+                }
 
                 Task::none()
             }
@@ -362,9 +362,9 @@ impl Bar {
                         && let Ok(player) = PlayerProxy::new(&connection, player).await
                     {
                         let _ = player.play_pause().await;
-                    };
+                    }
                 },
-                |_| Message::NoOp,
+                |()| Message::NoOp,
             ),
             Message::NextSong(player) => Task::perform(
                 async {
@@ -372,9 +372,9 @@ impl Bar {
                         && let Ok(player) = PlayerProxy::new(&connection, player).await
                     {
                         let _ = player.next().await;
-                    };
+                    }
                 },
-                |_| Message::NoOp,
+                |()| Message::NoOp,
             ),
             Message::StopPlayer(player) => Task::perform(
                 async {
@@ -382,9 +382,9 @@ impl Bar {
                         && let Ok(player) = PlayerProxy::new(&connection, player).await
                     {
                         let _ = player.stop().await;
-                    };
+                    }
                 },
-                |_| Message::NoOp,
+                |()| Message::NoOp,
             ),
             Message::Command(cmd) => {
                 info!("Command: {cmd}");
@@ -414,7 +414,7 @@ impl Bar {
         ];
 
         if let Some(service) = &self.battery_service {
-            for (pos, target) in alignments.iter_mut() {
+            for (pos, target) in &mut alignments {
                 target.extend(
                     self.battery_views
                         .iter()
@@ -425,7 +425,7 @@ impl Bar {
         }
 
         if let Some(service) = &self.time_service {
-            for (pos, target) in alignments.iter_mut() {
+            for (pos, target) in &mut alignments {
                 target.extend(
                     self.time_views
                         .iter()
@@ -436,7 +436,7 @@ impl Bar {
         }
 
         if let Some(service) = &self.cava_service {
-            for (pos, target) in alignments.iter_mut() {
+            for (pos, target) in &mut alignments {
                 target.extend(
                     self.cava_views
                         .iter()
@@ -447,7 +447,7 @@ impl Bar {
         }
 
         if let Some(service) = &self.mpris_service {
-            for (pos, target) in alignments.iter_mut() {
+            for (pos, target) in &mut alignments {
                 target.extend(
                     self.mpris_views
                         .iter()
@@ -458,7 +458,7 @@ impl Bar {
         }
 
         if let Some(service) = &self.niri_service {
-            for (pos, target) in alignments.iter_mut() {
+            for (pos, target) in &mut alignments {
                 target.extend(
                     self.niri_views
                         .iter()
@@ -468,7 +468,7 @@ impl Bar {
             }
         }
 
-        for (pos, target) in alignments.iter_mut() {
+        for (pos, target) in &mut alignments {
             target.extend(
                 self.label_views
                     .iter()

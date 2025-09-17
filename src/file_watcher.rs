@@ -35,7 +35,7 @@ pub enum CheckResult {
 
 pub fn watch_file(path: PathBuf) -> Subscription<Message> {
     Subscription::run_with(path, |path| {
-        let path = path.to_path_buf();
+        let path = path.clone();
         async_stream::stream! {
             let mut watcher = FileWatcher::new(path);
 
@@ -69,11 +69,11 @@ impl FileWatcher {
 
     pub fn check(&mut self) -> CheckResult {
         if let Ok(new_props) = see_path(&self.path) {
-            if self.last_props.as_ref() != Some(&new_props) {
+            if self.last_props.as_ref() == Some(&new_props) {
+                CheckResult::Unchanged
+            } else {
                 self.last_props = Some(new_props);
                 CheckResult::Changed
-            } else {
-                CheckResult::Unchanged
             }
         } else {
             CheckResult::Missing

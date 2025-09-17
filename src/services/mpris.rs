@@ -219,8 +219,8 @@ impl MprisPlayer {
             let art_url = val.to_string().trim_matches('"').to_string();
             let (handle, colors) = art_cache.get_art(&art_url);
 
-            self.art = handle.clone();
-            self.colors = colors.clone();
+            self.art.clone_from(handle);
+            self.colors.clone_from(colors);
 
             if self.status == "Playing" {
                 let captured_colors = colors.clone();

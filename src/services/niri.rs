@@ -207,7 +207,7 @@ impl NiriService {
                             .collect(),
                     })
                     .map(|ws| (ws.id, ws))
-                    .collect()
+                    .collect();
             }
             Event::WindowsChanged { windows } => {
                 self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
@@ -218,7 +218,7 @@ impl NiriService {
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
                         .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
-                        .collect()
+                        .collect();
                 });
             }
             Event::WindowOpenedOrChanged { window } => {
@@ -264,7 +264,23 @@ impl NiriService {
                 }
                 if let Some(ws) = self.workspaces.get_mut(&id) {
                     ws.is_active = true;
-                };
+                }
+            }
+            Event::WindowLayoutsChanged { changes } => {
+                for (id, layout) in changes {
+                    if let Some(window) = self.windows.get_mut(&id) {
+                        window.layout = layout;
+                    }
+                }
+
+                self.workspaces.values_mut().for_each(|ws| {
+                    ws.windows = self
+                        .windows
+                        .values()
+                        .filter(|w| w.workspace_id == Some(ws.id))
+                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
+                        .collect();
+                });
             }
             Event::WorkspaceUrgencyChanged { id: _, urgent: _ } => {}
             Event::WorkspaceActiveWindowChanged {
@@ -278,23 +294,7 @@ impl NiriService {
             } => {}
             Event::KeyboardLayoutSwitched { idx: _ } => {}
             Event::OverviewOpenedOrClosed { is_open: _ } => {}
-            Event::WindowLayoutsChanged { changes } => {
-                for (id, layout) in changes {
-                    if let Some(window) = self.windows.get_mut(&id) {
-                        window.layout = layout
-                    }
-                }
-
-                self.workspaces.values_mut().for_each(|ws| {
-                    ws.windows = self
-                        .windows
-                        .values()
-                        .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
-                        .collect()
-                });
-            }
-        };
+        }
         iced::Task::none()
     }
 }

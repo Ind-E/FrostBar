@@ -99,7 +99,7 @@ impl<'a> MprisPlayerView {
         let title = raw_title.trim().trim_matches('"');
 
         let tooltip =
-            Text::new(format!("{} - {}", artists, title)).shaping(Shaping::Advanced);
+            Text::new(format!("{artists} - {title}")).shaping(Shaping::Advanced);
 
         let content = Container::new(
             MouseArea::new(content)
