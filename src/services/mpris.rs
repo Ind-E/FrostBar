@@ -61,18 +61,17 @@ impl Service for MprisService {
                 futures::select! {
                     signal = name_owner_stream.next().fuse() => {
                         // debug!("name owner event");
-                        if let Some(signal) = signal && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>() {
-                            if name.starts_with(MPRIS_PREFIX) {
-
-
-                                if !new.is_empty() && old.is_empty() {
-                                    yield get_initial_player_state(&connection, &name).await;
-                                    if let Ok(stream) = create_player_stream(&connection, name).await {
-                                        player_streams.push(stream);
-                                    }
-                                } else if new.is_empty() && !old.is_empty() {
-                                    yield MprisEvent::PlayerVanished { name };
+                        if let Some(signal) = signal
+                            && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>()
+                            && name.starts_with(MPRIS_PREFIX)
+                        {
+                            if !new.is_empty() && old.is_empty() {
+                                yield get_initial_player_state(&connection, &name).await;
+                                if let Ok(stream) = create_player_stream(&connection, name).await {
+                                    player_streams.push(stream);
                                 }
+                            } else if new.is_empty() && !old.is_empty() {
+                                yield MprisEvent::PlayerVanished { name };
                             }
                         }
                     },
@@ -133,7 +132,7 @@ impl Service for MprisService {
                             p.colors.is_some() && p.status == "Playing" && p.name != name
                         })
                         .collect::<Vec<_>>();
-                    if let Some((_, player)) = players_w_colors.get(0) {
+                    if let Some((_, player)) = players_w_colors.first() {
                         let colors = player.colors.clone();
                         return iced::Task::perform(
                             async move { colors },
@@ -216,7 +215,7 @@ impl MprisPlayer {
             self.artists = Some(val.to_string());
         }
 
-        let task = if let Some(val) = metadata.get("mpris:artUrl") {
+        if let Some(val) = metadata.get("mpris:artUrl") {
             let art_url = val.to_string().trim_matches('"').to_string();
             let (handle, colors) = art_cache.get_art(&art_url);
 
@@ -237,8 +236,7 @@ impl MprisPlayer {
             self.art = None;
             self.colors = None;
             iced::Task::perform(async { None }, Message::CavaColorUpdate)
-        };
-        task
+        }
     }
 
     pub fn new(name: String, status: String) -> Self {
@@ -267,7 +265,7 @@ async fn create_player_stream(
     connection: &Connection,
     name: String,
 ) -> Result<EventStream<MprisEvent, zbus::Error>, zbus::Error> {
-    let player_proxy = PlayerProxy::new(&connection, name.clone()).await?;
+    let player_proxy = PlayerProxy::new(connection, name.clone()).await?;
     let mut streams: Vec<EventStream<MprisEvent, zbus::Error>> = vec![];
     {
         let name = name.clone();

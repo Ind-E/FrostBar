@@ -30,7 +30,7 @@ pub fn client_icon_path(
 
     let desktop_file = paths
         .find_map(|p| {
-            let file = p.join(&format!("{}.desktop", app_id));
+            let file = p.join(format!("{}.desktop", app_id));
             if file.exists() { Some(file) } else { None }
         })
         .map(
@@ -60,8 +60,8 @@ pub struct IconCache {
 
 fn load_icon_from_path(path: &Path) -> Option<Icon> {
     match path.extension().and_then(|s| s.to_str()) {
-        Some("svg") => Some(Icon::Svg(svg::Handle::from_path(&path))),
-        Some("png") | Some("jpg") => Some(Icon::Raster(image::Handle::from_path(&path))),
+        Some("svg") => Some(Icon::Svg(svg::Handle::from_path(path))),
+        Some("png") | Some("jpg") => Some(Icon::Raster(image::Handle::from_path(path))),
         _ => {
             eprintln!(
                 "Warning: Unrecognized or missing icon extension at path: {path:?}"

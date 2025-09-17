@@ -217,7 +217,7 @@ impl NiriService {
                         .windows
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| (w.id, map_window(&w, self.icon_cache.clone())))
+                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
                         .collect()
                 });
             }
@@ -228,12 +228,11 @@ impl NiriService {
                     self.windows.get(&window_id).and_then(|w| w.workspace_id);
                 let new_workspace_id = window.workspace_id;
 
-                if old_workspace_id != new_workspace_id {
-                    if let Some(old_ws_id) = old_workspace_id
-                        && let Some(old_ws) = self.workspaces.get_mut(&old_ws_id)
-                    {
-                        old_ws.windows.remove(&window_id);
-                    }
+                if old_workspace_id != new_workspace_id
+                    && let Some(old_ws_id) = old_workspace_id
+                    && let Some(old_ws) = self.workspaces.get_mut(&old_ws_id)
+                {
+                    old_ws.windows.remove(&window_id);
                 }
 
                 self.windows.insert(window_id, window);
@@ -258,14 +257,14 @@ impl NiriService {
                 let output = self.workspaces.iter().find_map(|(wid, ws)| {
                     if wid == &id { ws.output.clone() } else { None }
                 });
-                for (_, ws) in &mut self.workspaces {
+                for ws in self.workspaces.values_mut() {
                     if ws.output == output {
                         ws.is_active = false;
                     }
                 }
-                self.workspaces.get_mut(&id).map(|ws| {
+                if let Some(ws) = self.workspaces.get_mut(&id) {
                     ws.is_active = true;
-                });
+                };
             }
             Event::WorkspaceUrgencyChanged { id: _, urgent: _ } => {}
             Event::WorkspaceActiveWindowChanged {
@@ -282,7 +281,7 @@ impl NiriService {
             Event::WindowLayoutsChanged { changes } => {
                 for (id, layout) in changes {
                     if let Some(window) = self.windows.get_mut(&id) {
-                        window.layout = layout.into()
+                        window.layout = layout
                     }
                 }
 
@@ -291,7 +290,7 @@ impl NiriService {
                         .windows
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| (w.id, map_window(&w, self.icon_cache.clone())))
+                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
                         .collect()
                 });
             }
@@ -327,10 +326,11 @@ fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
 
     loop {
         match read_event() {
-            Ok(event) => match tx.unbounded_send(event) {
-                Err(e) => return error!("{e}"),
-                Ok(_) => {}
-            },
+            Ok(event) => {
+                if let Err(e) = tx.unbounded_send(event) {
+                    return error!("{e}");
+                }
+            }
             Err(e) => {
                 return error!("Failed to read event: {e}");
             }

@@ -263,7 +263,7 @@ impl Bar {
                             eprintln!("{e:?}");
                             if let Err(e) = Notification::new()
                                 .summary(&self.namespace())
-                                .body(&format!("Failed to parse config file"))
+                                .body("Failed to parse config file")
                                 .show()
                             {
                                 warn!(
@@ -313,8 +313,8 @@ impl Bar {
                 match event {
                     MouseEvent::Workspace(id) => {
                         self.niri_service
-                            .as_mut()
-                            .map(|s| s.hovered_workspace_id = Some(id));
+                            .iter_mut()
+                            .for_each(|s| s.hovered_workspace_id = Some(id));
                     }
                 };
 
@@ -322,16 +322,16 @@ impl Bar {
             }
             Message::MouseExitedBar => {
                 self.niri_service
-                    .as_mut()
-                    .map(|s| s.hovered_workspace_id = None);
+                    .iter_mut()
+                    .for_each(|s| s.hovered_workspace_id = None);
                 Task::none()
             }
             Message::MouseExited(event) => {
                 match event {
                     MouseEvent::Workspace(..) => {
                         self.niri_service
-                            .as_mut()
-                            .map(|s| s.hovered_workspace_id = None);
+                            .iter_mut()
+                            .for_each(|s| s.hovered_workspace_id = None);
                     }
                 };
 
@@ -358,30 +358,30 @@ impl Bar {
                 .unwrap_or_else(iced::Task::none),
             Message::PlayPause(player) => Task::perform(
                 async {
-                    if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
-                            let _ = player.play_pause().await;
-                        };
+                    if let Ok(connection) = Connection::session().await
+                        && let Ok(player) = PlayerProxy::new(&connection, player).await
+                    {
+                        let _ = player.play_pause().await;
                     };
                 },
                 |_| Message::NoOp,
             ),
             Message::NextSong(player) => Task::perform(
                 async {
-                    if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
-                            let _ = player.next().await;
-                        };
+                    if let Ok(connection) = Connection::session().await
+                        && let Ok(player) = PlayerProxy::new(&connection, player).await
+                    {
+                        let _ = player.next().await;
                     };
                 },
                 |_| Message::NoOp,
             ),
             Message::StopPlayer(player) => Task::perform(
                 async {
-                    if let Ok(connection) = Connection::session().await {
-                        if let Ok(player) = PlayerProxy::new(&connection, player).await {
-                            let _ = player.stop().await;
-                        };
+                    if let Ok(connection) = Connection::session().await
+                        && let Ok(player) = PlayerProxy::new(&connection, player).await
+                    {
+                        let _ = player.stop().await;
                     };
                 },
                 |_| Message::NoOp,
@@ -407,7 +407,7 @@ impl Bar {
         let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
         let mut bottom_views: Vec<(Element<Message>, usize)> = vec![];
 
-        let mut alignments = vec![
+        let mut alignments = [
             (BarAlignment::Start, &mut top_views),
             (BarAlignment::Middle, &mut middle_views),
             (BarAlignment::End, &mut bottom_views),

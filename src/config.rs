@@ -167,9 +167,7 @@ impl Config {
                 debug!("Successfully parsed config");
                 Ok(config)
             }
-            Err(e) => {
-                return Err(miette::Report::new(e));
-            }
+            Err(e) => Err(miette::Report::new(e)),
         }
     }
 

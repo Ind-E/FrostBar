@@ -178,8 +178,10 @@ pub fn maybe_mouse_interaction<'a>(
     if interaction.left_mouse.is_none()
         && interaction.right_mouse.is_none()
         && interaction.middle_mouse.is_none()
+        && interaction.scroll_up.is_none()
+        && interaction.scroll_down.is_none()
     {
-        return element.into();
+        element.into()
     } else {
         let mut mouse_area = MouseArea::new(element);
         if let Some(left) = &interaction.left_mouse {
@@ -200,14 +202,12 @@ pub fn maybe_mouse_interaction<'a>(
                     ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
                 };
 
-                if y > 0.0 || x < 0.0 {
-                    if let Some(scroll_up) = &interaction.scroll_up {
-                        return process_command(scroll_up);
-                    }
-                } else {
-                    if let Some(scroll_down) = &interaction.scroll_down {
-                        return process_command(scroll_down);
-                    }
+                if (y > 0.0 || x < 0.0)
+                    && let Some(scroll_up) = &interaction.scroll_up
+                {
+                    return process_command(scroll_up);
+                } else if let Some(scroll_down) = &interaction.scroll_down {
+                    return process_command(scroll_down);
                 };
                 unreachable!()
             })
@@ -224,11 +224,11 @@ pub fn process_command(cmd: &config::Command) -> Message {
             args: Some(vec![String::from("-c"), sh.to_string()]),
         })
     } else if let Some(args) = &cmd.command
-        && args.len() > 0
+        && !args.is_empty()
     {
         Message::Command(CommandSpec {
-            command: String::from(args[0].clone()),
-            args: args.get(1..).and_then(|v| Some(v.to_vec())),
+            command: args[0].clone(),
+            args: args.get(1..).map(|v| v.to_vec()),
         })
     } else {
         Message::NoOp
@@ -248,7 +248,7 @@ impl fmt::Display for CommandSpec {
             && args[0] == "-c"
         {
             let joined = args[1..].join(" ");
-            return write!(f, "{}", joined);
+            write!(f, "{}", joined)
         } else {
             write!(
                 f,

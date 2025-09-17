@@ -27,7 +27,7 @@ impl<'a> MprisView {
             .players
             .values()
             .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(MprisPlayerView::new().view(&player, &self.config, layout))
+                col.push(MprisPlayerView::new().view(player, &self.config, layout))
             })
             .into()
     }
