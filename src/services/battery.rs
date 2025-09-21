@@ -36,13 +36,16 @@ impl BatteryService {
                 None
             }
         };
-
-        Self {
+        let mut new = Self {
             manager,
             batteries: Vec::new(),
-        }
+        };
+
+        new.fetch_battery_info();
+
+        new
     }
-    fn fetch_battery_info(&mut self) {
+    pub fn fetch_battery_info(&mut self) {
         let Some(manager) = &self.manager else {
             return error!("No battery manager");
         };

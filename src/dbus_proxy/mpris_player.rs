@@ -28,7 +28,7 @@ pub trait Player {
     /// Next method
     fn next(&self) -> zbus::Result<()>;
 
-    /// OpenUri method
+    /// `OpenUri` method
     fn open_uri(&self, uri: &str) -> zbus::Result<()>;
 
     /// Pause method
@@ -37,7 +37,7 @@ pub trait Player {
     /// Play method
     fn play(&self) -> zbus::Result<()>;
 
-    /// PlayPause method
+    /// `PlayPause` method
     fn play_pause(&self) -> zbus::Result<()>;
 
     /// Previous method
@@ -46,7 +46,7 @@ pub trait Player {
     /// Seek method
     fn seek(&self, offset: i64) -> zbus::Result<()>;
 
-    /// SetPosition method
+    /// `SetPosition` method
     fn set_position(
         &self,
         track_id: &zbus::zvariant::ObjectPath<'_>,
@@ -60,37 +60,37 @@ pub trait Player {
     #[zbus(signal)]
     fn seeked(&self, position: i64) -> zbus::Result<()>;
 
-    /// CanControl property
+    /// `CanControl` property
     #[zbus(property)]
     fn can_control(&self) -> zbus::Result<bool>;
 
-    /// CanGoNext property
+    /// `CanGoNext` property
     #[zbus(property)]
     fn can_go_next(&self) -> zbus::Result<bool>;
 
-    /// CanGoPrevious property
+    /// `CanGoPrevious` property
     #[zbus(property)]
     fn can_go_previous(&self) -> zbus::Result<bool>;
 
-    /// CanPause property
+    /// `CanPause` property
     #[zbus(property)]
     fn can_pause(&self) -> zbus::Result<bool>;
 
-    /// CanPlay property
+    /// `CanPlay` property
     #[zbus(property)]
     fn can_play(&self) -> zbus::Result<bool>;
 
-    /// CanSeek property
+    /// `CanSeek` property
     #[zbus(property)]
     fn can_seek(&self) -> zbus::Result<bool>;
 
-    /// LoopStatus property
+    /// `LoopStatus` property
     #[zbus(property)]
     fn loop_status(&self) -> zbus::Result<String>;
     #[zbus(property)]
     fn set_loop_status(&self, value: &str) -> zbus::Result<()>;
 
-    /// MaximumRate property
+    /// `MaximumRate` property
     #[zbus(property)]
     fn maximum_rate(&self) -> zbus::Result<f64>;
 
@@ -100,11 +100,11 @@ pub trait Player {
         &self,
     ) -> zbus::Result<std::collections::HashMap<String, zbus::zvariant::OwnedValue>>;
 
-    /// MinimumRate property
+    /// `MinimumRate` property
     #[zbus(property)]
     fn minimum_rate(&self) -> zbus::Result<f64>;
 
-    /// PlaybackStatus property
+    /// `PlaybackStatus` property
     #[zbus(property)]
     fn playback_status(&self) -> zbus::Result<String>;
 

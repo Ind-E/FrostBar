@@ -3,14 +3,20 @@
 //
 // niri is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
-use iced::Subscription;
+use iced::{
+    Subscription,
+    advanced::subscription::{EventStream, Recipe, from_recipe},
+};
 use std::{
+    hash::Hash,
     io,
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::Message;
+use crate::{Message, utils::BoxStream};
 
 const POLLING_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -20,7 +26,7 @@ pub enum FileWatcherEvent {
     Missing,
 }
 
-pub struct FileWatcher {
+pub struct FileWatcherInner {
     path: PathBuf,
 
     last_props: Option<(SystemTime, PathBuf)>,
@@ -33,26 +39,51 @@ pub enum CheckResult {
     Changed,
 }
 
-pub fn watch_file(path: PathBuf) -> Subscription<Message> {
-    Subscription::run_with(path, |path| {
-        let path = path.clone();
-        async_stream::stream! {
-            let mut watcher = FileWatcher::new(path);
+struct FileWatcher {
+    path: PathBuf,
+}
 
+impl FileWatcher {
+    fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl Recipe for FileWatcher {
+    type Output = FileWatcherEvent;
+
+    fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
+        std::any::TypeId::of::<Self>().hash(state);
+    }
+
+    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
+            let mut watcher = FileWatcherInner::new(self.path);
             loop {
                 tokio::time::sleep(POLLING_INTERVAL).await;
 
-                match watcher.check() {
-                    CheckResult::Changed => yield FileWatcherEvent::Changed,
-                    CheckResult::Missing => yield FileWatcherEvent::Missing,
-                    CheckResult::Unchanged => {}
+                let event = match watcher.check() {
+                    CheckResult::Changed => Some(FileWatcherEvent::Changed),
+                    CheckResult::Missing => Some(FileWatcherEvent::Missing),
+                    CheckResult::Unchanged => None,
+                };
 
+                if let Some(event) = event
+                    && tx.send(event).is_err()
+                {
+                    break;
                 }
             }
+        });
 
-        }
-    })
-    .map(Message::FileWatcherEvent)
+        Box::pin(UnboundedReceiverStream::new(rx))
+    }
+}
+
+pub fn watch_file(path: PathBuf) -> Subscription<Message> {
+    from_recipe(FileWatcher::new(path)).map(Message::FileWatcherEvent)
 }
 
 fn see_path(path: &Path) -> io::Result<(SystemTime, PathBuf)> {
@@ -61,7 +92,7 @@ fn see_path(path: &Path) -> io::Result<(SystemTime, PathBuf)> {
     Ok((mtime, canon))
 }
 
-impl FileWatcher {
+impl FileWatcherInner {
     pub fn new(path: PathBuf) -> Self {
         let last_props = see_path(&path).ok();
         Self { path, last_props }

@@ -87,8 +87,7 @@ impl IconCache {
                     .ok()
                     .and_then(|path| load_icon_from_path(&path))
             })
-            .as_ref()
-            .cloned()
+            .clone()
     }
 }
 

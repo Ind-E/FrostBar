@@ -307,8 +307,7 @@ impl Bar {
             Message::NiriEvent(event) => self
                 .niri_service
                 .as_mut()
-                .map(|ns| ns.handle_event(event))
-                .unwrap_or_else(iced::Task::none),
+                .map_or_else(iced::Task::none, |ns| ns.handle_event(event)),
             Message::MouseEntered(event) => {
                 match event {
                     MouseEvent::Workspace(id) => {
@@ -333,7 +332,7 @@ impl Bar {
                             .iter_mut()
                             .for_each(|s| s.hovered_workspace_id = None);
                     }
-                };
+                }
 
                 Task::none()
             }
@@ -344,18 +343,15 @@ impl Bar {
             Message::CavaUpdate(event) => self
                 .cava_service
                 .as_mut()
-                .map(|cs| cs.handle_event(event))
-                .unwrap_or_else(iced::Task::none),
+                .map_or_else(iced::Task::none, |cs| cs.handle_event(event)),
             Message::CavaColorUpdate(gradient) => self
                 .cava_service
                 .as_mut()
-                .map(|cs| cs.update_gradient(gradient))
-                .unwrap_or_else(iced::Task::none),
+                .map_or_else(iced::Task::none, |cs| cs.update_gradient(gradient)),
             Message::MprisEvent(event) => self
                 .mpris_service
                 .as_mut()
-                .map(|ms| ms.handle_event(event))
-                .unwrap_or_else(iced::Task::none),
+                .map_or_else(iced::Task::none, |ms| ms.handle_event(event)),
             Message::PlayPause(player) => Task::perform(
                 async {
                     if let Ok(connection) = Connection::session().await

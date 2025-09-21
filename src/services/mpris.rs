@@ -4,15 +4,15 @@ use iced::{
     widget::image,
 };
 use std::collections::HashMap;
+use tokio::sync::mpsc;
+use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use tracing::{debug, error};
 
 use crate::{
-    Message,
-    dbus_proxy::PlayerProxy,
-    icon_cache::MprisArtCache,
-    services::{EventStream, Service},
+    Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache, services::Service,
+    utils::BoxStream,
 };
 
 pub struct MprisService {
@@ -24,7 +24,9 @@ impl Service for MprisService {
     #[tracing::instrument]
     fn subscription() -> iced::Subscription<Message> {
         Subscription::run(|| {
-         async_stream::stream! {
+        let (yield_tx, yield_rx) = mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {
@@ -40,16 +42,20 @@ impl Service for MprisService {
             "org.freedesktop.DBus",
             ).await.unwrap();
 
-            let mut player_streams = select_all(Vec::new());
+            let mut player_streams = StreamMap::new();
+                // select_all(Vec::new());
 
             if let Ok(names) = dbus_proxy.call_method("ListNames", &()).await &&
                 let Ok(names) = names.body().deserialize::<Vec<String>>() {
                 for name in names {
+                    let name1 = name.clone();
                     if name.starts_with(MPRIS_PREFIX) {
-                        yield get_initial_player_state(&connection, &name).await;
+                        if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
+                            error!("{e}");
+                        }
 
                         if let Ok(stream) = create_player_stream(&connection, name).await {
-                            player_streams.push(stream);
+                            player_streams.insert(name1, stream);
                         }
                     }
                 }
@@ -60,26 +66,35 @@ impl Service for MprisService {
             loop {
                 futures::select! {
                     signal = name_owner_stream.next().fuse() => {
-                        // debug!("name owner event");
                         if let Some(signal) = signal
                             && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>()
                             && name.starts_with(MPRIS_PREFIX)
                         {
                             if !new.is_empty() && old.is_empty() {
-                                yield get_initial_player_state(&connection, &name).await;
-                                if let Ok(stream) = create_player_stream(&connection, name).await {
-                                    player_streams.push(stream);
+                                if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
+                                    error!("{e}");
                                 }
-                            } else if new.is_empty() && !old.is_empty() {
-                                yield MprisEvent::PlayerVanished { name };
-                            }
+
+                                let name1 = name.clone();
+                                if let Ok(stream) = create_player_stream(&connection, name).await {
+                                    player_streams.insert(name1, stream);
+                                }
+                            } else if new.is_empty() && !old.is_empty()
+                                && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { name }) {
+                                    error!("{e}");
+                                }
                         }
                     },
 
                     event_result = player_streams.next().fuse() => {
-                        // debug!("player stream event");
-                        if let Some(Ok(event)) = event_result {
-                            yield event;
+                        if let Some((pname, Ok(event))) = event_result {
+                            if let MprisEvent::PlayerVanished {ref name} = event
+                                &&  *name == pname {
+                                    player_streams.remove(&pname);
+                                }
+                            if let Err(e) = yield_tx.send(event) {
+                                error!("{e}");
+                            }
                         }
                     }
 
@@ -89,7 +104,12 @@ impl Service for MprisService {
                     },
                 }
             }
-        }
+
+        });
+
+        UnboundedReceiverStream::new(yield_rx)
+
+
         }).map(Message::MprisEvent)
     }
 
@@ -264,9 +284,9 @@ async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisE
 async fn create_player_stream(
     connection: &Connection,
     name: String,
-) -> Result<EventStream<MprisEvent, zbus::Error>, zbus::Error> {
+) -> Result<BoxStream<Result<MprisEvent, zbus::Error>>, zbus::Error> {
     let player_proxy = PlayerProxy::new(connection, name.clone()).await?;
-    let mut streams: Vec<EventStream<MprisEvent, zbus::Error>> = vec![];
+    let mut streams: Vec<BoxStream<Result<MprisEvent, zbus::Error>>> = vec![];
     {
         let name = name.clone();
         let playback_stream = player_proxy

@@ -9,14 +9,17 @@ use crate::{
 };
 use iced::{
     Element, Size,
+    futures::Stream,
     mouse::ScrollDelta,
     widget::MouseArea,
     window::settings::{
         Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
     },
 };
-use std::fmt;
+use std::{fmt, pin::Pin};
 use tracing_subscriber::EnvFilter;
+
+pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
 pub fn handle_module(
     module: Module,

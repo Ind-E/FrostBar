@@ -19,7 +19,6 @@ pub struct BatteryView {
 impl<'a> BatteryView {
     pub fn view(&self, service: &BatteryService) -> Element<'a, Message> {
         if service.batteries.is_empty() {
-            warn!("No batteries found to display");
             return Text::new("?").size(self.config.overlay_icon_size).into();
         }
 

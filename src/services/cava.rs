@@ -1,14 +1,19 @@
-use iced::{Color, Subscription};
+use iced::{
+    Color,
+    advanced::subscription::{EventStream, Recipe, from_recipe},
+};
 use std::{
     env::temp_dir,
     fs,
+    hash::Hash,
     io::{self, BufRead},
     process::{Command, Stdio},
-    thread,
 };
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
-use crate::{Message, services::Service};
+use crate::{Message, services::Service, utils::BoxStream};
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CavaError {
@@ -40,55 +45,64 @@ pub struct CavaService {
     pub colors: Vec<Color>,
 }
 
-impl Service for CavaService {
-    fn subscription() -> iced::Subscription<Message> {
-        Subscription::run(|| {
-            async_stream::stream! {
-                let (tx, rx) = async_channel::unbounded::<Result<String, CavaError>>();
+struct CavaSubscriptionRecipe {}
 
-                let config_path = write_temp_cava_config().unwrap().display().to_string();
+impl Recipe for CavaSubscriptionRecipe {
+    type Output = Result<String, CavaError>;
 
-                thread::spawn(move || {
-                    let mut command = match Command::new("cava")
-                        .arg("-p")
-                        .arg(&config_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::null())
-                        .spawn()
-                    {
-                        Ok(cmd) => cmd,
-                        Err(e) => {
-                            let _ = tx.send_blocking(Err(CavaError::CommandFailed(e.to_string())));
-                            return;
-                        }
-                    };
+    fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
+        std::any::TypeId::of::<Self>().hash(state);
+    }
 
-                    let Some(stdout) = command.stdout.take() else {
-                        let _ = tx.send_blocking(Err(CavaError::PipeFailed));
-                        return;
-                    };
+    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
+        let (tx, rx) = mpsc::channel::<Result<String, CavaError>>(128);
 
-                    let reader = io::BufReader::new(stdout);
+        let config_path = write_temp_cava_config().unwrap().display().to_string();
 
-                    for line in reader.lines() {
-                        match line {
-                            Ok(line_str) => {
-                                if tx.send_blocking(Ok(line_str)).is_err() {
-                                    break;
-                                }
-                            }
-                            Err(_) => break,
+        tokio::task::spawn_blocking(move || {
+            let mut command = match Command::new("cava")
+                .arg("-p")
+                .arg(&config_path)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+            {
+                Ok(cmd) => cmd,
+                Err(e) => {
+                    let _ =
+                        tx.blocking_send(Err(CavaError::CommandFailed(e.to_string())));
+                    return;
+                }
+            };
+
+            let Some(stdout) = command.stdout.take() else {
+                let _ = tx.blocking_send(Err(CavaError::PipeFailed));
+                return;
+            };
+
+            let reader = io::BufReader::new(stdout);
+
+            for line in reader.lines() {
+                match line {
+                    Ok(line_str) => {
+                        if tx.blocking_send(Ok(line_str)).is_err() {
+                            break;
                         }
                     }
-
-                    let _ = command.kill();
-                });
-
-                while let Ok(result) = rx.recv().await {
-                    yield result;
+                    Err(_) => break,
                 }
             }
-        }).map(Message::CavaUpdate)
+
+            let _ = command.kill();
+        });
+
+        Box::pin(ReceiverStream::new(rx))
+    }
+}
+
+impl Service for CavaService {
+    fn subscription() -> iced::Subscription<Message> {
+        from_recipe(CavaSubscriptionRecipe {}).map(Message::CavaUpdate)
     }
 
     type Event = Result<String, CavaError>;

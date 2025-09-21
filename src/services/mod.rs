@@ -1,5 +1,4 @@
-use iced::{Subscription, futures::Stream};
-use std::pin::Pin;
+use iced::Subscription;
 
 use crate::Message;
 
@@ -9,8 +8,6 @@ pub mod mpris;
 pub mod niri;
 // pub mod systray;
 pub mod time;
-
-pub type EventStream<T, E> = Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>;
 
 pub trait Service {
     fn subscription() -> Subscription<Message>;
