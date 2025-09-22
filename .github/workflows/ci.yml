@@ -17,9 +17,14 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+          
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+        working-directory: docs/
 
       - name: Generate docs
         run: uv run mkdocs build
+        working-directory: docs/
         
       - name: Deploy docs
         uses: peaceiris/actions-gh-pages@v4
