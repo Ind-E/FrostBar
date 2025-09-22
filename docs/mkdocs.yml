@@ -1,0 +1,16 @@
+site_name: FrostBar
+docs_dir: wiki
+site_url: https://ind-e.github.io/FrostBar/
+repo_url: https://github.com/Ind-E/FrostBar
+edit_uri: edit/main/docs/wiki/
+
+
+theme:
+  name: material
+  features:
+    - naviagtion.instant
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+  plugins:
+    - search
