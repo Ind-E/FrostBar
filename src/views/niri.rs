@@ -11,8 +11,7 @@ use iced::{
 };
 
 use itertools::Itertools;
-use niri_ipc::{Action, WindowLayout, WorkspaceReferenceArg};
-use std::cmp::Ordering;
+use niri_ipc::{Action, WorkspaceReferenceArg};
 
 use crate::{
     Message, MouseEvent, config,
@@ -21,31 +20,6 @@ use crate::{
     style::{styled_tooltip, workspace_style},
     views::BarPosition,
 };
-
-#[derive(Debug, Eq, PartialEq)]
-enum Layout {
-    Floating,
-    Scrolling(usize, usize),
-}
-
-impl PartialOrd for Layout {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Layout {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (Layout::Floating, Layout::Floating) => Ordering::Equal,
-            (Layout::Floating, Layout::Scrolling(_, _)) => Ordering::Less,
-            (Layout::Scrolling(_, _), Layout::Floating) => Ordering::Greater,
-            (Layout::Scrolling(r1, c1), Layout::Scrolling(r2, c2)) => {
-                r1.cmp(r2).then_with(|| c1.cmp(c2))
-            }
-        }
-    }
-}
 
 #[derive(Debug, Eq, PartialEq)]
 struct WindowView<'a> {
@@ -133,14 +107,6 @@ impl<'a> WorkspaceView<'a> {
             .interaction(Interaction::Pointer),
         )
         .into()
-    }
-}
-
-impl From<WindowLayout> for Layout {
-    fn from(layout: WindowLayout) -> Self {
-        layout
-            .pos_in_scrolling_layout
-            .map_or(Layout::Floating, |l| Layout::Scrolling(l.0, l.1))
     }
 }
 

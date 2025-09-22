@@ -264,3 +264,4 @@ impl fmt::Display for CommandSpec {
         }
     }
 }
+

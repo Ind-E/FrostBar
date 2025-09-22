@@ -1,10 +1,9 @@
-use iced::{Subscription, futures::Stream};
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
+use iced::{
+    Subscription,
+    futures::{self, FutureExt},
 };
-use tokio::sync::mpsc::{self, Sender};
-use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
+use tokio::sync::mpsc::{self};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
 use std::{
@@ -17,6 +16,7 @@ use tracing::error;
 use crate::{
     Message,
     icon_cache::{Icon, IconCache},
+    services::Service,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -108,78 +108,59 @@ pub struct NiriService {
     pub sender: Option<mpsc::Sender<Request>>,
 }
 
-struct NiriStream {
-    request_stream: ReceiverStream<niri_ipc::Request>,
-    event_stream: UnboundedReceiverStream<niri_ipc::Event>,
-    request_tx: Option<Sender<niri_ipc::Request>>,
-    socket: Socket,
-}
+impl Service for NiriService {
+    fn subscription() -> Subscription<Message> {
+        Subscription::run(|| {
+            let (yield_tx, yield_rx) = mpsc::unbounded_channel();
 
-impl NiriStream {
-    fn new() -> Self {
-        let (request_tx, request_rx) = mpsc::channel(32);
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+            let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+            std::thread::spawn(move || {
+                run_event_listener(event_tx);
+            });
 
-        std::thread::spawn(move || {
-            run_event_listener(event_tx);
-        });
+            let (request_tx, mut request_rx) = mpsc::channel(32);
 
-        let socket = Socket::connect().unwrap();
+            let mut socket = Socket::connect().unwrap();
 
-        Self {
-            request_tx: Some(request_tx),
-            request_stream: ReceiverStream::new(request_rx),
-            event_stream: UnboundedReceiverStream::new(event_rx),
-            socket,
-        }
-    }
-}
-
-impl Stream for NiriStream {
-    type Item = NiriEvent;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        if let Some(tx) = self.request_tx.take() {
-            return Poll::Ready(Some(NiriEvent::Ready(tx)));
-        }
-
-        match Pin::new(&mut self.request_stream).poll_next(cx) {
-            Poll::Ready(Some(request)) => {
-                if let Err(e) = self.socket.send(request) {
-                    error!("Failed to send niri request: {e}");
+            tokio::spawn(async move {
+                if let Err(e) = yield_tx.send(NiriEvent::Ready(request_tx)) {
+                    error!("{e}");
                 }
-            }
-            Poll::Ready(Option::None) => {
-                error!("Niri request stream closed unexpectedly");
-                return Poll::Ready(None);
-            }
-            Poll::Pending => {}
-        }
+                loop {
+                    futures::select! {
+                        event = event_rx.recv().fuse() => {
+                            if let Some(event) = event {
+                                if let Err(e) = yield_tx.send(NiriEvent::Event(event)) {
+                                    error!("{e}");
+                                }
+                            } else {
+                                break;
+                            }
+                        },
 
-        match Pin::new(&mut self.event_stream).poll_next(cx) {
-            Poll::Ready(Some(event)) => {
-                return Poll::Ready(Some(NiriEvent::Event(event)));
-            }
-            Poll::Ready(Option::None) => {
-                error!("Niri event stream closed unexpectedly");
-                return Poll::Ready(None);
-            }
-            Poll::Pending => {}
-        }
+                        request = request_rx.recv().fuse() => {
+                            if let Some(request) = request {
+                                if let Err(e) = socket.send(request) {
+                                    error!("Failed to send request to niri socket: {e}");
+                                }
+                            } else {
+                                break;
+                            }
+                        },
 
-        Poll::Pending
+                        complete => break
+
+                    }
+                }
+            });
+
+            UnboundedReceiverStream::new(yield_rx)
+        })
+        .map(Message::NiriEvent)
     }
-}
 
-impl NiriService {
-    pub fn subscription() -> iced::Subscription<Message> {
-        Subscription::run(NiriStream::new).map(Message::NiriEvent)
-    }
-
-    pub fn handle_event(&mut self, event: NiriEvent) -> iced::Task<Message> {
+    type Event = NiriEvent;
+    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
         match event {
             NiriEvent::Ready(sender) => {
                 self.sender = Some(sender);

@@ -43,7 +43,6 @@ impl Service for MprisService {
             ).await.unwrap();
 
             let mut player_streams = StreamMap::new();
-                // select_all(Vec::new());
 
             if let Ok(names) = dbus_proxy.call_method("ListNames", &()).await &&
                 let Ok(names) = names.body().deserialize::<Vec<String>>() {

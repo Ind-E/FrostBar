@@ -78,6 +78,8 @@
               xorg.libXi
               xorg.libXrandr
               vulkan-loader
+
+              python313Packages.mkdocs-material
             ];
 
             shellHook = ''
