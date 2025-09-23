@@ -8,12 +8,30 @@ one will be created with the contents of the [default configuration
 file](https://github.com/Ind-E/FrostBar/blob/main/assets/default-config.kdl).
 
 The config file is live-reloaded. Whenever the file is saved, changes will
-automatically be applied. If the config file fails to parse, A notification
+automatically be applied. If the config file fails to parse, a notification
 will be sent.
 
 ### Syntax
 
 The config is written in [KDL](https://kdl.dev).
+
+(Neo)Vim and Helix come with KDL syntax highlighting by default.
+VSCode users can install the [KDL
+Extension](https://marketplace.visualstudio.com/items?itemName=kdl-org.kdl).
+
+#### Comments
+
+Lines starting with `//` are comments; they are ignored.
+
+Sections starting with `/-` are commented out; Everything in that section is
+ignored.
+
+```kdl
+/-time {
+    // Everything inside here is ignored.
+    format "%H\n%M"
+}
+```
 
 #### Colors
 
@@ -36,20 +54,6 @@ battery {
 
     // As RGB only (alpha defaults to 1.0)
     charging-color 115 244 170
-}
-```
-
-#### Comments
-
-Lines starting with `//` are comments; they are ignored.
-
-
-Also, you can put `/-` in front of a section to comment out the entire section:
-
-```kdl
-/-time {
-    // Everything inside here is ignored.
-    format "%H\n%M"
 }
 ```
 

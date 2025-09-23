@@ -21,6 +21,8 @@ pub struct Config {
     #[knuffel(child, default)]
     pub layout: Layout,
     #[knuffel(child, default)]
+    pub style: Style,
+    #[knuffel(child, default)]
     pub start: Start,
     #[knuffel(child, default)]
     pub middle: Middle,
@@ -46,22 +48,33 @@ pub struct End {
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, PartialEq, Eq)]
+#[derive(knuffel::Decode, Debug, Clone, PartialEq)]
 pub struct Layout {
     #[knuffel(child, unwrap(argument), default = 42)]
     pub width: u32,
     #[knuffel(child, unwrap(argument), default = 0)]
     pub gaps: i32,
-    #[knuffel(child, unwrap(argument), default = 0)]
-    pub border_radius: u16,
 }
 
 impl Default for Layout {
     fn default() -> Self {
+        Self { width: 42, gaps: 3 }
+    }
+}
+
+#[derive(knuffel::Decode, Debug, Clone)]
+pub struct Style {
+    #[knuffel(child, unwrap(argument), default = 0)]
+    pub border_radius: u16,
+    #[knuffel(child, default = Self::default().background)]
+    pub background: ConfigColor,
+}
+
+impl Default for Style {
+    fn default() -> Self {
         Self {
-            width: 42,
-            gaps: 3,
             border_radius: 0,
+            background: Color::from_rgb(0.0, 0.0, 0.0).into(),
         }
     }
 }
@@ -256,7 +269,7 @@ impl Config {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfigColor {
     inner: Color,
 }

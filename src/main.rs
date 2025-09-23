@@ -459,7 +459,7 @@ impl Bar {
                     self.niri_views
                         .iter()
                         .filter(|v| v.position.align == *pos)
-                        .map(|v| (v.view(service, &self.config.layout), v.position.idx)),
+                        .map(|v| (v.view(service, &self.config.style), v.position.idx)),
                 );
             }
         }
@@ -520,8 +520,8 @@ impl Bar {
             .width(Length::Fixed(self.config.layout.width as f32))
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
-                border: rounded(self.config.layout.border_radius),
+                background: Some(Background::Color(*self.config.style.background)),
+                border: rounded(self.config.style.border_radius),
                 ..Default::default()
             });
 

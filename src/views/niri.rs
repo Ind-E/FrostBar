@@ -75,7 +75,7 @@ impl<'a> WorkspaceView<'a> {
     fn view(
         &self,
         hovered: bool,
-        layout: &config::Layout,
+        style: &config::Style,
         offset: i8,
     ) -> Element<'a, Message> {
         Container::new(
@@ -92,7 +92,7 @@ impl<'a> WorkspaceView<'a> {
                 .style(workspace_style(
                     self.workspace.is_active,
                     hovered,
-                    layout.border_radius,
+                    style.border_radius,
                 ))
                 .padding(top(5).bottom(5))
                 .width(Length::Fill)
@@ -130,7 +130,7 @@ impl<'a> NiriView {
     pub fn view(
         &self,
         service: &'a NiriService,
-        layout: &config::Layout,
+        style: &config::Style,
     ) -> Element<'a, Message> {
         let ws = service
             .workspaces
@@ -139,7 +139,7 @@ impl<'a> NiriView {
             .fold(Column::new(), |col, (_, ws)| {
                 col.push(<&Workspace as Into<WorkspaceView>>::into(ws).view(
                     service.hovered_workspace_id.is_some_and(|id| id == ws.id),
-                    layout,
+                    style,
                     self.config.workspace_offset,
                 ))
             })
