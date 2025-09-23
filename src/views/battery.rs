@@ -1,5 +1,5 @@
 use iced::{
-    Color, Element, Length,
+    Element, Length,
     widget::{Container, Text, container},
 };
 use tracing::warn;

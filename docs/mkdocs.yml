@@ -4,6 +4,7 @@ site_url: https://ind-e.github.io/FrostBar/
 repo_url: https://github.com/Ind-E/FrostBar
 edit_uri: edit/main/docs/wiki/
 
+strict: true
 
 theme:
   name: material
@@ -30,5 +31,21 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to system preference
-  plugins:
-    - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.magiclink
+  - toc:
+      permalink: '#'
+
+plugins:
+  - search
+
+not_in_nav:
+  index.md

@@ -1,9 +1,13 @@
 [project]
 name = "frostbar"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "mkdocs-material>=9.6.20",
+    "pygments",
 ]
+
+# for KDL highlighting support
+# TODO: use the official pygments package once https://github.com/pygments/pygments/pull/2936 is merged
+[tool.uv.sources]
+pygments = { git = "https://github.com/chinatsu/pygments", rev = "0f0b0d4da2839e1285881389155bb4605a0a6dc4" }

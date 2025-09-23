@@ -295,7 +295,7 @@ struct ColorRgba {
     #[knuffel(argument)]
     b: u8,
     #[knuffel(argument)]
-    a: f32,
+    a: Option<f32>,
 }
 
 impl<S> knuffel::Decode<S> for ConfigColor
@@ -340,7 +340,13 @@ where
             // Otherwise, fall back to the 4-argument RGBA form.
             _ => {
                 return ColorRgba::decode_node(node, ctx).map(
-                    |ColorRgba { r, g, b, a }| Color::from_rgba8(r, g, b, a).into(),
+                    |ColorRgba { r, g, b, a }| {
+                        if let Some(a) = a {
+                            Color::from_rgba8(r, g, b, a).into()
+                        } else {
+                            Color::from_rgb8(r, g, b).into()
+                        }
+                    },
                 );
             }
         }?;

@@ -1,2 +1,1 @@
-# FrostBar
-
+# About
