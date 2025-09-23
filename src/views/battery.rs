@@ -1,6 +1,6 @@
 use iced::{
-    Element, Length, Padding,
-    widget::{Container, Text, container, stack},
+    Color, Element, Length,
+    widget::{Container, Text, container},
 };
 use tracing::warn;
 
@@ -19,7 +19,7 @@ pub struct BatteryView {
 impl<'a> BatteryView {
     pub fn view(&self, service: &BatteryService) -> Element<'a, Message> {
         if service.batteries.is_empty() {
-            return Text::new("?").size(self.config.overlay_icon_size).into();
+            return Text::new("?").size(self.config.icon_size).into();
         }
 
         let total_percentage: f32 = service.batteries.iter().map(|b| b.percentage).sum();
@@ -31,25 +31,17 @@ impl<'a> BatteryView {
             !matches!(b.state, battery::State::Discharging | battery::State::Empty)
         });
 
-        let icon_widget = Container::new(Text::new(icon).size(self.config.icon_size))
+        let icon_text = if is_charging {
+            Text::new(icon)
+                .size(self.config.icon_size)
+                .color(&self.config.charging_color)
+        } else {
+            Text::new(icon).size(self.config.icon_size)
+        };
+
+        let icon_widget = Container::new(icon_text)
             .center_x(Length::Fill)
             .id(self.id.clone());
-
-        let content: Element<'a, Message> = if is_charging {
-            let charging_overlay =
-                Container::new(Text::new("󱐋").size(self.config.overlay_icon_size))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .padding(Padding {
-                        top: 7.0,
-                        left: 27.0,
-                        right: 0.0,
-                        bottom: 0.0,
-                    });
-            stack![icon_widget, charging_overlay].into()
-        } else {
-            icon_widget.into()
-        };
 
         let tooltip = Text::new(
             service
@@ -68,7 +60,7 @@ impl<'a> BatteryView {
                 .join("\n"),
         );
 
-        styled_tooltip(content, tooltip)
+        styled_tooltip(icon_widget, tooltip)
     }
 }
 

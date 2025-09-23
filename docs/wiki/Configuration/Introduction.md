@@ -15,6 +15,10 @@ notification about it.
 
 The config is written in [KDL](https://kdl.dev).
 
+### Colors
+
+Colors can be of the form `#rrggbb`, `#rrggbbaa`, `#rgb`, or `#rgba`
+
 #### Comments
 
 Lines starting with `//` are comments; they are ignored.

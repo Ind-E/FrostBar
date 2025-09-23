@@ -142,9 +142,9 @@ pub fn init_tracing() {
         .init();
 }
 
-pub fn open_window(config: &Config) -> (iced::window::Id, iced::Task<Message>) {
+pub fn open_window(layout: &config::Layout) -> (iced::window::Id, iced::Task<Message>) {
     let (id, open_task) = iced::window::open(iced::window::Settings {
-        size: Size::new(config.layout.width as f32, 0.0),
+        size: Size::new(layout.width as f32, 0.0),
         decorations: false,
         resizable: false,
         minimizable: false,
@@ -153,14 +153,11 @@ pub fn open_window(config: &Config) -> (iced::window::Id, iced::Task<Message>) {
             layer_shell: LayerShellSettings {
                 layer: Some(Layer::Top),
                 anchor: Some(Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT),
-                exclusive_zone: Some(config.layout.width as i32),
-                margin: Some((
-                    config.layout.gaps,
-                    config.layout.gaps,
-                    config.layout.gaps,
-                    config.layout.gaps,
-                )),
-                input_region: Some((0, 0, config.layout.width as i32, 1200)),
+                exclusive_zone: Some(layout.width as i32 + layout.gaps),
+                // no right gaps because right edge of the layer surface is actually the right edge
+                // of the screen. Instead, increase the exclusive zone to emulate gaps
+                margin: Some((layout.gaps, 0, layout.gaps, layout.gaps)),
+                input_region: Some((0, 0, layout.width as i32, 1200)),
                 keyboard_interactivity: Some(KeyboardInteractivity::None),
                 namespace: Some(String::from(BAR_NAMESPACE)),
                 ..Default::default()
@@ -264,4 +261,3 @@ impl fmt::Display for CommandSpec {
         }
     }
 }
-

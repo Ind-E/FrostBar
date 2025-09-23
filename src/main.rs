@@ -171,7 +171,7 @@ impl Bar {
             &mut label_views,
         );
 
-        let (id, open_task) = open_window(&config);
+        let (id, open_task) = open_window(&config.layout);
 
         let bar = Self {
             id,
@@ -254,7 +254,7 @@ impl Bar {
                             } else {
                                 self.config = config;
                                 let close = iced::window::close(self.id);
-                                let (id, open) = open_window(&self.config);
+                                let (id, open) = open_window(&self.config.layout);
                                 self.id = id;
                                 return Task::batch([close, open]);
                             }

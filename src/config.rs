@@ -1,14 +1,18 @@
+use iced::color;
 use std::{
     ffi::OsStr,
     fs::{self, File},
     io::Write,
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
 
 use directories::ProjectDirs;
+use iced::Color;
+use knuffel::errors::DecodeError;
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
-use tracing::{debug, error};
+use tracing::{error, info};
 
 use crate::constants::BAR_NAMESPACE;
 
@@ -46,7 +50,7 @@ pub struct End {
 pub struct Layout {
     #[knuffel(child, unwrap(argument), default = 42)]
     pub width: u32,
-    #[knuffel(child, unwrap(argument), default = 3)]
+    #[knuffel(child, unwrap(argument), default = 0)]
     pub gaps: i32,
     #[knuffel(child, unwrap(argument), default = 0)]
     pub border_radius: u16,
@@ -84,10 +88,19 @@ pub struct Cava {
 
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Battery {
-    #[knuffel(child, unwrap(argument), default = 22)]
+    #[knuffel(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
-    #[knuffel(child, unwrap(argument), default = 13)]
-    pub overlay_icon_size: u32,
+    #[knuffel(child, default = Self::default().charging_color)]
+    pub charging_color: ConfigColor,
+}
+
+impl Default for Battery {
+    fn default() -> Self {
+        Self {
+            icon_size: 22,
+            charging_color: color!(0x73F5AB).into(),
+        }
+    }
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
@@ -166,7 +179,7 @@ impl Config {
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knuffel::parse::<Config>(filename, text) {
             Ok(config) => {
-                debug!("Successfully parsed config");
+                info!("Successfully parsed config");
                 Ok(config)
             }
             Err(e) => Err(miette::Report::new(e)),
@@ -240,5 +253,123 @@ impl Config {
         };
 
         (config, config_path)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfigColor {
+    inner: Color,
+}
+
+impl Deref for ConfigColor {
+    type Target = Color;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for ConfigColor {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl Into<Color> for &ConfigColor {
+    fn into(self) -> Color {
+        self.inner
+    }
+}
+
+impl From<Color> for ConfigColor {
+    fn from(inner: Color) -> Self {
+        Self { inner }
+    }
+}
+
+#[derive(knuffel::Decode)]
+struct ColorRgba {
+    #[knuffel(argument)]
+    r: u8,
+    #[knuffel(argument)]
+    g: u8,
+    #[knuffel(argument)]
+    b: u8,
+    #[knuffel(argument)]
+    a: f32,
+}
+
+impl<S> knuffel::Decode<S> for ConfigColor
+where
+    S: knuffel::traits::ErrorSpan,
+{
+    fn decode_node(
+        node: &knuffel::ast::SpannedNode<S>,
+        ctx: &mut knuffel::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        // Check for unexpected type name.
+        if let Some(type_name) = &node.type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+
+        // Get the first argument.
+        let mut iter_args = node.arguments.iter();
+        let val = iter_args.next().ok_or_else(|| {
+            DecodeError::missing(node, "additional argument is required")
+        })?;
+
+        // Check for unexpected type name.
+        if let Some(typ) = &val.type_name {
+            ctx.emit_error(DecodeError::TypeName {
+                span: typ.span().clone(),
+                found: Some((**typ).clone()),
+                expected: knuffel::errors::ExpectedType::no_type(),
+                rust_type: "str",
+            });
+        }
+
+        // Check the argument type.
+        let rv = match *val.literal {
+            // If it's a string, use parse.
+            knuffel::ast::Literal::String(ref s) => Color::parse(s).ok_or_else(|| {
+                DecodeError::conversion(&val.literal, "invalid hex literal")
+            }),
+            // Otherwise, fall back to the 4-argument RGBA form.
+            _ => {
+                return ColorRgba::decode_node(node, ctx).map(
+                    |ColorRgba { r, g, b, a }| Color::from_rgba8(r, g, b, a).into(),
+                );
+            }
+        }?;
+
+        // Check for unexpected following arguments.
+        if let Some(val) = iter_args.next() {
+            ctx.emit_error(DecodeError::unexpected(
+                &val.literal,
+                "argument",
+                "unexpected argument",
+            ));
+        }
+
+        // Check for unexpected properties and children.
+        for name in node.properties.keys() {
+            ctx.emit_error(DecodeError::unexpected(
+                name,
+                "property",
+                format!("unexpected property `{}`", name.escape_default()),
+            ));
+        }
+        for child in node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]) {
+            ctx.emit_error(DecodeError::unexpected(
+                child,
+                "node",
+                format!("unexpected node `{}`", child.node_name.escape_default()),
+            ));
+        }
+
+        Ok(rv.into())
     }
 }
