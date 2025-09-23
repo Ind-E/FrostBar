@@ -5,13 +5,7 @@ use tracing::{info, warn};
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    Background, Color, Element, Event, Length, Settings, Subscription, Task, Theme,
-    advanced::mouse,
-    alignment::{Horizontal, Vertical},
-    border::rounded,
-    event, theme,
-    widget::{Column, Container, container, stack},
-    window::Id,
+    advanced::mouse, alignment::{Horizontal, Vertical}, border::rounded, event, theme, widget::{container, stack, Column, Container}, window::Id, Background, Color, Element, Event, Length, Pixels, Settings, Subscription, Task, Theme
 };
 use notify_rust::Notification;
 use std::{
@@ -73,9 +67,11 @@ pub fn main() -> iced::Result {
     .title(Bar::title)
     .theme(Bar::theme)
     .settings(Settings {
+        id: Some(BAR_NAMESPACE.to_string()),
         fonts: vec![FIRA_CODE_BYTES.into()],
         default_font: FIRA_CODE,
-        antialiasing: false,
+        default_text_size: Pixels(16.0),
+        antialiasing: true,
         ..Default::default()
     })
     .run()
