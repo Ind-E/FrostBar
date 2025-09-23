@@ -305,6 +305,7 @@ impl NiriService {
             } => {}
             Event::KeyboardLayoutSwitched { idx: _ } => {}
             Event::OverviewOpenedOrClosed { is_open: _ } => {}
+            Event::ConfigLoaded { failed: _ } => {}
         }
         iced::Task::none()
     }
