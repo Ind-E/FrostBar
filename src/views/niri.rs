@@ -72,7 +72,12 @@ impl<'a> From<&'a Workspace> for WorkspaceView<'a> {
 }
 
 impl<'a> WorkspaceView<'a> {
-    fn view(&self, hovered: bool, layout: &config::Layout) -> Element<'a, Message> {
+    fn view(
+        &self,
+        hovered: bool,
+        layout: &config::Layout,
+        offset: i8,
+    ) -> Element<'a, Message> {
         Container::new(
             MouseArea::new(
                 Container::new(
@@ -80,7 +85,7 @@ impl<'a> WorkspaceView<'a> {
                         Column::new()
                             .align_x(Horizontal::Center)
                             .spacing(5)
-                            .push(Text::new(self.workspace.idx - 1).size(20)),
+                            .push(Text::new(self.workspace.idx as i8 + offset).size(20)),
                         |col, w| col.push(<&Window as Into<WindowView>>::into(w).view()),
                     ),
                 )
@@ -135,6 +140,7 @@ impl<'a> NiriView {
                 col.push(<&Workspace as Into<WorkspaceView>>::into(ws).view(
                     service.hovered_workspace_id.is_some_and(|id| id == ws.id),
                     layout,
+                    self.config.workspace_offset,
                 ))
             })
             .align_x(Horizontal::Center)

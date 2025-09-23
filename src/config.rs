@@ -108,6 +108,8 @@ pub struct Mpris {
 pub struct Niri {
     #[knuffel(child, unwrap(argument), default = 10)]
     pub spacing: u32,
+    #[knuffel(child, unwrap(argument), default = 0)]
+    pub workspace_offset: i8,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
