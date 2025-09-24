@@ -65,7 +65,6 @@ impl Service for MprisService {
             loop {
                 futures::select! {
                     signal = name_owner_stream.next() => {
-                        debug!("name owner event");
                         if let Some(signal) = signal
                             && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>()
                             && name.starts_with(MPRIS_PREFIX)
@@ -87,7 +86,6 @@ impl Service for MprisService {
                     },
 
                     event_result = player_streams.next().fuse() => {
-                        debug!("player event");
                         if let Some((pname, Ok(event))) = event_result {
                             if let MprisEvent::PlayerVanished {ref name} = event
                                 &&  *name == pname {

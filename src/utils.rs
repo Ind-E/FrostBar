@@ -126,13 +126,12 @@ pub fn process_modules(
 }
 
 pub fn init_tracing() {
-    let default_level = if cfg!(debug_assertions) {
-        "debug"
-    } else {
-        "info"
-    };
+    let debug = cfg!(debug_assertions);
+    let default_level = if debug { "debug" } else { "info" };
 
     tracing_subscriber::fmt()
+        .compact()
+        .with_writer(std::io::stderr)
         .with_env_filter(
             EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| EnvFilter::new(default_level)),
@@ -140,7 +139,9 @@ pub fn init_tracing() {
         .with_timer(tracing_subscriber::fmt::time::ChronoLocal::new(
             "%H:%M:%S".to_string(),
         ))
-        .with_line_number(true)
+        .with_line_number(debug)
+        .with_file(debug)
+        .with_target(false)
         .init();
 }
 

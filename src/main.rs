@@ -378,7 +378,7 @@ impl Bar {
                 |()| Message::NoOp,
             ),
             Message::Command(cmd) => {
-                info!("Command: {cmd}");
+                info!("{cmd}");
                 Task::future(async move {
                     let mut command = TokioCommand::new(cmd.command);
                     if let Some(args) = cmd.args {
