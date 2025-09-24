@@ -5,7 +5,14 @@ use tracing::{info, warn};
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    advanced::mouse, alignment::{Horizontal, Vertical}, border::rounded, event, theme, widget::{container, stack, Column, Container}, window::Id, Background, Color, Element, Event, Length, Pixels, Settings, Subscription, Task, Theme
+    Background, Color, Element, Event, Length, Pixels, Settings, Subscription, Task,
+    Theme,
+    advanced::mouse,
+    alignment::{Horizontal, Vertical},
+    border::rounded,
+    event, theme,
+    widget::{Column, Container, container, stack},
+    window::Id,
 };
 use notify_rust::Notification;
 use std::{
@@ -17,7 +24,7 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::Config,
+    config::{Config, MediaControl},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     file_watcher::{FileWatcherEvent, watch_file},
@@ -101,9 +108,7 @@ pub enum Message {
     CavaColorUpdate(Option<Vec<Color>>),
 
     MprisEvent(MprisEvent),
-    PlayPause(String),
-    NextSong(String),
-    StopPlayer(String),
+    MediaControl(MediaControl, String),
 
     OpenWindow(Id),
 
@@ -348,32 +353,20 @@ impl Bar {
                 .mpris_service
                 .as_mut()
                 .map_or_else(iced::Task::none, |ms| ms.handle_event(event)),
-            Message::PlayPause(player) => Task::perform(
-                async {
+            Message::MediaControl(control, player) => Task::perform(
+                async move {
                     if let Ok(connection) = Connection::session().await
                         && let Ok(player) = PlayerProxy::new(&connection, player).await
+                        && let Err(e) = match control {
+                            MediaControl::Play => player.play().await,
+                            MediaControl::Pause => player.pause().await,
+                            MediaControl::PlayPause => player.play_pause().await,
+                            MediaControl::Stop => player.stop().await,
+                            MediaControl::Next => player.next().await,
+                            MediaControl::Previous => player.previous().await,
+                        }
                     {
-                        let _ = player.play_pause().await;
-                    }
-                },
-                |()| Message::NoOp,
-            ),
-            Message::NextSong(player) => Task::perform(
-                async {
-                    if let Ok(connection) = Connection::session().await
-                        && let Ok(player) = PlayerProxy::new(&connection, player).await
-                    {
-                        let _ = player.next().await;
-                    }
-                },
-                |()| Message::NoOp,
-            ),
-            Message::StopPlayer(player) => Task::perform(
-                async {
-                    if let Ok(connection) = Connection::session().await
-                        && let Ok(player) = PlayerProxy::new(&connection, player).await
-                    {
-                        let _ = player.stop().await;
+                        error!("{e}");
                     }
                 },
                 |()| Message::NoOp,

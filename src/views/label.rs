@@ -4,8 +4,7 @@ use iced::{
 };
 
 use crate::{
-    Message, config, style::styled_tooltip, utils::maybe_mouse_interaction,
-    views::BarPosition,
+    Message, config, style::styled_tooltip, utils::maybe_mouse_binds, views::BarPosition,
 };
 
 pub struct LabelView {
@@ -28,7 +27,7 @@ impl<'a> LabelView {
             content.into()
         };
 
-        maybe_mouse_interaction(element, &self.config.interaction)
+        maybe_mouse_binds(element, &self.config.binds)
     }
 }
 

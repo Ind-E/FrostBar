@@ -2,8 +2,12 @@
 
 layout {
     width 42
-    gaps 3
-    border-radius 4
+    gaps 0
+}
+
+style {
+    border-radius 0
+    background "#000"
 }
 
 start {
@@ -13,18 +17,24 @@ start {
         size 28
     }
 
-    battery
+    battery {
+        charging-color "#73F5AB"
+    }
 
     time {
         format "%I\n%M"
     }
 
-    cava {
-        spacing 0.1
+    /-cava {
+        // scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
+        // scroll-down "wpctl" "set-volume" "@DEFAULT_SINK@" "3%-"
     }
 
     mpris {
         placeholder "󰝚"
+        mouse-left "play-pause"
+        mouse-right "next"
+        mouse-middle "stop"
     }
 
 }
@@ -33,7 +43,9 @@ middle {
 
     niri {
         spacing 10
+        // workspace-offset 0
     }
+
 }
 
 end {

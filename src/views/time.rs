@@ -5,7 +5,7 @@ use iced::{
 
 use crate::{
     Message, config, services::time::TimeService, style::styled_tooltip,
-    views::BarPosition,
+    utils::maybe_mouse_binds, views::BarPosition,
 };
 
 pub struct TimeView {
@@ -22,6 +22,8 @@ impl TimeView {
         let content = Container::new(text(time).size(16))
             .center_x(Length::Fill)
             .id(self.id.clone());
+
+        let content = maybe_mouse_binds(content, &self.config.binds);
 
         styled_tooltip(content, tooltip)
     }

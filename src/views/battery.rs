@@ -6,7 +6,7 @@ use tracing::warn;
 
 use crate::{
     Message, config, services::battery::BatteryService, style::styled_tooltip,
-    views::BarPosition,
+    utils::maybe_mouse_binds, views::BarPosition,
 };
 extern crate starship_battery as battery;
 
@@ -17,7 +17,7 @@ pub struct BatteryView {
 }
 
 impl<'a> BatteryView {
-    pub fn view(&self, service: &BatteryService) -> Element<'a, Message> {
+    pub fn view(&'a self, service: &BatteryService) -> Element<'a, Message> {
         if service.batteries.is_empty() {
             return Text::new("?").size(self.config.icon_size).into();
         }
@@ -59,6 +59,8 @@ impl<'a> BatteryView {
                 .collect::<Vec<_>>()
                 .join("\n"),
         );
+
+        let icon_widget = maybe_mouse_binds(icon_widget, &self.config.binds);
 
         styled_tooltip(icon_widget, tooltip)
     }

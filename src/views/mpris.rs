@@ -1,12 +1,13 @@
 use iced::{
     Border, Color, Element, Length,
     border::Radius,
-    mouse::Interaction,
+    mouse::{Interaction, ScrollDelta},
     widget::{Column, Container, Image, MouseArea, Text, container, text::Shaping},
 };
 
 use crate::{
-    Message, config,
+    Message,
+    config::{self, MouseTrigger},
     services::mpris::{MprisPlayer, MprisService},
     style::styled_tooltip,
     views::BarPosition,
@@ -20,7 +21,7 @@ pub struct MprisView {
 impl<'a> MprisView {
     pub fn view(
         &'a self,
-        service: &MprisService,
+        service: &'a MprisService,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         service
@@ -55,8 +56,8 @@ impl MprisPlayerView {
 impl<'a> MprisPlayerView {
     fn view(
         &self,
-        player: &MprisPlayer,
-        config: &config::Mpris,
+        player: &'a MprisPlayer,
+        config: &'a config::Mpris,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &player.art {
@@ -101,14 +102,61 @@ impl<'a> MprisPlayerView {
         let tooltip =
             Text::new(format!("{artists} - {title}")).shaping(Shaping::Advanced);
 
-        let content = Container::new(
-            MouseArea::new(content)
-                .on_release(Message::PlayPause(player.name.clone()))
-                .on_right_release(Message::NextSong(player.name.clone()))
-                .on_middle_release(Message::StopPlayer(player.name.clone()))
-                .interaction(Interaction::Pointer),
-        )
-        .id(self.id.clone());
+        let mut mouse_area = MouseArea::new(content);
+
+        let mut scroll_binds = (None, None);
+
+        for bind in &config.binds {
+            match bind.trigger {
+                MouseTrigger::MouseLeft => {
+                    mouse_area = mouse_area.on_release(Message::MediaControl(
+                        bind.action,
+                        player.name.clone(),
+                    ));
+                }
+
+                MouseTrigger::MouseRight => {
+                    mouse_area = mouse_area.on_right_release(Message::MediaControl(
+                        bind.action,
+                        player.name.clone(),
+                    ));
+                }
+
+                MouseTrigger::MouseMiddle => {
+                    mouse_area = mouse_area.on_middle_release(Message::MediaControl(
+                        bind.action,
+                        player.name.clone(),
+                    ));
+                }
+                MouseTrigger::ScrollUp => {
+                    scroll_binds.0 = Some(bind.action);
+                }
+
+                MouseTrigger::ScrollDown => {
+                    scroll_binds.1 = Some(bind.action);
+                }
+            }
+        }
+
+        if scroll_binds.0.is_some() || scroll_binds.1.is_some() {
+            mouse_area = mouse_area.on_scroll(move |delta| {
+                let (x, y) = match delta {
+                    ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
+                };
+
+                if (y > 0.0 || x < 0.0)
+                    && let Some(scroll_up) = scroll_binds.0
+                {
+                    return Message::MediaControl(scroll_up, player.name.clone());
+                } else if let Some(scroll_down) = scroll_binds.1 {
+                    return Message::MediaControl(scroll_down, player.name.clone());
+                }
+                unreachable!()
+            });
+        }
+
+        let content = Container::new(mouse_area.interaction(Interaction::Pointer))
+            .id(self.id.clone());
 
         styled_tooltip(content, tooltip)
     }

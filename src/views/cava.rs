@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    Message, config, services::cava::CavaService, utils::maybe_mouse_interaction,
+    Message, config, services::cava::CavaService, utils::maybe_mouse_binds,
     views::BarPosition,
 };
 
@@ -27,7 +27,7 @@ impl<'a> CavaView {
             .width(Length::Fill)
             .height(130);
 
-        maybe_mouse_interaction(canvas, &self.config.interaction)
+        maybe_mouse_binds(canvas, &self.config.binds)
     }
 }
 

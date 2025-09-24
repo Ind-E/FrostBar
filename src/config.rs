@@ -1,4 +1,7 @@
 use iced::color;
+use knuffel::DecodeScalar;
+use miette::miette;
+use std::str::FromStr;
 use std::{
     ffi::OsStr,
     fs::{self, File},
@@ -54,11 +57,25 @@ pub struct Layout {
     pub width: u32,
     #[knuffel(child, unwrap(argument), default = 0)]
     pub gaps: i32,
+    #[knuffel(child, default = Self::default().anchor)]
+    pub anchor: Anchor,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, PartialEq)]
+pub enum Anchor {
+    Top,
+    Bottom,
+    Left,
+    Right,
 }
 
 impl Default for Layout {
     fn default() -> Self {
-        Self { width: 42, gaps: 3 }
+        Self {
+            width: 42,
+            gaps: 3,
+            anchor: Anchor::Left,
+        }
     }
 }
 
@@ -93,18 +110,24 @@ pub enum Module {
 pub struct Cava {
     #[knuffel(child, unwrap(argument), default = 3)]
     pub volume_percent: i32,
+
     #[knuffel(child, unwrap(argument), default = 0.1)]
     pub spacing: f32,
-    #[knuffel(flatten(child), default)]
-    pub interaction: MouseInteraction,
+
+    #[knuffel(children, default)]
+    pub binds: Vec<Bind>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Battery {
     #[knuffel(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
+
     #[knuffel(child, default = Self::default().charging_color)]
     pub charging_color: ConfigColor,
+
+    #[knuffel(children, default)]
+    pub binds: Vec<Bind>,
 }
 
 impl Default for Battery {
@@ -112,6 +135,7 @@ impl Default for Battery {
         Self {
             icon_size: 22,
             charging_color: color!(0x73F5AB).into(),
+            binds: Vec::new(),
         }
     }
 }
@@ -120,20 +144,28 @@ impl Default for Battery {
 pub struct Time {
     #[knuffel(child, unwrap(argument), default = "%I\n%M".to_string())]
     pub format: String,
+
     #[knuffel(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
     pub tooltip_format: String,
+
+    #[knuffel(children, default)]
+    pub binds: Vec<Bind>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Mpris {
     #[knuffel(child, unwrap(argument), default = "󰝚".to_string())]
     pub placeholder: String,
+
+    #[knuffel(children, default)]
+    pub binds: Vec<MediaBind>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
 pub struct Niri {
     #[knuffel(child, unwrap(argument), default = 10)]
     pub spacing: u32,
+
     #[knuffel(child, unwrap(argument), default = 0)]
     pub workspace_offset: i8,
 }
@@ -142,35 +174,158 @@ pub struct Niri {
 pub struct Label {
     #[knuffel(child, unwrap(argument), default = String::new())]
     pub text: String,
+
     #[knuffel(child, unwrap(argument), default = 18)]
     pub size: u32,
+
     #[knuffel(child, unwrap(argument), default = None)]
     pub tooltip: Option<String>,
-    #[knuffel(flatten(child), default)]
-    pub interaction: MouseInteraction,
-}
 
-#[derive(knuffel::Decode, Debug, Clone, Default)]
-pub struct MouseInteraction {
-    #[knuffel(child)]
-    pub left_mouse: Option<Command>,
-    #[knuffel(child)]
-    pub right_mouse: Option<Command>,
-    #[knuffel(child)]
-    pub middle_mouse: Option<Command>,
-    #[knuffel(child)]
-    pub scroll_up: Option<Command>,
-    #[knuffel(child)]
-    pub scroll_down: Option<Command>,
+    #[knuffel(children, default)]
+    pub binds: Vec<Bind>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone, Default)]
 pub struct Command {
     #[knuffel(property)]
-    pub sh: Option<String>,
+    pub sh: Option<bool>,
 
     #[knuffel(arguments)]
-    pub command: Option<Vec<String>>,
+    pub args: Vec<String>,
+}
+
+#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
+pub enum MediaControl {
+    Play,
+    Pause,
+    PlayPause,
+    Stop,
+    Next,
+    Previous,
+}
+
+#[derive(Debug, Clone)]
+pub struct Bind {
+    pub trigger: MouseTrigger,
+    pub action: Command,
+}
+
+impl<S> knuffel::Decode<S> for Bind
+where
+    S: knuffel::traits::ErrorSpan,
+{
+    fn decode_node(
+        node: &knuffel::ast::SpannedNode<S>,
+        ctx: &mut knuffel::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        if let Some(type_name) = &node.type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+
+        if node.arguments.is_empty() {
+            ctx.emit_error(DecodeError::missing(
+                node,
+                "expected an action for this bind",
+            ));
+        }
+
+        let trigger = node.node_name.parse::<MouseTrigger>().map_err(|e| {
+            DecodeError::conversion(&node.node_name, e.wrap_err("invalid bind"))
+        })?;
+
+        match Command::decode_node(&node, ctx) {
+            Ok(action) => Ok(Self { trigger, action }),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MediaBind {
+    pub trigger: MouseTrigger,
+    pub action: MediaControl,
+}
+
+impl<S> knuffel::Decode<S> for MediaBind
+where
+    S: knuffel::traits::ErrorSpan,
+{
+    fn decode_node(
+        node: &knuffel::ast::SpannedNode<S>,
+        ctx: &mut knuffel::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        if let Some(type_name) = &node.type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+
+        for child in node.children() {
+            ctx.emit_error(DecodeError::unexpected(
+                child,
+                "child",
+                "no children expected for this node",
+            ));
+        }
+
+        let trigger = node.node_name.parse::<MouseTrigger>().map_err(|e| {
+            DecodeError::conversion(&node.node_name, e.wrap_err("invalid bind"))
+        })?;
+
+        let mut arguments = node.arguments.iter();
+
+        if let Some(argument) = arguments.next() {
+            for unwanted_argument in arguments {
+                ctx.emit_error(DecodeError::unexpected(
+                    &unwanted_argument.literal,
+                    "argument",
+                    "only one action is allowed per trigger",
+                ));
+            }
+
+            match MediaControl::decode(argument, ctx) {
+                Ok(action) => Ok(Self { trigger, action }),
+                Err(e) => Err(e),
+            }
+        } else {
+            Err(DecodeError::missing(
+                node,
+                "expected an action for this bind",
+            ))
+        }
+    }
+}
+
+#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
+pub enum MouseTrigger {
+    MouseLeft,
+    MouseRight,
+    MouseMiddle,
+    ScrollUp,
+    ScrollDown,
+}
+
+impl FromStr for MouseTrigger {
+    type Err = miette::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mouse-left" | "MouseLeft" => Ok(MouseTrigger::MouseLeft),
+            "mouse-right" | "MouseRight" => Ok(MouseTrigger::MouseRight),
+            "mouse-middle" | "MouseMiddle" => Ok(MouseTrigger::MouseMiddle),
+            "scroll-up" | "ScrollUp" => Ok(MouseTrigger::ScrollUp),
+            "scroll-down" | "ScrollDown" => Ok(MouseTrigger::ScrollDown),
+            _ => Err(miette!(
+                "expected one of 'mouse-left', 'mouse-right', 'mouse-middle', 'scroll-up', or 'scroll-down'"
+            )),
+        }
+    }
 }
 
 impl Config {
@@ -287,9 +442,9 @@ impl DerefMut for ConfigColor {
     }
 }
 
-impl Into<Color> for &ConfigColor {
-    fn into(self) -> Color {
-        self.inner
+impl From<&ConfigColor> for Color {
+    fn from(color: &ConfigColor) -> Self {
+        color.inner
     }
 }
 
