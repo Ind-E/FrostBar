@@ -1,7 +1,3 @@
-use iced::color;
-use knuffel::DecodeScalar;
-use miette::miette;
-use std::str::FromStr;
 use std::{
     ffi::OsStr,
     fs::{self, File},
@@ -11,7 +7,7 @@ use std::{
 };
 
 use directories::ProjectDirs;
-use iced::Color;
+use iced::{Color, color};
 use knuffel::errors::DecodeError;
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
@@ -33,19 +29,19 @@ pub struct Config {
     pub end: End,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Default)]
 pub struct Start {
     #[knuffel(children, default)]
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Default)]
 pub struct Middle {
     #[knuffel(children, default)]
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Default)]
 pub struct End {
     #[knuffel(children, default)]
     pub modules: Vec<Module>,
@@ -96,7 +92,7 @@ impl Default for Style {
     }
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug)]
 pub enum Module {
     Cava(Cava),
     Battery(Battery),
@@ -106,7 +102,7 @@ pub enum Module {
     Label(Label),
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug)]
 pub struct Cava {
     #[knuffel(child, unwrap(argument), default = 3)]
     pub volume_percent: i32,
@@ -114,11 +110,11 @@ pub struct Cava {
     #[knuffel(child, unwrap(argument), default = 0.1)]
     pub spacing: f32,
 
-    #[knuffel(children, default)]
-    pub binds: Vec<Bind>,
+    #[knuffel(flatten(child), default)]
+    pub binds: MouseBinds,
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug)]
 pub struct Battery {
     #[knuffel(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
@@ -126,8 +122,8 @@ pub struct Battery {
     #[knuffel(child, default = Self::default().charging_color)]
     pub charging_color: ConfigColor,
 
-    #[knuffel(children, default)]
-    pub binds: Vec<Bind>,
+    #[knuffel(flatten(child), default)]
+    pub binds: MouseBinds,
 }
 
 impl Default for Battery {
@@ -135,12 +131,12 @@ impl Default for Battery {
         Self {
             icon_size: 22,
             charging_color: color!(0x73F5AB).into(),
-            binds: Vec::new(),
+            binds: MouseBinds::default(),
         }
     }
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug)]
 pub struct Time {
     #[knuffel(child, unwrap(argument), default = "%I\n%M".to_string())]
     pub format: String,
@@ -148,8 +144,8 @@ pub struct Time {
     #[knuffel(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
     pub tooltip_format: String,
 
-    #[knuffel(children, default)]
-    pub binds: Vec<Bind>,
+    #[knuffel(flatten(child), default)]
+    pub binds: MouseBinds,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
@@ -157,8 +153,8 @@ pub struct Mpris {
     #[knuffel(child, unwrap(argument), default = "󰝚".to_string())]
     pub placeholder: String,
 
-    #[knuffel(children, default)]
-    pub binds: Vec<MediaBind>,
+    #[knuffel(flatten(child), default)]
+    pub binds: MouseBindsForMpris,
 }
 
 #[derive(knuffel::Decode, Debug, Clone)]
@@ -170,7 +166,7 @@ pub struct Niri {
     pub workspace_offset: i8,
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug)]
 pub struct Label {
     #[knuffel(child, unwrap(argument), default = String::new())]
     pub text: String,
@@ -181,17 +177,26 @@ pub struct Label {
     #[knuffel(child, unwrap(argument), default = None)]
     pub tooltip: Option<String>,
 
-    #[knuffel(children, default)]
-    pub binds: Vec<Bind>,
+    #[knuffel(flatten(child), default)]
+    pub binds: MouseBinds,
 }
 
 #[derive(knuffel::Decode, Debug, Clone, Default)]
-pub struct Command {
-    #[knuffel(property)]
-    pub sh: Option<bool>,
+pub struct MouseBinds {
+    #[knuffel(child)]
+    pub mouse_left: Option<Command>,
 
-    #[knuffel(arguments)]
-    pub args: Vec<String>,
+    #[knuffel(child)]
+    pub mouse_right: Option<Command>,
+
+    #[knuffel(child)]
+    pub mouse_middle: Option<Command>,
+
+    #[knuffel(child)]
+    pub scroll_up: Option<Command>,
+
+    #[knuffel(child)]
+    pub scroll_down: Option<Command>,
 }
 
 #[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
@@ -204,19 +209,38 @@ pub enum MediaControl {
     Previous,
 }
 
-#[derive(Debug, Clone)]
-pub struct Bind {
-    pub trigger: MouseTrigger,
-    pub action: Command,
+#[derive(knuffel::Decode, Debug, Clone, Default)]
+pub struct MouseBindsForMpris {
+    #[knuffel(child, unwrap(argument))]
+    pub mouse_left: Option<MediaControl>,
+
+    #[knuffel(child, unwrap(argument))]
+    pub mouse_right: Option<MediaControl>,
+
+    #[knuffel(child, unwrap(argument))]
+    pub mouse_middle: Option<MediaControl>,
+
+    #[knuffel(child, unwrap(argument))]
+    pub scroll_up: Option<MediaControl>,
+
+    #[knuffel(child, unwrap(argument))]
+    pub scroll_down: Option<MediaControl>,
 }
 
-impl<S> knuffel::Decode<S> for Bind
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Command {
+    pub sh: Option<bool>,
+
+    pub args: Vec<String>,
+}
+
+impl<S> ::knuffel::Decode<S> for Command
 where
-    S: knuffel::traits::ErrorSpan,
+    S: ::knuffel::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &knuffel::ast::SpannedNode<S>,
-        ctx: &mut knuffel::decode::Context<S>,
+        node: &::knuffel::ast::SpannedNode<S>,
+        ctx: &mut ::knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         if let Some(type_name) = &node.type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -226,105 +250,50 @@ where
             ));
         }
 
-        if node.arguments.is_empty() {
-            ctx.emit_error(DecodeError::missing(
-                node,
-                "expected an action for this bind",
+        let mut sh = None;
+        for (name, val) in &node.properties {
+            match &***name {
+                "sh" => {
+                    sh = ::knuffel::traits::DecodeScalar::decode(val, ctx)?;
+                }
+                name_str => {
+                    return Err(DecodeError::unexpected(
+                        name,
+                        "property",
+                        format!("unexpected property `{0}`", name_str.escape_default(),),
+                    ));
+                }
+            }
+        }
+
+        let mut iter_args = node.arguments.iter();
+        if iter_args.len() > 1
+            && let Some(sh) = sh
+            && sh
+        {
+            return Err(DecodeError::unexpected(
+                &iter_args.nth(1).unwrap().literal,
+                "argument",
+                "when sh=true, only 1 argument is allowed",
             ));
         }
-
-        let trigger = node.node_name.parse::<MouseTrigger>().map_err(|e| {
-            DecodeError::conversion(&node.node_name, e.wrap_err("invalid bind"))
-        })?;
-
-        match Command::decode_node(&node, ctx) {
-            Ok(action) => Ok(Self { trigger, action }),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MediaBind {
-    pub trigger: MouseTrigger,
-    pub action: MediaControl,
-}
-
-impl<S> knuffel::Decode<S> for MediaBind
-where
-    S: knuffel::traits::ErrorSpan,
-{
-    fn decode_node(
-        node: &knuffel::ast::SpannedNode<S>,
-        ctx: &mut knuffel::decode::Context<S>,
-    ) -> Result<Self, DecodeError<S>> {
-        if let Some(type_name) = &node.type_name {
-            ctx.emit_error(DecodeError::unexpected(
-                type_name,
-                "type name",
-                "no type name expected for this node",
-            ));
-        }
-
-        for child in node.children() {
-            ctx.emit_error(DecodeError::unexpected(
-                child,
-                "child",
-                "no children expected for this node",
-            ));
-        }
-
-        let trigger = node.node_name.parse::<MouseTrigger>().map_err(|e| {
-            DecodeError::conversion(&node.node_name, e.wrap_err("invalid bind"))
-        })?;
-
-        let mut arguments = node.arguments.iter();
-
-        if let Some(argument) = arguments.next() {
-            for unwanted_argument in arguments {
+        let args = iter_args
+            .map(|val| ::knuffel::traits::DecodeScalar::decode(val, ctx))
+            .collect::<Result<_, _>>()?;
+        let children = node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]);
+        children
+            .iter()
+            .flat_map(|child| {
+                let name_str = &**child.node_name;
                 ctx.emit_error(DecodeError::unexpected(
-                    &unwanted_argument.literal,
-                    "argument",
-                    "only one action is allowed per trigger",
+                    child,
+                    "node",
+                    format!("unexpected node `{0}`", name_str.escape_default(),),
                 ));
-            }
-
-            match MediaControl::decode(argument, ctx) {
-                Ok(action) => Ok(Self { trigger, action }),
-                Err(e) => Err(e),
-            }
-        } else {
-            Err(DecodeError::missing(
-                node,
-                "expected an action for this bind",
-            ))
-        }
-    }
-}
-
-#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
-pub enum MouseTrigger {
-    MouseLeft,
-    MouseRight,
-    MouseMiddle,
-    ScrollUp,
-    ScrollDown,
-}
-
-impl FromStr for MouseTrigger {
-    type Err = miette::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "mouse-left" | "MouseLeft" => Ok(MouseTrigger::MouseLeft),
-            "mouse-right" | "MouseRight" => Ok(MouseTrigger::MouseRight),
-            "mouse-middle" | "MouseMiddle" => Ok(MouseTrigger::MouseMiddle),
-            "scroll-up" | "ScrollUp" => Ok(MouseTrigger::ScrollUp),
-            "scroll-down" | "ScrollDown" => Ok(MouseTrigger::ScrollDown),
-            _ => Err(miette!(
-                "expected one of 'mouse-left', 'mouse-right', 'mouse-middle', 'scroll-up', or 'scroll-down'"
-            )),
-        }
+                None
+            })
+            .collect::<Result<(), DecodeError<_>>>()?;
+        Ok(Command { sh, args })
     }
 }
 

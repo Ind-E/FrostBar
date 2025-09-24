@@ -1,6 +1,6 @@
 use crate::{
     Message,
-    config::{self, Bind, Config, Module, MouseTrigger},
+    config::{self, Config, Module, MouseBinds},
     constants::BAR_NAMESPACE,
     views::{
         BarAlignment, BarPosition, battery::BatteryView, cava::CavaView,
@@ -173,72 +173,65 @@ pub fn open_window(layout: &config::Layout) -> (iced::window::Id, iced::Task<Mes
 
 pub fn maybe_mouse_binds<'a>(
     element: impl Into<Element<'a, Message>>,
-    binds: &'a Vec<Bind>,
+    binds: &'a MouseBinds,
 ) -> Element<'a, Message> {
-    let mut mouse_area = MouseArea::new(element);
-
-    let mut scroll_binds = (None, None);
-
-    for bind in binds {
-        match bind.trigger {
-            MouseTrigger::MouseLeft => {
-                mouse_area = mouse_area.on_release(process_command(&bind.action));
-            }
-
-            MouseTrigger::MouseRight => {
-                mouse_area = mouse_area.on_right_release(process_command(&bind.action));
-            }
-
-            MouseTrigger::MouseMiddle => {
-                mouse_area = mouse_area.on_middle_release(process_command(&bind.action));
-            }
-            MouseTrigger::ScrollUp => {
-                scroll_binds.0 = Some(&bind.action);
-            }
-
-            MouseTrigger::ScrollDown => {
-                scroll_binds.1 = Some(&bind.action);
-            }
+    if binds.mouse_left.is_none()
+        && binds.mouse_right.is_none()
+        && binds.mouse_middle.is_none()
+        && binds.scroll_up.is_none()
+        && binds.scroll_down.is_none()
+    {
+        element.into()
+    } else {
+        let mut mouse_area = MouseArea::new(element);
+        if let Some(left) = &binds.mouse_left {
+            mouse_area = mouse_area.on_release(process_command(left));
         }
+
+        if let Some(right) = &binds.mouse_right {
+            mouse_area = mouse_area.on_right_release(process_command(right));
+        }
+
+        if let Some(middle) = &binds.mouse_middle {
+            mouse_area = mouse_area.on_middle_release(process_command(middle));
+        }
+
+        if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
+            mouse_area = mouse_area.on_scroll(|delta| {
+                let (x, y) = match delta {
+                    ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
+                };
+
+                if (y > 0.0 || x < 0.0)
+                    && let Some(scroll_up) = &binds.scroll_up
+                {
+                    return process_command(scroll_up);
+                } else if let Some(scroll_down) = &binds.scroll_down {
+                    return process_command(scroll_down);
+                }
+                unreachable!()
+            });
+        }
+
+        mouse_area.into()
     }
-
-    if scroll_binds.0.is_some() || scroll_binds.1.is_some() {
-        mouse_area = mouse_area.on_scroll(move |delta| {
-            let (x, y) = match delta {
-                ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
-            };
-
-            if (y > 0.0 || x < 0.0)
-                && let Some(scroll_up) = scroll_binds.0
-            {
-                return process_command(&scroll_up);
-            } else if let Some(scroll_down) = scroll_binds.1 {
-                return process_command(&scroll_down);
-            }
-            unreachable!()
-        });
-    }
-
-    mouse_area.into()
 }
 
 pub fn process_command(cmd: &config::Command) -> Message {
-    if !cmd.args.is_empty() {
-        if let Some(sh) = cmd.sh
-            && sh
-        {
-            Message::Command(CommandSpec {
-                command: String::from("sh"),
-                args: Some(vec![String::from("-c"), cmd.args[0].clone()]),
-            })
-        } else {
-            Message::Command(CommandSpec {
-                command: cmd.args[0].clone(),
-                args: cmd.args.get(1..).map(<[String]>::to_vec),
-            })
-        }
-    } else {
+    if cmd.args.is_empty() {
         Message::NoOp
+    } else if let Some(sh) = cmd.sh
+        && sh
+    {
+        Message::Command(CommandSpec {
+            command: String::from("sh"),
+            args: Some(vec![String::from("-c"), cmd.args[0].clone()]),
+        })
+    } else {
+        Message::Command(CommandSpec {
+            command: cmd.args[0].clone(),
+            args: cmd.args.get(1..).map(<[String]>::to_vec),
+        })
     }
 }
 
