@@ -18,6 +18,7 @@ pub struct MprisView {
     pub position: BarPosition,
 }
 
+#[profiling::all_functions]
 impl<'a> MprisView {
     pub fn view(
         &'a self,
@@ -53,6 +54,7 @@ impl MprisPlayerView {
     }
 }
 
+#[profiling::all_functions]
 impl<'a> MprisPlayerView {
     fn view(
         &self,

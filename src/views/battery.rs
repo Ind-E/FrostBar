@@ -16,6 +16,7 @@ pub struct BatteryView {
     pub position: BarPosition,
 }
 
+#[profiling::all_functions]
 impl<'a> BatteryView {
     pub fn view(&'a self, service: &BatteryService) -> Element<'a, Message> {
         if service.batteries.is_empty() {

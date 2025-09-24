@@ -54,6 +54,11 @@ mod style;
 mod utils;
 mod views;
 
+#[cfg(feature = "tracy-allocations")]
+#[global_allocator]
+static GLOBAL: tracy_client::ProfiledAllocator<std::alloc::System> =
+    tracy_client::ProfiledAllocator::new(std::alloc::System, 100);
+
 pub fn main() -> iced::Result {
     init_tracing();
 
@@ -141,6 +146,7 @@ pub struct Bar {
     label_views: Vec<LabelView>,
 }
 
+#[profiling::all_functions]
 impl Bar {
     pub fn new(mut config: Config, config_path: PathBuf) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));

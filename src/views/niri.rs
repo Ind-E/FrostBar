@@ -36,6 +36,7 @@ impl<'a> From<&'a Window> for WindowView<'a> {
     }
 }
 
+#[profiling::all_functions]
 impl<'a> WindowView<'a> {
     fn view(&self) -> Element<'a, Message> {
         let icon: Element<'a, Message> = match &self.window.icon {
@@ -71,6 +72,7 @@ impl<'a> From<&'a Workspace> for WorkspaceView<'a> {
     }
 }
 
+#[profiling::all_functions]
 impl<'a> WorkspaceView<'a> {
     fn view(
         &self,
@@ -126,6 +128,7 @@ impl NiriView {
     }
 }
 
+#[profiling::all_functions]
 impl<'a> NiriView {
     pub fn view(
         &self,

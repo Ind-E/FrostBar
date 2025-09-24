@@ -21,6 +21,7 @@ use tracing_subscriber::EnvFilter;
 
 pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
+#[profiling::function]
 pub fn handle_module(
     module: Module,
     position: BarPosition,
@@ -53,6 +54,7 @@ pub fn handle_module(
     }
 }
 
+#[profiling::function]
 pub fn process_modules(
     config: &mut Config,
     battery_views: &mut Vec<BatteryView>,
@@ -142,6 +144,7 @@ pub fn init_tracing() {
         .init();
 }
 
+#[profiling::function]
 pub fn open_window(layout: &config::Layout) -> (iced::window::Id, iced::Task<Message>) {
     let (id, open_task) = iced::window::open(iced::window::Settings {
         size: Size::new(layout.width as f32, 0.0),
@@ -171,6 +174,7 @@ pub fn open_window(layout: &config::Layout) -> (iced::window::Id, iced::Task<Mes
     (id, open_task.map(Message::OpenWindow))
 }
 
+#[profiling::function]
 pub fn maybe_mouse_binds<'a>(
     element: impl Into<Element<'a, Message>>,
     binds: &'a MouseBinds,
@@ -217,6 +221,7 @@ pub fn maybe_mouse_binds<'a>(
     }
 }
 
+#[profiling::function]
 pub fn process_command(cmd: &config::Command) -> Message {
     if cmd.args.is_empty() {
         Message::NoOp

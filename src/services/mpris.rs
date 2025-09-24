@@ -20,8 +20,8 @@ pub struct MprisService {
     art_cache: MprisArtCache,
 }
 
+#[profiling::all_functions]
 impl Service for MprisService {
-    #[tracing::instrument]
     fn subscription() -> iced::Subscription<Message> {
         Subscription::run(|| {
         let (yield_tx, yield_rx) = mpsc::unbounded_channel();
@@ -54,17 +54,18 @@ impl Service for MprisService {
                         }
 
                         if let Ok(stream) = create_player_stream(&connection, name).await {
-                            player_streams.insert(name1, stream);
+                            player_streams.insert(name1, stream.fuse());
                         }
                     }
                 }
             }
 
-            let mut name_owner_stream = dbus_proxy.receive_signal("NameOwnerChanged").await.unwrap();
+            let mut name_owner_stream = dbus_proxy.receive_signal("NameOwnerChanged").await.unwrap().fuse();
 
             loop {
                 futures::select! {
-                    signal = name_owner_stream.next().fuse() => {
+                    signal = name_owner_stream.next() => {
+                        debug!("name owner event");
                         if let Some(signal) = signal
                             && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>()
                             && name.starts_with(MPRIS_PREFIX)
@@ -76,7 +77,7 @@ impl Service for MprisService {
 
                                 let name1 = name.clone();
                                 if let Ok(stream) = create_player_stream(&connection, name).await {
-                                    player_streams.insert(name1, stream);
+                                    player_streams.insert(name1, stream.fuse());
                                 }
                             } else if new.is_empty() && !old.is_empty()
                                 && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { name }) {
@@ -86,6 +87,7 @@ impl Service for MprisService {
                     },
 
                     event_result = player_streams.next().fuse() => {
+                        debug!("player event");
                         if let Some((pname, Ok(event))) = event_result {
                             if let MprisEvent::PlayerVanished {ref name} = event
                                 &&  *name == pname {
@@ -221,6 +223,7 @@ pub struct MprisPlayer {
     pub colors: Option<Vec<Color>>,
 }
 
+#[profiling::all_functions]
 impl MprisPlayer {
     pub fn update_metadata(
         &mut self,
@@ -270,6 +273,7 @@ impl MprisPlayer {
     }
 }
 
+#[tracing::instrument]
 async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisEvent {
     let proxy = PlayerProxy::new(connection, name).await.unwrap();
     let status = proxy.playback_status().await.unwrap();
@@ -280,6 +284,8 @@ async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisE
         metadata,
     }
 }
+
+#[tracing::instrument]
 async fn create_player_stream(
     connection: &Connection,
     name: String,

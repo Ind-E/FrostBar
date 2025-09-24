@@ -31,6 +31,7 @@ knuffel = "3.2.0"
 miette = { version = "5.1.1", features = ["fancy-no-backtrace"] }
 niri-ipc = { git = "https://github.com/YaLTeR/niri/", branch = "main" }
 notify-rust = "4.11.7"
+profiling = { version = "1.0.17" }
 starship-battery = { version = "0.10.2", default-features = false }
 thiserror = { version = "2.0.16", default-features = false }
 tokio = "1.47.1"
@@ -50,7 +51,7 @@ zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 overflow-checks = false
 
 [features]
-tracy = ["tracy-client/default"]
+tracy = ["tracy-client/default", "profiling/profile-with-tracy"]
 tracy-ondemand = [
     "tracy",
     "tracy-client/ondemand",

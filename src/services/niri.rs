@@ -72,6 +72,7 @@ pub struct Workspace {
     pub windows: HashMap<u64, Window>,
 }
 
+#[profiling::function]
 fn map_window(window: &niri_ipc::Window, icon_cache: Arc<Mutex<IconCache>>) -> Window {
     let mut icon_cache = icon_cache.lock().unwrap();
     Window {
@@ -108,6 +109,7 @@ pub struct NiriService {
     pub sender: Option<mpsc::Sender<Request>>,
 }
 
+#[profiling::all_functions]
 impl Service for NiriService {
     fn subscription() -> Subscription<Message> {
         Subscription::run(|| {
@@ -115,6 +117,7 @@ impl Service for NiriService {
 
             let (event_tx, mut event_rx) = mpsc::unbounded_channel();
             std::thread::spawn(move || {
+                profiling::register_thread!("niri event listener");
                 run_event_listener(event_tx);
             });
 

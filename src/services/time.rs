@@ -10,6 +10,7 @@ pub struct TimeService {
     pub time: DateTime<Local>,
 }
 
+#[profiling::all_functions]
 impl Service for TimeService {
     fn subscription() -> Subscription<Message> {
         time::every(Duration::from_secs(1)).map(|_| Message::Tick(Local::now()))

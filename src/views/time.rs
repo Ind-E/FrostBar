@@ -14,6 +14,7 @@ pub struct TimeView {
     pub position: BarPosition,
 }
 
+#[profiling::all_functions]
 impl TimeView {
     pub fn view(&self, service: &TimeService) -> Element<'_, Message> {
         let time = service.time.format(&self.config.format).to_string();

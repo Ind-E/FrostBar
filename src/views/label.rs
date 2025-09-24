@@ -13,6 +13,7 @@ pub struct LabelView {
     pub position: BarPosition,
 }
 
+#[profiling::all_functions]
 impl<'a> LabelView {
     pub fn view(&'a self) -> Element<'a, Message> {
         let content =

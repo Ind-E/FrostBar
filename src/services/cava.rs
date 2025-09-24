@@ -47,6 +47,7 @@ pub struct CavaService {
 
 struct CavaSubscriptionRecipe {}
 
+#[profiling::all_functions]
 impl Recipe for CavaSubscriptionRecipe {
     type Output = Result<String, CavaError>;
 
@@ -100,6 +101,7 @@ impl Recipe for CavaSubscriptionRecipe {
     }
 }
 
+#[profiling::all_functions]
 impl Service for CavaService {
     fn subscription() -> iced::Subscription<Message> {
         from_recipe(CavaSubscriptionRecipe {}).map(Message::CavaUpdate)

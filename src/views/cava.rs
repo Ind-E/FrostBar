@@ -21,6 +21,7 @@ impl CavaView {
     }
 }
 
+#[profiling::all_functions]
 impl<'a> CavaView {
     pub fn view(&'a self, service: &'a CavaService) -> Element<'a, Message> {
         let canvas = Canvas::new(CavaCanvas::new(service, &self.config))

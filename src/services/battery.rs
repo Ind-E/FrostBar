@@ -45,6 +45,8 @@ impl BatteryService {
 
         new
     }
+
+    #[profiling::function]
     pub fn fetch_battery_info(&mut self) {
         let Some(manager) = &self.manager else {
             return error!("No battery manager");

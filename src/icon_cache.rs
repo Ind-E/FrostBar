@@ -23,6 +23,7 @@ pub enum Icon {
     Raster(image::Handle),
 }
 
+#[profiling::function]
 pub fn client_icon_path(
     app_id: &str,
 ) -> Result<PathBuf, freedesktop_desktop_entry::DecodeError> {
@@ -58,6 +59,7 @@ pub struct IconCache {
     inner: BTreeMap<String, Option<Icon>>,
 }
 
+#[profiling::function]
 fn load_icon_from_path(path: &Path) -> Option<Icon> {
     match path.extension().and_then(|s| s.to_str()) {
         Some("svg") => Some(Icon::Svg(svg::Handle::from_path(path))),
@@ -72,6 +74,7 @@ fn load_icon_from_path(path: &Path) -> Option<Icon> {
     }
 }
 
+#[profiling::all_functions]
 impl IconCache {
     pub fn new() -> Self {
         Self {
@@ -95,6 +98,7 @@ pub struct MprisArtCache {
     inner: BTreeMap<String, (Option<image::Handle>, Option<Vec<Color>>)>,
 }
 
+#[profiling::all_functions]
 impl MprisArtCache {
     pub fn new() -> Self {
         Self {
@@ -140,6 +144,7 @@ fn lerp_color(c1: Color, c2: Color, factor: f32) -> Color {
     Color::from_rgba(r, g, b, 1.0)
 }
 
+#[profiling::function]
 fn generate_gradient(
     palette: Vec<color_thief::Color>,
     steps: usize,
@@ -182,6 +187,7 @@ fn generate_gradient(
     Some(gradient)
 }
 
+#[profiling::function]
 fn extract_gradient(
     buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>,
     bars: usize,
