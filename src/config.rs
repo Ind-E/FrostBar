@@ -364,13 +364,14 @@ impl Config {
         Config::load(path)
     }
 
-    pub fn init() -> (Config, PathBuf) {
+    pub fn init() -> (Config, PathBuf, PathBuf) {
         let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
             std::process::exit(1);
         };
 
-        let config_path: PathBuf =
-            project_dir.config_dir().to_path_buf().join("config.kdl");
+        let config_dir = project_dir.config_dir().to_path_buf();
+
+        let config_path = config_dir.join("config.kdl");
         let config = {
             match Config::load_or_create(&config_path) {
                 Err(e) => {
@@ -389,7 +390,7 @@ impl Config {
             }
         };
 
-        (config, config_path)
+        (config, config_path, config_dir)
     }
 }
 

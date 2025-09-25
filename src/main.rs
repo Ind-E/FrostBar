@@ -60,14 +60,14 @@ static GLOBAL: tracy_client::ProfiledAllocator<std::alloc::System> =
     tracy_client::ProfiledAllocator::new(std::alloc::System, 100);
 
 pub fn main() -> iced::Result {
-    init_tracing();
-
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();
 
     iced::daemon(
         || {
-            let (config, config_path) = Config::init();
+            let (config, config_path, config_dir) = Config::init();
+
+            init_tracing(config_dir);
 
             Bar::new(config, config_path)
         },

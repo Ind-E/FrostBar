@@ -16,8 +16,13 @@ use iced::{
         Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
     },
 };
-use std::{fmt, pin::Pin};
-use tracing_subscriber::EnvFilter;
+use std::{path::PathBuf, pin::Pin};
+use tracing::Level;
+use tracing_subscriber::{
+    fmt::{self, time::SystemTime, writer::MakeWriterExt},
+    prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
+};
 
 pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
@@ -125,23 +130,23 @@ pub fn process_modules(
     }
 }
 
-pub fn init_tracing() {
+pub fn init_tracing(config_dir: PathBuf) {
     let debug = cfg!(debug_assertions);
-    let default_level = if debug { "debug" } else { "info" };
 
-    tracing_subscriber::fmt()
-        .compact()
-        .with_writer(std::io::stderr)
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(default_level)),
-        )
-        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::new(
-            "%H:%M:%S".to_string(),
-        ))
-        .with_line_number(debug)
-        .with_file(debug)
-        .with_target(false)
+    let logfile =
+        tracing_appender::rolling::hourly(config_dir.join("logs/"), "frostbar.log")
+            .with_max_level(Level::INFO);
+
+    let logfile_layer = fmt::layer().compact().with_writer(logfile).with_ansi(false);
+
+    let stdout =
+        std::io::stdout.with_max_level(if debug { Level::DEBUG } else { Level::INFO });
+
+    let stdout_layer = fmt::layer().compact().with_writer(stdout);
+
+    tracing_subscriber::registry()
+        .with(logfile_layer)
+        .with(stdout_layer)
         .init();
 }
 
@@ -247,8 +252,8 @@ pub struct CommandSpec {
     pub args: Option<Vec<String>>,
 }
 
-impl fmt::Display for CommandSpec {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for CommandSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(args) = self.args.as_ref()
             && !args.is_empty()
             && args[0] == "-c"
