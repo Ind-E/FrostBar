@@ -23,13 +23,17 @@ impl<'a> BatteryView {
             return Text::new("?").size(self.config.icon_size).into();
         }
 
-        let total_percentage: f32 = service.batteries.iter().map(|b| b.percentage).sum();
+        let total_percentage: f32 =
+            service.batteries.iter().map(|b| b.percentage).sum();
         let avg_percentage = total_percentage / service.batteries.len() as f32;
 
         let icon = get_battery_icon(avg_percentage);
 
         let is_charging = service.batteries.iter().all(|b| {
-            !matches!(b.state, battery::State::Discharging | battery::State::Empty)
+            !matches!(
+                b.state,
+                battery::State::Discharging | battery::State::Empty
+            )
         });
 
         let icon_text = if is_charging {

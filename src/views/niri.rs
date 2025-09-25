@@ -49,14 +49,16 @@ impl<'a> WindowView<'a> {
             Option::None => column![].into(),
         };
 
-        let content =
-            Container::new(MouseArea::new(icon).on_right_press(Message::NiriEvent(
-                NiriEvent::Action(Action::FocusWindow { id: self.window.id }),
-            )))
-            .center_x(Length::Fill)
-            .id(self.container_id.clone());
+        let content = Container::new(MouseArea::new(icon).on_right_press(
+            Message::NiriEvent(NiriEvent::Action(Action::FocusWindow {
+                id: self.window.id,
+            })),
+        ))
+        .center_x(Length::Fill)
+        .id(self.container_id.clone());
 
-        let tooltip = Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
+        let tooltip =
+            Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
 
         styled_tooltip(content, tooltip)
     }
@@ -87,8 +89,15 @@ impl<'a> WorkspaceView<'a> {
                         Column::new()
                             .align_x(Horizontal::Center)
                             .spacing(5)
-                            .push(Text::new(self.workspace.idx as i8 + offset).size(20)),
-                        |col, w| col.push(<&Window as Into<WindowView>>::into(w).view()),
+                            .push(
+                                Text::new(self.workspace.idx as i8 + offset)
+                                    .size(20),
+                            ),
+                        |col, w| {
+                            col.push(
+                                <&Window as Into<WindowView>>::into(w).view(),
+                            )
+                        },
                     ),
                 )
                 .style(workspace_style(

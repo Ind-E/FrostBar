@@ -4,7 +4,8 @@ use iced::{
 };
 
 use crate::{
-    Message, config, style::styled_tooltip, utils::maybe_mouse_binds, views::BarPosition,
+    Message, config, style::styled_tooltip, utils::maybe_mouse_binds,
+    views::BarPosition,
 };
 
 pub struct LabelView {
@@ -16,10 +17,11 @@ pub struct LabelView {
 #[profiling::all_functions]
 impl<'a> LabelView {
     pub fn view(&'a self) -> Element<'a, Message> {
-        let content =
-            Container::new(text(self.config.text.clone()).size(self.config.size))
-                .center_x(Length::Fill)
-                .id(self.id.clone());
+        let content = Container::new(
+            text(self.config.text.clone()).size(self.config.size),
+        )
+        .center_x(Length::Fill)
+        .id(self.id.clone());
 
         let element = if let Some(tooltip) = &self.config.tooltip {
             let tooltip = Text::new(tooltip.clone());

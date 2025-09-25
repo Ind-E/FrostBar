@@ -8,7 +8,9 @@ use crate::Message;
 
 pub fn _bg(_theme: &Theme) -> container::Style {
     container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
+        background: Some(Background::Color(Color::from_rgba(
+            0.0, 0.0, 0.0, 0.8,
+        ))),
         ..Default::default()
     }
 }
@@ -21,7 +23,9 @@ pub fn styled_tooltip<'a>(
         content,
         Container::new(tooltip)
             .style(|_theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.8))),
+                background: Some(Background::Color(Color::from_rgba(
+                    0.0, 0.0, 0.0, 0.8,
+                ))),
 
                 ..Default::default()
             })

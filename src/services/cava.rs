@@ -58,7 +58,8 @@ impl Recipe for CavaSubscriptionRecipe {
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
         let (tx, rx) = mpsc::channel::<Result<String, CavaError>>(128);
 
-        let config_path = write_temp_cava_config().unwrap().display().to_string();
+        let config_path =
+            write_temp_cava_config().unwrap().display().to_string();
 
         tokio::task::spawn_blocking(move || {
             let mut command = match Command::new("cava")
@@ -70,8 +71,9 @@ impl Recipe for CavaSubscriptionRecipe {
             {
                 Ok(cmd) => cmd,
                 Err(e) => {
-                    let _ =
-                        tx.blocking_send(Err(CavaError::CommandFailed(e.to_string())));
+                    let _ = tx.blocking_send(Err(CavaError::CommandFailed(
+                        e.to_string(),
+                    )));
                     return;
                 }
             };
@@ -132,7 +134,10 @@ impl CavaService {
         }
     }
 
-    pub fn update_gradient(&mut self, colors: Option<Vec<Color>>) -> iced::Task<Message> {
+    pub fn update_gradient(
+        &mut self,
+        colors: Option<Vec<Color>>,
+    ) -> iced::Task<Message> {
         self.colors = colors.unwrap_or_else(default_gradient);
         iced::Task::none()
     }

@@ -11,8 +11,8 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 use tracing::{debug, error};
 
 use crate::{
-    Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache, services::Service,
-    utils::BoxStream,
+    Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
+    services::Service, utils::BoxStream,
 };
 
 pub struct MprisService {
@@ -121,7 +121,8 @@ impl Service for MprisService {
                 metadata,
             } => {
                 let mut player = MprisPlayer::new(name.clone(), status);
-                let task = player.update_metadata(&metadata, &mut self.art_cache);
+                let task =
+                    player.update_metadata(&metadata, &mut self.art_cache);
                 self.players.insert(name, player);
                 task
             }
@@ -148,7 +149,9 @@ impl Service for MprisService {
                         .players
                         .iter()
                         .filter(|(_, p)| {
-                            p.colors.is_some() && p.status == "Playing" && p.name != name
+                            p.colors.is_some()
+                                && p.status == "Playing"
+                                && p.name != name
                         })
                         .collect::<Vec<_>>();
                     if let Some((_, player)) = players_w_colors.first() {
@@ -272,7 +275,10 @@ impl MprisPlayer {
 }
 
 #[tracing::instrument]
-async fn get_initial_player_state(connection: &Connection, name: &str) -> MprisEvent {
+async fn get_initial_player_state(
+    connection: &Connection,
+    name: &str,
+) -> MprisEvent {
     let proxy = PlayerProxy::new(connection, name).await.unwrap();
     let status = proxy.playback_status().await.unwrap();
     let metadata = proxy.metadata().await.unwrap();

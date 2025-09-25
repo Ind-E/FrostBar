@@ -93,7 +93,6 @@ fn see_path(path: &Path) -> io::Result<(SystemTime, PathBuf)> {
     Ok((mtime, canon))
 }
 
-
 #[profiling::all_functions]
 impl FileWatcherInner {
     pub fn new(path: PathBuf) -> Self {

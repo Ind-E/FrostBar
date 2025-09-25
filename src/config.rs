@@ -260,7 +260,10 @@ where
                     return Err(DecodeError::unexpected(
                         name,
                         "property",
-                        format!("unexpected property `{0}`", name_str.escape_default(),),
+                        format!(
+                            "unexpected property `{0}`",
+                            name_str.escape_default(),
+                        ),
                     ));
                 }
             }
@@ -280,7 +283,8 @@ where
         let args = iter_args
             .map(|val| ::knuffel::traits::DecodeScalar::decode(val, ctx))
             .collect::<Result<_, _>>()?;
-        let children = node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]);
+        let children =
+            node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]);
         children
             .iter()
             .flat_map(|child| {
@@ -341,11 +345,15 @@ impl Config {
             .create_new(true)
             .open(path)
         {
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                return Ok(());
+            }
             res => res,
         }
         .into_diagnostic()
-        .with_context(|| format!("error opening config file at {}", path.display()))?;
+        .with_context(|| {
+            format!("error opening config file at {}", path.display())
+        })?;
 
         let default_config = include_bytes!("../assets/default-config.kdl");
 
@@ -377,12 +385,16 @@ impl Config {
                 Err(e) => {
                     if let Err(e) = Notification::new()
                         .summary(BAR_NAMESPACE)
-                        .body("Failed to parse config file, using default config")
+                        .body(
+                            "Failed to parse config file, using default config",
+                        )
                         .show()
                     {
                         error!("{e}");
                     }
-                    eprintln!("\nFailed to parse config file, using default config");
+                    eprintln!(
+                        "\nFailed to parse config file, using default config"
+                    );
                     eprintln!("{e:?}");
                     Config::default()
                 }
@@ -472,9 +484,11 @@ where
         // Check the argument type.
         let rv = match *val.literal {
             // If it's a string, use parse.
-            knuffel::ast::Literal::String(ref s) => Color::parse(s).ok_or_else(|| {
-                DecodeError::conversion(&val.literal, "invalid hex literal")
-            }),
+            knuffel::ast::Literal::String(ref s) => {
+                Color::parse(s).ok_or_else(|| {
+                    DecodeError::conversion(&val.literal, "invalid hex literal")
+                })
+            }
             // Otherwise, fall back to the 4-argument RGBA form.
             _ => {
                 return ColorRgba::decode_node(node, ctx).map(
@@ -510,7 +524,10 @@ where
             ctx.emit_error(DecodeError::unexpected(
                 child,
                 "node",
-                format!("unexpected node `{}`", child.node_name.escape_default()),
+                format!(
+                    "unexpected node `{}`",
+                    child.node_name.escape_default()
+                ),
             ));
         }
 

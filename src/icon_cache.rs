@@ -9,7 +9,9 @@ use base64::engine::general_purpose;
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
 use iced::{
     Color,
-    advanced::graphics::image::image_rs::{ImageBuffer, Rgb, load_from_memory, open},
+    advanced::graphics::image::image_rs::{
+        ImageBuffer, Rgb, load_from_memory, open,
+    },
     widget::{
         image::{self},
         svg,
@@ -35,10 +37,14 @@ pub fn client_icon_path(
             if file.exists() { Some(file) } else { None }
         })
         .map(
-            |df| -> Result<Option<PathBuf>, freedesktop_desktop_entry::DecodeError> {
+            |df| -> Result<
+                Option<PathBuf>,
+                freedesktop_desktop_entry::DecodeError,
+            > {
                 let content = std::fs::read_to_string(&df)?;
 
-                let entry = DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
+                let entry =
+                    DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
 
                 Ok(entry.desktop_entry("Icon").and_then(|icon_name| {
                     icon_finder::find_icon(icon_name.to_string(), 128, 1)
@@ -63,7 +69,9 @@ pub struct IconCache {
 fn load_icon_from_path(path: &Path) -> Option<Icon> {
     match path.extension().and_then(|s| s.to_str()) {
         Some("svg") => Some(Icon::Svg(svg::Handle::from_path(path))),
-        Some("png" | "jpg") => Some(Icon::Raster(image::Handle::from_path(path))),
+        Some("png" | "jpg") => {
+            Some(Icon::Raster(image::Handle::from_path(path)))
+        }
         _ => {
             eprintln!(
                 "Warning: Unrecognized or missing icon extension at path: {}",

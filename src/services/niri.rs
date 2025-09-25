@@ -73,7 +73,10 @@ pub struct Workspace {
 }
 
 #[profiling::function]
-fn map_window(window: &niri_ipc::Window, icon_cache: Arc<Mutex<IconCache>>) -> Window {
+fn map_window(
+    window: &niri_ipc::Window,
+    icon_cache: Arc<Mutex<IconCache>>,
+) -> Window {
     let mut icon_cache = icon_cache.lock().unwrap();
     Window {
         id: window.id,
@@ -217,7 +220,9 @@ impl NiriService {
                             .windows
                             .values()
                             .filter(|w| w.workspace_id == Some(ws.id))
-                            .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
+                            .map(|w| {
+                                (w.id, map_window(w, self.icon_cache.clone()))
+                            })
                             .collect(),
                     })
                     .map(|ws| (ws.id, ws))

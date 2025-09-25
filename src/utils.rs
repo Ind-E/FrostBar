@@ -13,13 +13,17 @@ use iced::{
     mouse::ScrollDelta,
     widget::MouseArea,
     window::settings::{
-        Anchor, KeyboardInteractivity, Layer, LayerShellSettings, PlatformSpecific,
+        Anchor, KeyboardInteractivity, Layer, LayerShellSettings,
+        PlatformSpecific,
     },
 };
-use std::{path::PathBuf, pin::Pin};
+use std::{
+    path::{Path, PathBuf},
+    pin::Pin,
+};
 use tracing::Level;
 use tracing_subscriber::{
-    fmt::{self, time::SystemTime, writer::MakeWriterExt},
+    fmt::{self, writer::MakeWriterExt},
     prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
 };
@@ -130,17 +134,22 @@ pub fn process_modules(
     }
 }
 
-pub fn init_tracing(config_dir: PathBuf) {
+pub fn init_tracing(config_dir: &Path) -> PathBuf {
     let debug = cfg!(debug_assertions);
 
-    let logfile =
-        tracing_appender::rolling::hourly(config_dir.join("logs/"), "frostbar.log")
-            .with_max_level(Level::INFO);
+    let log_dir = config_dir.join("logs/");
 
-    let logfile_layer = fmt::layer().compact().with_writer(logfile).with_ansi(false);
+    let logfile = tracing_appender::rolling::hourly(&log_dir, "frostbar.log")
+        .with_max_level(Level::INFO);
 
-    let stdout =
-        std::io::stdout.with_max_level(if debug { Level::DEBUG } else { Level::INFO });
+    let logfile_layer =
+        fmt::layer().compact().with_writer(logfile).with_ansi(false);
+
+    let stdout = std::io::stdout.with_max_level(if debug {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    });
 
     let stdout_layer = fmt::layer().compact().with_writer(stdout);
 
@@ -148,10 +157,13 @@ pub fn init_tracing(config_dir: PathBuf) {
         .with(logfile_layer)
         .with(stdout_layer)
         .init();
+    log_dir
 }
 
 #[profiling::function]
-pub fn open_window(layout: &config::Layout) -> (iced::window::Id, iced::Task<Message>) {
+pub fn open_window(
+    layout: &config::Layout,
+) -> (iced::window::Id, iced::Task<Message>) {
     let (id, open_task) = iced::window::open(iced::window::Settings {
         size: Size::new(layout.width as f32, 0.0),
         decorations: false,
@@ -161,7 +173,9 @@ pub fn open_window(layout: &config::Layout) -> (iced::window::Id, iced::Task<Mes
         platform_specific: PlatformSpecific {
             layer_shell: LayerShellSettings {
                 layer: Some(Layer::Top),
-                anchor: Some(Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT),
+                anchor: Some(
+                    Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
+                ),
                 exclusive_zone: Some(layout.width as i32 + layout.gaps),
                 // no right gaps because right edge of the layer surface is actually the right edge
                 // of the screen. Instead, increase the exclusive zone to emulate gaps
@@ -209,7 +223,8 @@ pub fn maybe_mouse_binds<'a>(
         if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
             mouse_area = mouse_area.on_scroll(|delta| {
                 let (x, y) = match delta {
-                    ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => (x, y),
+                    ScrollDelta::Lines { x, y }
+                    | ScrollDelta::Pixels { x, y } => (x, y),
                 };
 
                 if (y > 0.0 || x < 0.0)

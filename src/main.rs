@@ -5,8 +5,8 @@ use tracing::{info, warn};
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    Background, Color, Element, Event, Length, Pixels, Settings, Subscription, Task,
-    Theme,
+    Background, Color, Element, Event, Length, Pixels, Settings, Subscription,
+    Task, Theme,
     advanced::mouse,
     alignment::{Horizontal, Vertical},
     border::rounded,
@@ -67,7 +67,10 @@ pub fn main() -> iced::Result {
         || {
             let (config, config_path, config_dir) = Config::init();
 
-            init_tracing(config_dir);
+            let log_dir = init_tracing(&config_dir);
+
+            info!("starting version {}", env!("CARGO_PKG_VERSION"));
+            info!("saving logs to {:?}", log_dir);
 
             Bar::new(config, config_path)
         },
@@ -148,7 +151,10 @@ pub struct Bar {
 
 #[profiling::all_functions]
 impl Bar {
-    pub fn new(mut config: Config, config_path: PathBuf) -> (Self, Task<Message>) {
+    pub fn new(
+        mut config: Config,
+        config_path: PathBuf,
+    ) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
         let battery_service = BatteryService::new();
@@ -209,7 +215,8 @@ impl Bar {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let mut subscriptions: Vec<Subscription<Message>> = Vec::with_capacity(8);
+        let mut subscriptions: Vec<Subscription<Message>> =
+            Vec::with_capacity(8);
 
         subscriptions.push(event::listen().map(Message::IcedEvent));
         subscriptions.push(watch_file(self.config_path.clone()));
@@ -245,40 +252,43 @@ impl Bar {
             }
             Message::FileWatcherEvent(event) => {
                 match event {
-                    FileWatcherEvent::Changed => match Config::load(&self.config_path) {
-                        Ok(mut config) => {
-                            process_modules(
-                                &mut config,
-                                &mut self.battery_views,
-                                &mut self.time_views,
-                                &mut self.cava_views,
-                                &mut self.mpris_views,
-                                &mut self.niri_views,
-                                &mut self.label_views,
-                            );
-                            if self.config.layout == config.layout {
-                                self.config = config;
-                            } else {
-                                self.config = config;
-                                let close = iced::window::close(self.id);
-                                let (id, open) = open_window(&self.config.layout);
-                                self.id = id;
-                                return Task::batch([close, open]);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{e:?}");
-                            if let Err(e) = Notification::new()
-                                .summary(&self.namespace())
-                                .body("Failed to parse config file")
-                                .show()
-                            {
-                                warn!(
-                                    "Failed to send config parse error notification: {e:?}"
+                    FileWatcherEvent::Changed => {
+                        match Config::load(&self.config_path) {
+                            Ok(mut config) => {
+                                process_modules(
+                                    &mut config,
+                                    &mut self.battery_views,
+                                    &mut self.time_views,
+                                    &mut self.cava_views,
+                                    &mut self.mpris_views,
+                                    &mut self.niri_views,
+                                    &mut self.label_views,
                                 );
+                                if self.config.layout == config.layout {
+                                    self.config = config;
+                                } else {
+                                    self.config = config;
+                                    let close = iced::window::close(self.id);
+                                    let (id, open) =
+                                        open_window(&self.config.layout);
+                                    self.id = id;
+                                    return Task::batch([close, open]);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("{e:?}");
+                                if let Err(e) = Notification::new()
+                                    .summary(&self.namespace())
+                                    .body("Failed to parse config file")
+                                    .show()
+                                {
+                                    warn!(
+                                        "Failed to send config parse error notification: {e:?}"
+                                    );
+                                }
                             }
                         }
-                    },
+                    }
                     FileWatcherEvent::Missing => {
                         if let Err(e) = Notification::new()
                             .summary(&format!(
@@ -354,7 +364,9 @@ impl Bar {
             Message::CavaColorUpdate(gradient) => self
                 .cava_service
                 .as_mut()
-                .map_or_else(iced::Task::none, |cs| cs.update_gradient(gradient)),
+                .map_or_else(iced::Task::none, |cs| {
+                    cs.update_gradient(gradient)
+                }),
             Message::MprisEvent(event) => self
                 .mpris_service
                 .as_mut()
@@ -362,11 +374,14 @@ impl Bar {
             Message::MediaControl(control, player) => Task::perform(
                 async move {
                     if let Ok(connection) = Connection::session().await
-                        && let Ok(player) = PlayerProxy::new(&connection, player).await
+                        && let Ok(player) =
+                            PlayerProxy::new(&connection, player).await
                         && let Err(e) = match control {
                             MediaControl::Play => player.play().await,
                             MediaControl::Pause => player.pause().await,
-                            MediaControl::PlayPause => player.play_pause().await,
+                            MediaControl::PlayPause => {
+                                player.play_pause().await
+                            }
                             MediaControl::Stop => player.stop().await,
                             MediaControl::Next => player.next().await,
                             MediaControl::Previous => player.previous().await,
@@ -443,7 +458,12 @@ impl Bar {
                     self.mpris_views
                         .iter()
                         .filter(|v| v.position.align == *pos)
-                        .map(|v| (v.view(service, &self.config.layout), v.position.idx)),
+                        .map(|v| {
+                            (
+                                v.view(service, &self.config.layout),
+                                v.position.idx,
+                            )
+                        }),
                 );
             }
         }
@@ -454,7 +474,12 @@ impl Bar {
                     self.niri_views
                         .iter()
                         .filter(|v| v.position.align == *pos)
-                        .map(|v| (v.view(service, &self.config.style), v.position.idx)),
+                        .map(|v| {
+                            (
+                                v.view(service, &self.config.style),
+                                v.position.idx,
+                            )
+                        }),
                 );
             }
         }
@@ -486,12 +511,13 @@ impl Bar {
             .map(|(v, _)| v)
             .collect();
 
-        let top_section =
-            Container::new(Column::with_children(top_views).align_x(Horizontal::Center))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(Horizontal::Center)
-                .align_y(Vertical::Top);
+        let top_section = Container::new(
+            Column::with_children(top_views).align_x(Horizontal::Center),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Top);
 
         let middle_section = Container::new(
             Column::with_children(middle_views).align_x(Horizontal::Center),
@@ -515,7 +541,9 @@ impl Bar {
             .width(Length::Fixed(self.config.layout.width as f32))
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Background::Color(*self.config.style.background)),
+                background: Some(Background::Color(
+                    *self.config.style.background,
+                )),
                 border: rounded(self.config.style.border_radius),
                 ..Default::default()
             });

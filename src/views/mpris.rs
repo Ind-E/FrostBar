@@ -2,7 +2,9 @@ use iced::{
     Border, Color, Element, Length,
     border::Radius,
     mouse::{Interaction, ScrollDelta},
-    widget::{Column, Container, Image, MouseArea, Text, container, text::Shaping},
+    widget::{
+        Column, Container, Image, MouseArea, Text, container, text::Shaping,
+    },
 };
 
 use crate::{
@@ -29,7 +31,11 @@ impl<'a> MprisView {
             .players
             .values()
             .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(MprisPlayerView::new().view(player, &self.config, layout))
+                col.push(MprisPlayerView::new().view(
+                    player,
+                    &self.config,
+                    layout,
+                ))
             })
             .into()
     }
@@ -87,8 +93,10 @@ impl<'a> MprisPlayerView {
             .into()
         };
 
-        let raw_artists = player.artists.clone().unwrap_or_else(|| "[]".to_string());
-        let raw_title = player.title.clone().unwrap_or_else(|| "\"\"".to_string());
+        let raw_artists =
+            player.artists.clone().unwrap_or_else(|| "[]".to_string());
+        let raw_title =
+            player.title.clone().unwrap_or_else(|| "\"\"".to_string());
 
         let artists = raw_artists
             .trim_start_matches('[')
@@ -101,8 +109,8 @@ impl<'a> MprisPlayerView {
 
         let title = raw_title.trim().trim_matches('"');
 
-        let tooltip =
-            Text::new(format!("{artists} - {title}")).shaping(Shaping::Advanced);
+        let tooltip = Text::new(format!("{artists} - {title}"))
+            .shaping(Shaping::Advanced);
 
         let binds = &config.binds;
 
@@ -114,43 +122,51 @@ impl<'a> MprisPlayerView {
         {
             let mut mouse_area = MouseArea::new(content);
             if let Some(left) = &binds.mouse_left {
-                mouse_area = mouse_area
-                    .on_release(Message::MediaControl(*left, player.name.clone()));
+                mouse_area = mouse_area.on_release(Message::MediaControl(
+                    *left,
+                    player.name.clone(),
+                ));
             }
 
             if let Some(right) = &binds.mouse_right {
-                mouse_area = mouse_area
-                    .on_right_release(Message::MediaControl(*right, player.name.clone()));
+                mouse_area = mouse_area.on_right_release(
+                    Message::MediaControl(*right, player.name.clone()),
+                );
             }
 
             if let Some(middle) = &binds.mouse_middle {
-                mouse_area = mouse_area.on_middle_release(Message::MediaControl(
-                    *middle,
-                    player.name.clone(),
-                ));
+                mouse_area = mouse_area.on_middle_release(
+                    Message::MediaControl(*middle, player.name.clone()),
+                );
             }
 
             if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
                 mouse_area = mouse_area.on_scroll(move |delta| {
                     let (x, y) = match delta {
-                        ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => {
-                            (x, y)
-                        }
+                        ScrollDelta::Lines { x, y }
+                        | ScrollDelta::Pixels { x, y } => (x, y),
                     };
 
                     if (y > 0.0 || x < 0.0)
                         && let Some(scroll_up) = &binds.scroll_up
                     {
-                        return Message::MediaControl(*scroll_up, player.name.clone());
+                        return Message::MediaControl(
+                            *scroll_up,
+                            player.name.clone(),
+                        );
                     } else if let Some(scroll_down) = &binds.scroll_down {
-                        return Message::MediaControl(*scroll_down, player.name.clone());
+                        return Message::MediaControl(
+                            *scroll_down,
+                            player.name.clone(),
+                        );
                     }
                     unreachable!()
                 });
             }
 
-            let content = Container::new(mouse_area.interaction(Interaction::Pointer))
-                .id(self.id.clone());
+            let content =
+                Container::new(mouse_area.interaction(Interaction::Pointer))
+                    .id(self.id.clone());
 
             return styled_tooltip(content, tooltip);
         }
