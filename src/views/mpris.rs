@@ -3,7 +3,8 @@ use iced::{
     border::Radius,
     mouse::{Interaction, ScrollDelta},
     widget::{
-        Column, Container, Image, MouseArea, Text, container, text::Shaping,
+        Column, Container, Image, MouseArea, Row, Text, container,
+        text::Shaping,
     },
 };
 
@@ -27,17 +28,31 @@ impl<'a> MprisView {
         service: &'a MprisService,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
-        service
-            .players
-            .values()
-            .fold(Column::new().spacing(5).padding(5), |col, player| {
-                col.push(MprisPlayerView::new().view(
-                    player,
-                    &self.config,
-                    layout,
-                ))
-            })
-            .into()
+        if layout.anchor.vertical() {
+            service
+                .players
+                .values()
+                .fold(Column::new().spacing(5).padding(5), |col, player| {
+                    col.push(MprisPlayerView::new().view(
+                        player,
+                        &self.config,
+                        layout,
+                    ))
+                })
+                .into()
+        } else {
+            service
+                .players
+                .values()
+                .fold(Row::new().spacing(5).padding(5), |col, player| {
+                    col.push(MprisPlayerView::new().view(
+                        player,
+                        &self.config,
+                        layout,
+                    ))
+                })
+                .into()
+        }
     }
 }
 
@@ -71,7 +86,7 @@ impl<'a> MprisPlayerView {
         let content: Element<'a, Message> = if let Some(art) = &player.art {
             Container::new(Image::new(art)).into()
         } else {
-            Container::new(
+            let mut container = Container::new(
                 Text::new(config.placeholder.clone())
                     .size(20)
                     .width(Length::Fill)
@@ -81,7 +96,6 @@ impl<'a> MprisPlayerView {
             .padding(5)
             .width(layout.width - layout.gaps as u32 * 4)
             .height(layout.width - layout.gaps as u32 * 4)
-            .center_x(Length::Fill)
             .style(|_| container::Style {
                 border: Border {
                     color: Color::WHITE,
@@ -89,8 +103,13 @@ impl<'a> MprisPlayerView {
                     radius: Radius::new(1),
                 },
                 ..Default::default()
-            })
-            .into()
+            });
+            if layout.anchor.vertical() {
+                container = container.center_x(Length::Fill);
+            } else {
+                container = container.center_y(Length::Fill);
+            }
+            container.into()
         };
 
         let raw_artists =
@@ -168,11 +187,11 @@ impl<'a> MprisPlayerView {
                 Container::new(mouse_area.interaction(Interaction::Pointer))
                     .id(self.id.clone());
 
-            return styled_tooltip(content, tooltip);
+            return styled_tooltip(content, tooltip, &layout.anchor);
         }
 
         let content = Container::new(content).id(self.id.clone());
 
-        styled_tooltip(content, tooltip)
+        styled_tooltip(content, tooltip, &layout.anchor)
     }
 }

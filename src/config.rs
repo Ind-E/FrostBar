@@ -53,16 +53,25 @@ pub struct Layout {
     pub width: u32,
     #[knuffel(child, unwrap(argument), default = 0)]
     pub gaps: i32,
-    #[knuffel(child, default = Self::default().anchor)]
+    #[knuffel(child, unwrap(argument), default = Self::default().anchor)]
     pub anchor: Anchor,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, PartialEq)]
+#[derive(knuffel::DecodeScalar, Debug, Clone, PartialEq)]
 pub enum Anchor {
-    Top,
-    Bottom,
     Left,
     Right,
+    Top,
+    Bottom,
+}
+
+impl Anchor {
+    pub fn vertical(&self) -> bool {
+        match self {
+            Anchor::Left | Anchor::Right => true,
+            Anchor::Top | Anchor::Bottom => false,
+        }
+    }
 }
 
 impl Default for Layout {

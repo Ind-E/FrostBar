@@ -18,7 +18,11 @@ pub struct BatteryView {
 
 #[profiling::all_functions]
 impl<'a> BatteryView {
-    pub fn view(&'a self, service: &BatteryService) -> Element<'a, Message> {
+    pub fn view(
+        &'a self,
+        service: &BatteryService,
+        layout: &config::Layout,
+    ) -> Element<'a, Message> {
         if service.batteries.is_empty() {
             return Text::new("?").size(self.config.icon_size).into();
         }
@@ -44,9 +48,13 @@ impl<'a> BatteryView {
             Text::new(icon).size(self.config.icon_size)
         };
 
-        let icon_widget = Container::new(icon_text)
-            .center_x(Length::Fill)
-            .id(self.id.clone());
+        let mut icon_widget = Container::new(icon_text).id(self.id.clone());
+
+        if layout.anchor.vertical() {
+            icon_widget = icon_widget.center_x(Length::Fill)
+        } else {
+            icon_widget = icon_widget.center_y(Length::Fill)
+        }
 
         let tooltip = Text::new(
             service
@@ -67,7 +75,7 @@ impl<'a> BatteryView {
 
         let icon_widget = maybe_mouse_binds(icon_widget, &self.config.binds);
 
-        styled_tooltip(icon_widget, tooltip)
+        styled_tooltip(icon_widget, tooltip, &layout.anchor)
     }
 }
 

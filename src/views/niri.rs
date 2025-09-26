@@ -1,10 +1,9 @@
 use iced::{
-    Element, Length,
-    alignment::Horizontal,
+    Alignment, Element, Length,
     mouse::Interaction,
-    padding::top,
+    padding::{left, top},
     widget::{
-        Column, Container, Image, MouseArea, Svg, Text, column,
+        Column, Container, Image, MouseArea, Row, Svg, Text, column,
         container::{self},
         text::Shaping,
     },
@@ -38,7 +37,7 @@ impl<'a> From<&'a Window> for WindowView<'a> {
 
 #[profiling::all_functions]
 impl<'a> WindowView<'a> {
-    fn view(&self) -> Element<'a, Message> {
+    fn view(&self, layout: &config::Layout) -> Element<'a, Message> {
         let icon: Element<'a, Message> = match &self.window.icon {
             Some(Icon::Svg(handle)) => {
                 Svg::new(handle.clone()).height(24).width(24).into()
@@ -49,18 +48,22 @@ impl<'a> WindowView<'a> {
             Option::None => column![].into(),
         };
 
-        let content = Container::new(MouseArea::new(icon).on_right_press(
+        let mut content = Container::new(MouseArea::new(icon).on_right_press(
             Message::NiriEvent(NiriEvent::Action(Action::FocusWindow {
                 id: self.window.id,
             })),
         ))
-        .center_x(Length::Fill)
         .id(self.container_id.clone());
+        if layout.anchor.vertical() {
+            content = content.center_x(Length::Fill)
+        } else {
+            content = content.center_y(Length::Fill)
+        };
 
         let tooltip =
             Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
 
-        styled_tooltip(content, tooltip)
+        styled_tooltip(content, tooltip, &layout.anchor)
     }
 }
 
@@ -81,46 +84,67 @@ impl<'a> WorkspaceView<'a> {
         hovered: bool,
         style: &config::Style,
         offset: i8,
+        layout: &config::Layout,
     ) -> Element<'a, Message> {
-        Container::new(
-            MouseArea::new(
-                Container::new(
-                    self.workspace.windows.values().sorted_unstable().fold(
-                        Column::new()
-                            .align_x(Horizontal::Center)
-                            .spacing(5)
-                            .push(
-                                Text::new(self.workspace.idx as i8 + offset)
-                                    .size(20),
-                            ),
-                        |col, w| {
-                            col.push(
-                                <&Window as Into<WindowView>>::into(w).view(),
-                            )
-                        },
+        let windows = if layout.anchor.vertical() {
+            Container::new(
+                self.workspace.windows.values().sorted_unstable().fold(
+                    Column::new().align_x(Alignment::Center).spacing(5).push(
+                        Text::new(self.workspace.idx as i8 + offset).size(20),
                     ),
-                )
-                .style(workspace_style(
-                    self.workspace.is_active,
-                    hovered,
-                    style.border_radius,
-                ))
-                .padding(top(5).bottom(5))
-                .width(Length::Fill)
-                .align_x(Horizontal::Center),
+                    |col, w| {
+                        col.push(
+                            <&Window as Into<WindowView>>::into(w).view(layout),
+                        )
+                    },
+                ),
             )
-            .on_press(Message::NiriEvent(NiriEvent::Action(
-                Action::FocusWorkspace {
-                    reference: WorkspaceReferenceArg::Id(self.workspace.id),
-                },
-            )))
-            .on_enter(Message::MouseEntered(MouseEvent::Workspace(
-                self.workspace.id,
-            )))
-            .on_exit(Message::MouseExited(MouseEvent::Workspace(
-                self.workspace.id,
-            )))
-            .interaction(Interaction::Pointer),
+            .padding(top(5).bottom(5))
+            .width(Length::Fill)
+            .align_x(Alignment::Center)
+        } else {
+            Container::new(
+                self.workspace.windows.values().sorted_unstable().fold(
+                    Row::new()
+                        .align_y(Alignment::Center)
+                        .spacing(5)
+                        .padding(5)
+                        .push(
+                            Text::new(self.workspace.idx as i8 + offset)
+                                .size(20),
+                        ),
+                    |col, w| {
+                        col.push(
+                            <&Window as Into<WindowView>>::into(w).view(layout),
+                        )
+                    },
+                ),
+            )
+            .padding(left(5).right(5))
+            .height(Length::Fill)
+            .align_y(Alignment::Center)
+        };
+
+        let windows = windows.style(workspace_style(
+            self.workspace.is_active,
+            hovered,
+            style.border_radius,
+        ));
+
+        Container::new(
+            MouseArea::new(windows)
+                .on_press(Message::NiriEvent(NiriEvent::Action(
+                    Action::FocusWorkspace {
+                        reference: WorkspaceReferenceArg::Id(self.workspace.id),
+                    },
+                )))
+                .on_enter(Message::MouseEntered(MouseEvent::Workspace(
+                    self.workspace.id,
+                )))
+                .on_exit(Message::MouseExited(MouseEvent::Workspace(
+                    self.workspace.id,
+                )))
+                .interaction(Interaction::Pointer),
         )
         .into()
     }
@@ -142,21 +166,49 @@ impl<'a> NiriView {
     pub fn view(
         &self,
         service: &'a NiriService,
+        layout: &config::Layout,
         style: &config::Style,
     ) -> Element<'a, Message> {
-        let ws = service
-            .workspaces
-            .iter()
-            .sorted_by_key(|(_, ws)| ws.idx)
-            .fold(Column::new(), |col, (_, ws)| {
-                col.push(<&Workspace as Into<WorkspaceView>>::into(ws).view(
-                    service.hovered_workspace_id.is_some_and(|id| id == ws.id),
-                    style,
-                    self.config.workspace_offset,
-                ))
-            })
-            .align_x(Horizontal::Center)
-            .spacing(self.config.spacing);
-        ws.into()
+        if layout.anchor.vertical() {
+            service
+                .workspaces
+                .iter()
+                .sorted_by_key(|(_, ws)| ws.idx)
+                .fold(Column::new(), |col, (_, ws)| {
+                    col.push(
+                        <&Workspace as Into<WorkspaceView>>::into(ws).view(
+                            service
+                                .hovered_workspace_id
+                                .is_some_and(|id| id == ws.id),
+                            style,
+                            self.config.workspace_offset,
+                            layout,
+                        ),
+                    )
+                })
+                .align_x(Alignment::Center)
+                .spacing(self.config.spacing)
+                .into()
+        } else {
+            service
+                .workspaces
+                .iter()
+                .sorted_by_key(|(_, ws)| ws.idx)
+                .fold(Row::new(), |row, (_, ws)| {
+                    row.push(
+                        <&Workspace as Into<WorkspaceView>>::into(ws).view(
+                            service
+                                .hovered_workspace_id
+                                .is_some_and(|id| id == ws.id),
+                            style,
+                            self.config.workspace_offset,
+                            layout,
+                        ),
+                    )
+                })
+                .align_y(Alignment::Center)
+                .spacing(self.config.spacing)
+                .into()
+        }
     }
 }

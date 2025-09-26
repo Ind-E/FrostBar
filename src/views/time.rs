@@ -16,18 +16,28 @@ pub struct TimeView {
 
 #[profiling::all_functions]
 impl TimeView {
-    pub fn view(&self, service: &TimeService) -> Element<'_, Message> {
+    pub fn view(
+        &self,
+        service: &TimeService,
+        layout: &config::Layout,
+    ) -> Element<'_, Message> {
         let time = service.time.format(&self.config.format).to_string();
         let tooltip = Text::new(
             service.time.format(&self.config.tooltip_format).to_string(),
         );
-        let content = Container::new(text(time).size(16))
-            .center_x(Length::Fill)
-            .id(self.id.clone());
+
+        let mut content =
+            Container::new(text(time).size(16)).id(self.id.clone());
+
+        if layout.anchor.vertical() {
+            content = content.center_x(Length::Fill);
+        } else {
+            content = content.center_y(Length::Fill);
+        }
 
         let content = maybe_mouse_binds(content, &self.config.binds);
 
-        styled_tooltip(content, tooltip)
+        styled_tooltip(content, tooltip, &layout.anchor)
     }
 }
 

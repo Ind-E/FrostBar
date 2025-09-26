@@ -16,16 +16,21 @@ pub struct LabelView {
 
 #[profiling::all_functions]
 impl<'a> LabelView {
-    pub fn view(&'a self) -> Element<'a, Message> {
-        let content = Container::new(
+    pub fn view(&'a self, layout: &config::Layout) -> Element<'a, Message> {
+        let mut content = Container::new(
             text(self.config.text.clone()).size(self.config.size),
         )
-        .center_x(Length::Fill)
         .id(self.id.clone());
+
+        if layout.anchor.vertical() {
+            content = content.center_x(Length::Fill)
+        } else {
+            content = content.center_y(Length::Fill)
+        }
 
         let element = if let Some(tooltip) = &self.config.tooltip {
             let tooltip = Text::new(tooltip.clone());
-            styled_tooltip(content, tooltip)
+            styled_tooltip(content, tooltip, &layout.anchor)
         } else {
             content.into()
         };

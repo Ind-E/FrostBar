@@ -1,17 +1,18 @@
 use chrono::{DateTime, Local};
 use itertools::Itertools;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    Background, Color, Element, Event, Length, Pixels, Settings, Subscription,
-    Task, Theme,
+    Alignment, Background, Color, Element, Event, Length, Pixels, Settings,
+    Size, Subscription, Task, Theme,
     advanced::mouse,
-    alignment::{Horizontal, Vertical},
     border::rounded,
-    event, theme,
-    widget::{Column, Container, container, stack},
+    event,
+    padding::left,
+    theme,
+    widget::{Column, Container, Row, container, stack},
     window::Id,
 };
 use notify_rust::Notification;
@@ -37,7 +38,10 @@ use crate::{
         niri::{NiriEvent, NiriService},
         time::TimeService,
     },
-    utils::{CommandSpec, init_tracing, open_window, process_modules},
+    utils::{
+        CommandSpec, init_tracing, open_dummy_window, open_window,
+        process_modules,
+    },
     views::{
         BarAlignment, battery::BatteryView, cava::CavaView, label::LabelView,
         mpris::MprisView, niri::NiriView, time::TimeView,
@@ -118,8 +122,6 @@ pub enum Message {
     MprisEvent(MprisEvent),
     MediaControl(MediaControl, String),
 
-    OpenWindow(Id),
-
     Command(CommandSpec),
 
     ErrorMessage(String),
@@ -127,7 +129,9 @@ pub enum Message {
 }
 
 pub struct Bar {
-    id: Id,
+    id: Option<Id>,
+    dummy_id: Id,
+    monitor_size: Option<Size>,
     config: Config,
     config_path: PathBuf,
 
@@ -184,10 +188,13 @@ impl Bar {
             &mut label_views,
         );
 
-        let (id, open_task) = open_window(&config.layout);
+        let (dummy_id, open_dummy) = open_dummy_window();
+        // let (id, open_task) = open_window(&config.layout);
 
         let bar = Self {
-            id,
+            id: None,
+            monitor_size: None,
+            dummy_id,
             time_service: Some(time_service),
             time_views,
             battery_service: Some(battery_service),
@@ -203,7 +210,7 @@ impl Bar {
             config_path,
         };
 
-        (bar, Task::batch(vec![open_task]))
+        (bar, Task::batch(vec![open_dummy]))
     }
 
     fn title(&self, _id: Id) -> String {
@@ -246,8 +253,31 @@ impl Bar {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::OpenWindow(id) => {
-                debug_assert!(id == self.id);
+            Message::IcedEvent(event) => {
+                if let Event::Mouse(mouse::Event::CursorLeft) = event {
+                    return Task::done(Message::MouseExitedBar);
+                }
+
+                if let Event::Window(iced::window::Event::Opened {
+                    position: _,
+                    size,
+                }) = event
+                    && self.id.is_none()
+                {
+                    self.monitor_size = Some(size);
+                    debug!("measured monitor {size:?}");
+
+                    let (id, open_task) =
+                        open_window(&self.config.layout, size);
+                    self.id = Some(id);
+
+                    let close_task = iced::window::close(self.dummy_id);
+                    return Task::batch([open_task, close_task]);
+                }
+
+                if let Event::Window(iced::window::Event::Closed) = event {
+                    debug!("window closed");
+                }
                 Task::none()
             }
             Message::FileWatcherEvent(event) => {
@@ -266,12 +296,14 @@ impl Bar {
                                 );
                                 if self.config.layout == config.layout {
                                     self.config = config;
-                                } else {
+                                } else if let Some(id) = self.id {
                                     self.config = config;
-                                    let close = iced::window::close(self.id);
-                                    let (id, open) =
-                                        open_window(&self.config.layout);
-                                    self.id = id;
+                                    let close = iced::window::close(id);
+                                    let (id, open) = open_window(
+                                        &self.config.layout,
+                                        self.monitor_size.unwrap(),
+                                    );
+                                    self.id = Some(id);
                                     return Task::batch([close, open]);
                                 }
                             }
@@ -304,13 +336,6 @@ impl Bar {
                     }
                 }
 
-                Task::none()
-            }
-            Message::IcedEvent(event) => {
-                if let Event::Mouse(mouse::Event::CursorLeft) = event {
-                    return Task::done(Message::MouseExitedBar);
-                }
-                // println!("{event:?}");
                 Task::none()
             }
             Message::Tick(time) => self
@@ -409,14 +434,14 @@ impl Bar {
     }
 
     fn view_bar(&self) -> Element<'_, Message> {
-        let mut top_views: Vec<(Element<Message>, usize)> = vec![];
+        let mut start_views: Vec<(Element<Message>, usize)> = vec![];
         let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
-        let mut bottom_views: Vec<(Element<Message>, usize)> = vec![];
+        let mut end_views: Vec<(Element<Message>, usize)> = vec![];
 
         let mut alignments = [
-            (BarAlignment::Start, &mut top_views),
+            (BarAlignment::Start, &mut start_views),
             (BarAlignment::Middle, &mut middle_views),
-            (BarAlignment::End, &mut bottom_views),
+            (BarAlignment::End, &mut end_views),
         ];
 
         if let Some(service) = &self.battery_service {
@@ -425,7 +450,12 @@ impl Bar {
                     self.battery_views
                         .iter()
                         .filter(|v| v.position.align == *pos)
-                        .map(|v| (v.view(service), v.position.idx)),
+                        .map(|v| {
+                            (
+                                v.view(service, &self.config.layout),
+                                v.position.idx,
+                            )
+                        }),
                 );
             }
         }
@@ -436,7 +466,12 @@ impl Bar {
                     self.time_views
                         .iter()
                         .filter(|v| v.position.align == *pos)
-                        .map(|v| (v.view(service), v.position.idx)),
+                        .map(|v| {
+                            (
+                                v.view(service, &self.config.layout),
+                                v.position.idx,
+                            )
+                        }),
                 );
             }
         }
@@ -447,7 +482,12 @@ impl Bar {
                     self.cava_views
                         .iter()
                         .filter(|v| v.position.align == *pos)
-                        .map(|v| (v.view(service), v.position.idx)),
+                        .map(|v| {
+                            (
+                                v.view(service, &self.config.layout),
+                                v.position.idx,
+                            )
+                        }),
                 );
             }
         }
@@ -476,7 +516,11 @@ impl Bar {
                         .filter(|v| v.position.align == *pos)
                         .map(|v| {
                             (
-                                v.view(service, &self.config.style),
+                                v.view(
+                                    service,
+                                    &self.config.layout,
+                                    &self.config.style,
+                                ),
                                 v.position.idx,
                             )
                         }),
@@ -489,11 +533,11 @@ impl Bar {
                 self.label_views
                     .iter()
                     .filter(|v| v.position.align == *pos)
-                    .map(|v| (v.view(), v.position.idx)),
+                    .map(|v| (v.view(&self.config.layout), v.position.idx)),
             );
         }
 
-        let top_views: Vec<Element<Message>> = top_views
+        let start_views: Vec<Element<Message>> = start_views
             .into_iter()
             .sorted_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
@@ -505,54 +549,103 @@ impl Bar {
             .map(|(v, _)| v)
             .collect();
 
-        let bottom_views: Vec<Element<Message>> = bottom_views
+        let end_views: Vec<Element<Message>> = end_views
             .into_iter()
             .sorted_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
             .collect();
 
-        let top_section = Container::new(
-            Column::with_children(top_views).align_x(Horizontal::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Top);
+        let vertical = self.config.layout.anchor.vertical();
 
-        let middle_section = Container::new(
-            Column::with_children(middle_views).align_x(Horizontal::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center);
+        let start_section;
 
-        let bottom_section = Container::new(
-            Column::with_children(bottom_views).align_x(Horizontal::Center),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Bottom);
+        if vertical {
+            start_section = Container::new(
+                Column::with_children(start_views).align_x(Alignment::Center),
+            )
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Start);
+        } else {
+            start_section = Container::new(
+                Row::with_children(start_views)
+                    .align_y(Alignment::Center)
+                    .padding(left(5).right(5))
+                    .spacing(5),
+            )
+            .align_x(Alignment::Start)
+            .align_y(Alignment::Center);
+        }
 
-        let layout = stack![top_section, middle_section, bottom_section];
+        let start_section =
+            start_section.width(Length::Fill).height(Length::Fill);
 
-        let bar = Container::new(layout)
-            .width(Length::Fixed(self.config.layout.width as f32))
+        let middle_section;
+
+        if vertical {
+            middle_section = Container::new(
+                Column::with_children(middle_views).align_x(Alignment::Center),
+            );
+        } else {
+            middle_section = Container::new(
+                Row::with_children(middle_views)
+                    .align_y(Alignment::Center)
+                    .spacing(5),
+            );
+        }
+
+        let middle_section = middle_section
+            .width(Length::Fill)
             .height(Length::Fill)
-            .style(|_theme| container::Style {
-                background: Some(Background::Color(
-                    *self.config.style.background,
-                )),
-                border: rounded(self.config.style.border_radius),
-                ..Default::default()
-            });
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center);
 
-        bar.into()
+        let end_section;
+
+        if vertical {
+            end_section = Container::new(
+                Column::with_children(end_views).align_x(Alignment::Center),
+            )
+            .align_x(Alignment::Center)
+            .align_y(Alignment::End);
+        } else {
+            end_section = Container::new(
+                Row::with_children(end_views)
+                    .align_y(Alignment::Center)
+                    .spacing(5)
+                    .padding(left(5).right(5)),
+            )
+            .align_x(Alignment::End)
+            .align_y(Alignment::Center);
+        }
+
+        let end_section = end_section.width(Length::Fill).height(Length::Fill);
+
+        let layout = stack![start_section, middle_section, end_section];
+
+        let bar = if vertical {
+            Container::new(layout)
+                .width(Length::Fixed(self.config.layout.width as f32))
+                .height(Length::Fill)
+        } else {
+            Container::new(layout)
+                .width(Length::Fill)
+                .height(Length::Fixed(self.config.layout.width as f32))
+        };
+
+        bar.style(|_theme| container::Style {
+            background: Some(Background::Color(*self.config.style.background)),
+            border: rounded(self.config.style.border_radius),
+            ..Default::default()
+        })
+        .into()
     }
 
-    pub fn view(&self, _id: Id) -> Element<'_, Message> {
-        self.view_bar()
+    pub fn view(&self, id: Id) -> Element<'_, Message> {
+        if Some(id) == self.id {
+            self.view_bar()
+        } else {
+            Column::new().into()
+        }
     }
 
     pub fn style(&self, theme: &Theme) -> theme::Style {

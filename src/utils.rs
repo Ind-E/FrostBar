@@ -30,6 +30,7 @@ use tracing_subscriber::{
 
 pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
+#[allow(clippy::too_many_arguments)]
 #[profiling::function]
 pub fn handle_module(
     module: Module,
@@ -160,15 +161,8 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
     log_dir
 }
 
-#[profiling::function]
-pub fn open_window(
-    layout: &config::Layout,
-) -> (iced::window::Id, iced::Task<Message>) {
+pub fn open_dummy_window() -> (iced::window::Id, iced::Task<Message>) {
     let (id, open_task) = iced::window::open(iced::window::Settings {
-        size: Size::new(layout.width as f32, 0.0),
-        decorations: false,
-        resizable: false,
-        minimizable: false,
         transparent: true,
         platform_specific: PlatformSpecific {
             layer_shell: LayerShellSettings {
@@ -176,11 +170,83 @@ pub fn open_window(
                 anchor: Some(
                     Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
                 ),
+                input_region: Some((0, 0, 0, 0)),
+                keyboard_interactivity: Some(KeyboardInteractivity::None),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        exit_on_close_request: false,
+        ..Default::default()
+    });
+
+    (id, open_task.map(|_| Message::NoOp))
+}
+
+#[profiling::function]
+pub fn open_window(
+    layout: &config::Layout,
+    monitor_size: iced::Size,
+) -> (iced::window::Id, iced::Task<Message>) {
+    let size = match layout.anchor {
+        config::Anchor::Left | config::Anchor::Right => {
+            Size::new(monitor_size.width, 0.0)
+        }
+        config::Anchor::Top | config::Anchor::Bottom => {
+            Size::new(0.0, monitor_size.width)
+        }
+    };
+
+    let anchor = Some(match layout.anchor {
+        config::Anchor::Left => Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM,
+        config::Anchor::Right => Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
+        config::Anchor::Top => Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+        config::Anchor::Bottom => Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+    });
+
+    // top, right, bottom, left
+    let margin = Some(match layout.anchor {
+        config::Anchor::Left => (layout.gaps, 0, layout.gaps, layout.gaps),
+        config::Anchor::Right => (layout.gaps, layout.gaps, layout.gaps, 0),
+        config::Anchor::Top => (layout.gaps, layout.gaps, 0, layout.gaps),
+        config::Anchor::Bottom => (0, layout.gaps, layout.gaps, layout.gaps),
+    });
+
+    // x, y, width, height
+    let input_region = Some(match layout.anchor {
+        config::Anchor::Left => {
+            (0, 0, layout.width as i32, monitor_size.height as i32)
+        }
+        config::Anchor::Right => (
+            monitor_size.width as i32 - layout.width as i32,
+            0,
+            layout.width as i32,
+            monitor_size.height as i32,
+        ),
+        config::Anchor::Top => {
+            (0, 0, monitor_size.width as i32, layout.width as i32)
+        }
+        config::Anchor::Bottom => (
+            0,
+            monitor_size.height as i32 - layout.width as i32,
+            monitor_size.width as i32,
+            layout.width as i32,
+        ),
+    });
+
+    let (id, open_task) = iced::window::open(iced::window::Settings {
+        size,
+        decorations: false,
+        resizable: false,
+        minimizable: false,
+        transparent: true,
+        platform_specific: PlatformSpecific {
+            layer_shell: LayerShellSettings {
+                anchor,
+                margin,
+                input_region,
+                layer: Some(Layer::Top),
                 exclusive_zone: Some(layout.width as i32 + layout.gaps),
-                // no right gaps because right edge of the layer surface is actually the right edge
-                // of the screen. Instead, increase the exclusive zone to emulate gaps
-                margin: Some((layout.gaps, 0, layout.gaps, layout.gaps)),
-                input_region: Some((0, 0, layout.width as i32, 1200)),
                 keyboard_interactivity: Some(KeyboardInteractivity::None),
                 namespace: Some(String::from(BAR_NAMESPACE)),
                 ..Default::default()
@@ -191,7 +257,7 @@ pub fn open_window(
         ..Default::default()
     });
 
-    (id, open_task.map(Message::OpenWindow))
+    (id, open_task.map(|_| Message::NoOp))
 }
 
 #[profiling::function]

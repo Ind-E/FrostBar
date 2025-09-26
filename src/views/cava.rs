@@ -23,10 +23,24 @@ impl CavaView {
 
 #[profiling::all_functions]
 impl<'a> CavaView {
-    pub fn view(&'a self, service: &'a CavaService) -> Element<'a, Message> {
-        let canvas = Canvas::new(CavaCanvas::new(service, &self.config))
-            .width(Length::Fill)
-            .height(130);
+    pub fn view(
+        &'a self,
+        service: &'a CavaService,
+        layout: &config::Layout,
+    ) -> Element<'a, Message> {
+        let canvas;
+        let vertical = layout.anchor.vertical();
+        if vertical {
+            canvas =
+                Canvas::new(CavaCanvas::new(service, &self.config, vertical))
+                    .width(Length::Fill)
+                    .height(130);
+        } else {
+            canvas =
+                Canvas::new(CavaCanvas::new(service, &self.config, vertical))
+                    .width(130)
+                    .height(Length::Fill);
+        }
 
         maybe_mouse_binds(canvas, &self.config.binds)
     }
@@ -36,14 +50,20 @@ struct CavaCanvas<'a> {
     service: &'a CavaService,
     config: &'a config::Cava,
     cache: canvas::Cache,
+    vertical: bool,
 }
 
 impl<'a> CavaCanvas<'a> {
-    pub fn new(service: &'a CavaService, config: &'a config::Cava) -> Self {
+    pub fn new(
+        service: &'a CavaService,
+        config: &'a config::Cava,
+        vertical: bool,
+    ) -> Self {
         Self {
             service,
             config,
             cache: canvas::Cache::new(),
+            vertical,
         }
     }
 }
@@ -63,7 +83,7 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
             renderer,
             bounds.size(),
             |frame: &mut canvas::Frame| {
-                let center_x = frame.center().x;
+                let center = frame.center();
 
                 let bars_per_channel = self.service.bars.len() / 2;
 
@@ -71,8 +91,11 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                     return;
                 }
 
-                let bar_thickness_total =
-                    frame.height() / bars_per_channel as f32;
+                let bar_thickness_total = if self.vertical {
+                    frame.height() / bars_per_channel as f32
+                } else {
+                    frame.width() / bars_per_channel as f32
+                };
                 let spacing = bar_thickness_total * self.config.spacing;
                 let bar_thickness = bar_thickness_total - spacing;
 
@@ -81,13 +104,14 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                     let right_val =
                         self.service.bars[2 * bars_per_channel - i - 1];
 
-                    let max_bar_width = center_x;
+                    let max_bar_width =
+                        if self.vertical { center.x } else { center.y };
                     let left_width = max_bar_width
                         * (f32::from(left_val) / MAX_BAR_HEIGHT as f32);
                     let right_width = max_bar_width
                         * (f32::from(right_val) / MAX_BAR_HEIGHT as f32);
 
-                    let y_pos = i as f32 * bar_thickness_total + spacing / 2.0;
+                    let pos = i as f32 * bar_thickness_total + spacing / 2.0;
 
                     let color_index =
                         (i * self.service.colors.len()) / bars_per_channel;
@@ -99,20 +123,44 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                         .unwrap_or(&Color::WHITE);
 
                     if left_val > 0 {
-                        let top_left = Point {
-                            x: center_x - left_width,
-                            y: y_pos,
+                        let (top_left, bar_size) = if self.vertical {
+                            (
+                                Point {
+                                    x: center.x - left_width,
+                                    y: pos,
+                                },
+                                Size::new(left_width, bar_thickness),
+                            )
+                        } else {
+                            (
+                                Point {
+                                    x: pos,
+                                    y: center.y - left_width,
+                                },
+                                Size::new(bar_thickness, left_width),
+                            )
                         };
-                        let bar_size = Size::new(left_width, bar_thickness);
                         frame.fill_rectangle(top_left, bar_size, *bar_color);
                     }
 
                     if right_val > 0 {
-                        let top_left = Point {
-                            x: center_x,
-                            y: y_pos,
+                        let (top_left, bar_size) = if self.vertical {
+                            (
+                                Point {
+                                    x: center.x,
+                                    y: pos,
+                                },
+                                Size::new(right_width, bar_thickness),
+                            )
+                        } else {
+                            (
+                                Point {
+                                    x: pos,
+                                    y: center.y,
+                                },
+                                Size::new(bar_thickness, right_width),
+                            )
                         };
-                        let bar_size = Size::new(right_width, bar_thickness);
                         frame.fill_rectangle(top_left, bar_size, *bar_color);
                     }
                 }

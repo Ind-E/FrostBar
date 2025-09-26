@@ -4,7 +4,7 @@ use iced::{
     widget::{Container, Tooltip, container, tooltip::Position},
 };
 
-use crate::Message;
+use crate::{Message, config};
 
 pub fn _bg(_theme: &Theme) -> container::Style {
     container::Style {
@@ -18,6 +18,7 @@ pub fn _bg(_theme: &Theme) -> container::Style {
 pub fn styled_tooltip<'a>(
     content: impl Into<Element<'a, Message>>,
     tooltip: impl Into<Element<'a, Message>>,
+    anchor: &config::Anchor,
 ) -> Element<'a, Message> {
     Tooltip::new(
         content,
@@ -30,7 +31,12 @@ pub fn styled_tooltip<'a>(
                 ..Default::default()
             })
             .padding(5),
-        Position::Right,
+        match anchor {
+            config::Anchor::Left => Position::Right,
+            config::Anchor::Right => Position::Left,
+            config::Anchor::Top => Position::Bottom,
+            config::Anchor::Bottom => Position::Top,
+        },
     )
     .into()
 }

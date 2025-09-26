@@ -140,6 +140,7 @@ impl Service for NiriService {
                                     error!("{e}");
                                 }
                             } else {
+                                error!("failed to receive event");
                                 break;
                             }
                         },
@@ -150,6 +151,7 @@ impl Service for NiriService {
                                     error!("Failed to send request to niri socket: {e}");
                                 }
                             } else {
+                                error!("failed to receive request");
                                 break;
                             }
                         },
