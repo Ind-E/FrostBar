@@ -21,7 +21,7 @@ note: FrostBar is currently a work in progress and under active development. The
 - time
 - cava audio visualization
 - mpris album art
-- basic configuration file
+- hot reloaded config file
 
 
 ## Planned Features
@@ -29,6 +29,4 @@ note: FrostBar is currently a work in progress and under active development. The
 - system tray icons
 - ipc
 - ability to load system fonts
-- expanded configuration options
-- hot reload config file
 - animations
