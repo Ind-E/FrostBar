@@ -557,41 +557,37 @@ impl Bar {
 
         let vertical = self.config.layout.anchor.vertical();
 
-        let start_section;
-
-        if vertical {
-            start_section = Container::new(
+        let start_section = if vertical {
+            Container::new(
                 Column::with_children(start_views).align_x(Alignment::Center),
             )
             .align_x(Alignment::Center)
-            .align_y(Alignment::Start);
+            .align_y(Alignment::Start)
         } else {
-            start_section = Container::new(
+            Container::new(
                 Row::with_children(start_views)
                     .align_y(Alignment::Center)
                     .padding(left(5).right(5))
                     .spacing(5),
             )
             .align_x(Alignment::Start)
-            .align_y(Alignment::Center);
-        }
+            .align_y(Alignment::Center)
+        };
 
         let start_section =
             start_section.width(Length::Fill).height(Length::Fill);
 
-        let middle_section;
-
-        if vertical {
-            middle_section = Container::new(
+        let middle_section = if vertical {
+            Container::new(
                 Column::with_children(middle_views).align_x(Alignment::Center),
-            );
+            )
         } else {
-            middle_section = Container::new(
+            Container::new(
                 Row::with_children(middle_views)
                     .align_y(Alignment::Center)
                     .spacing(5),
-            );
-        }
+            )
+        };
 
         let middle_section = middle_section
             .width(Length::Fill)
@@ -599,24 +595,22 @@ impl Bar {
             .align_x(Alignment::Center)
             .align_y(Alignment::Center);
 
-        let end_section;
-
-        if vertical {
-            end_section = Container::new(
+        let end_section = if vertical {
+            Container::new(
                 Column::with_children(end_views).align_x(Alignment::Center),
             )
             .align_x(Alignment::Center)
-            .align_y(Alignment::End);
+            .align_y(Alignment::End)
         } else {
-            end_section = Container::new(
+            Container::new(
                 Row::with_children(end_views)
                     .align_y(Alignment::Center)
                     .spacing(5)
                     .padding(left(5).right(5)),
             )
             .align_x(Alignment::End)
-            .align_y(Alignment::Center);
-        }
+            .align_y(Alignment::Center)
+        };
 
         let end_section = end_section.width(Length::Fill).height(Length::Fill);
 

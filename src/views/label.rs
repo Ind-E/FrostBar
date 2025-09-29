@@ -23,9 +23,9 @@ impl<'a> LabelView {
         .id(self.id.clone());
 
         if layout.anchor.vertical() {
-            content = content.center_x(Length::Fill)
+            content = content.center_x(Length::Fill);
         } else {
-            content = content.center_y(Length::Fill)
+            content = content.center_y(Length::Fill);
         }
 
         let element = if let Some(tooltip) = &self.config.tooltip {

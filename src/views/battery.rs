@@ -51,9 +51,9 @@ impl<'a> BatteryView {
         let mut icon_widget = Container::new(icon_text).id(self.id.clone());
 
         if layout.anchor.vertical() {
-            icon_widget = icon_widget.center_x(Length::Fill)
+            icon_widget = icon_widget.center_x(Length::Fill);
         } else {
-            icon_widget = icon_widget.center_y(Length::Fill)
+            icon_widget = icon_widget.center_y(Length::Fill);
         }
 
         let tooltip = Text::new(

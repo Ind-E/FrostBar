@@ -55,10 +55,10 @@ impl<'a> WindowView<'a> {
         ))
         .id(self.container_id.clone());
         if layout.anchor.vertical() {
-            content = content.center_x(Length::Fill)
+            content = content.center_x(Length::Fill);
         } else {
-            content = content.center_y(Length::Fill)
-        };
+            content = content.center_y(Length::Fill);
+        }
 
         let tooltip =
             Text::new(self.window.title.clone()).shaping(Shaping::Advanced);

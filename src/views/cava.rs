@@ -28,19 +28,16 @@ impl<'a> CavaView {
         service: &'a CavaService,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
-        let canvas;
         let vertical = layout.anchor.vertical();
-        if vertical {
-            canvas =
-                Canvas::new(CavaCanvas::new(service, &self.config, vertical))
-                    .width(Length::Fill)
-                    .height(130);
+        let canvas = if vertical {
+            Canvas::new(CavaCanvas::new(service, &self.config, vertical))
+                .width(Length::Fill)
+                .height(130)
         } else {
-            canvas =
-                Canvas::new(CavaCanvas::new(service, &self.config, vertical))
-                    .width(130)
-                    .height(Length::Fill);
-        }
+            Canvas::new(CavaCanvas::new(service, &self.config, vertical))
+                .width(130)
+                .height(Length::Fill)
+        };
 
         maybe_mouse_binds(canvas, &self.config.binds)
     }

@@ -160,12 +160,11 @@ impl Service for MprisService {
                             async move { colors },
                             Message::CavaColorUpdate,
                         );
-                    } else {
-                        return iced::Task::perform(
-                            async move { None },
-                            Message::CavaColorUpdate,
-                        );
                     }
+                    return iced::Task::perform(
+                        async move { None },
+                        Message::CavaColorUpdate,
+                    );
                 }
                 iced::Task::none()
             }

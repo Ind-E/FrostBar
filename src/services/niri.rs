@@ -121,7 +121,7 @@ impl Service for NiriService {
             let (event_tx, mut event_rx) = mpsc::unbounded_channel();
             std::thread::spawn(move || {
                 profiling::register_thread!("niri event listener");
-                run_event_listener(event_tx);
+                run_event_listener(&event_tx);
             });
 
             let (request_tx, mut request_rx) = mpsc::channel(32);
@@ -303,25 +303,20 @@ impl NiriService {
                         .collect();
                 });
             }
-            Event::WorkspaceUrgencyChanged { id: _, urgent: _ } => {}
-            Event::WorkspaceActiveWindowChanged {
-                workspace_id: _,
-                active_window_id: _,
-            } => {}
-            Event::WindowFocusChanged { id: _ } => {}
-            Event::WindowUrgencyChanged { id: _, urgent: _ } => {}
-            Event::KeyboardLayoutsChanged {
-                keyboard_layouts: _,
-            } => {}
-            Event::KeyboardLayoutSwitched { idx: _ } => {}
-            Event::OverviewOpenedOrClosed { is_open: _ } => {}
-            Event::ConfigLoaded { failed: _ } => {}
+            Event::WorkspaceUrgencyChanged { .. }
+            | Event::WorkspaceActiveWindowChanged { .. }
+            | Event::WindowFocusChanged { .. }
+            | Event::WindowUrgencyChanged { .. }
+            | Event::KeyboardLayoutsChanged { .. }
+            | Event::KeyboardLayoutSwitched { .. }
+            | Event::OverviewOpenedOrClosed { .. }
+            | Event::ConfigLoaded { .. } => {}
         }
         iced::Task::none()
     }
 }
 
-fn run_event_listener(tx: mpsc::UnboundedSender<Event>) {
+fn run_event_listener(tx: &mpsc::UnboundedSender<Event>) {
     let mut sock = match Socket::connect() {
         Ok(s) => s,
         Err(e) => {

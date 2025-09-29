@@ -292,20 +292,15 @@ where
         let args = iter_args
             .map(|val| ::knus::traits::DecodeScalar::decode(val, ctx))
             .collect::<Result<_, _>>()?;
-        let children =
-            node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]);
-        children
-            .iter()
-            .flat_map(|child| {
-                let name_str = &**child.node_name;
-                ctx.emit_error(DecodeError::unexpected(
-                    child,
-                    "node",
-                    format!("unexpected node `{0}`", name_str.escape_default(),),
-                ));
-                None
-            })
-            .collect::<Result<(), DecodeError<_>>>()?;
+        let children = node.children.as_ref().map_or(&[][..], |lst| &lst[..]);
+        for child in children {
+            let name_str = &**child.node_name;
+            ctx.emit_error(DecodeError::unexpected(
+                child,
+                "node",
+                format!("unexpected node `{0}`", name_str.escape_default(),),
+            ));
+        }
         Ok(Command { sh, args })
     }
 }
@@ -529,7 +524,7 @@ where
                 format!("unexpected property `{}`", name.escape_default()),
             ));
         }
-        for child in node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]) {
+        for child in node.children.as_ref().map_or(&[][..], |lst| &lst[..]) {
             ctx.emit_error(DecodeError::unexpected(
                 child,
                 "node",
