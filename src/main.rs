@@ -33,7 +33,7 @@ use crate::{
     services::{
         Service,
         battery::BatteryService,
-        cava::{CavaError, CavaService},
+        cava::CavaService,
         mpris::{MprisEvent, MprisService},
         niri::{NiriEvent, NiriService},
         time::TimeService,
@@ -116,7 +116,7 @@ pub enum Message {
 
     NiriEvent(NiriEvent),
 
-    CavaUpdate(Result<String, CavaError>),
+    CavaUpdate(Option<String>),
     CavaColorUpdate(Option<Vec<Color>>),
 
     MprisEvent(MprisEvent),

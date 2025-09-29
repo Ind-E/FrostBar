@@ -15,14 +15,6 @@ use tracing::error;
 
 use crate::{Message, services::Service, utils::BoxStream};
 
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum CavaError {
-    #[error("Cava command failed to start: {0}")]
-    CommandFailed(String),
-    #[error("Could not capture Cava's stdout pipe")]
-    PipeFailed,
-}
-
 const CAVA_CONFIG: &str = include_str!("../../assets/cava-config");
 
 pub fn write_temp_cava_config() -> std::io::Result<std::path::PathBuf> {
@@ -49,14 +41,14 @@ struct CavaSubscriptionRecipe {}
 
 #[profiling::all_functions]
 impl Recipe for CavaSubscriptionRecipe {
-    type Output = Result<String, CavaError>;
+    type Output = Option<String>;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
         std::any::TypeId::of::<Self>().hash(state);
     }
 
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
-        let (tx, rx) = mpsc::channel::<Result<String, CavaError>>(128);
+        let (tx, rx) = mpsc::channel::<Option<String>>(128);
 
         let config_path =
             write_temp_cava_config().unwrap().display().to_string();
@@ -71,15 +63,13 @@ impl Recipe for CavaSubscriptionRecipe {
             {
                 Ok(cmd) => cmd,
                 Err(e) => {
-                    let _ = tx.blocking_send(Err(CavaError::CommandFailed(
-                        e.to_string(),
-                    )));
+                    error!("Cava Command Failed: {e}");
                     return;
                 }
             };
 
             let Some(stdout) = command.stdout.take() else {
-                let _ = tx.blocking_send(Err(CavaError::PipeFailed));
+                error!("Cava Pipe Failed");
                 return;
             };
 
@@ -88,7 +78,7 @@ impl Recipe for CavaSubscriptionRecipe {
             for line in reader.lines() {
                 match line {
                     Ok(line_str) => {
-                        if tx.blocking_send(Ok(line_str)).is_err() {
+                        if tx.blocking_send(Some(line_str)).is_err() {
                             break;
                         }
                     }
@@ -109,18 +99,13 @@ impl Service for CavaService {
         from_recipe(CavaSubscriptionRecipe {}).map(Message::CavaUpdate)
     }
 
-    type Event = Result<String, CavaError>;
+    type Event = Option<String>;
     fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
-        match event {
-            Ok(line) => {
-                self.bars = line
-                    .split(';')
-                    .map(|s| s.parse::<u8>().unwrap_or(0))
-                    .collect();
-            }
-            Err(e) => {
-                error!("cava error: {e}");
-            }
+        if let Some(line) = event {
+            self.bars = line
+                .split(';')
+                .map(|s| s.parse::<u8>().unwrap_or(0))
+                .collect();
         }
         iced::Task::none()
     }
