@@ -8,56 +8,56 @@ use std::{
 
 use directories::ProjectDirs;
 use iced::{Color, color};
-use knuffel::errors::DecodeError;
+use knus::errors::DecodeError;
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
 use tracing::{error, info};
 
 use crate::constants::BAR_NAMESPACE;
 
-#[derive(knuffel::Decode, Default, Debug)]
+#[derive(knus::Decode, Default, Debug)]
 pub struct Config {
-    #[knuffel(child, default)]
+    #[knus(child, default)]
     pub layout: Layout,
-    #[knuffel(child, default)]
+    #[knus(child, default)]
     pub style: Style,
-    #[knuffel(child, default)]
+    #[knus(child, default)]
     pub start: Start,
-    #[knuffel(child, default)]
+    #[knus(child, default)]
     pub middle: Middle,
-    #[knuffel(child, default)]
+    #[knus(child, default)]
     pub end: End,
 }
 
-#[derive(knuffel::Decode, Debug, Default)]
+#[derive(knus::Decode, Debug, Default)]
 pub struct Start {
-    #[knuffel(children, default)]
+    #[knus(children, default)]
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Default)]
+#[derive(knus::Decode, Debug, Default)]
 pub struct Middle {
-    #[knuffel(children, default)]
+    #[knus(children, default)]
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Default)]
+#[derive(knus::Decode, Debug, Default)]
 pub struct End {
-    #[knuffel(children, default)]
+    #[knus(children, default)]
     pub modules: Vec<Module>,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, PartialEq)]
+#[derive(knus::Decode, Debug, Clone, PartialEq)]
 pub struct Layout {
-    #[knuffel(child, unwrap(argument), default = 42)]
+    #[knus(child, unwrap(argument), default = 42)]
     pub width: u32,
-    #[knuffel(child, unwrap(argument), default = 0)]
+    #[knus(child, unwrap(argument), default = 0)]
     pub gaps: i32,
-    #[knuffel(child, unwrap(argument), default = Self::default().anchor)]
+    #[knus(child, unwrap(argument), default = Self::default().anchor)]
     pub anchor: Anchor,
 }
 
-#[derive(knuffel::DecodeScalar, Debug, Clone, PartialEq)]
+#[derive(knus::DecodeScalar, Debug, Clone, PartialEq)]
 pub enum Anchor {
     Left,
     Right,
@@ -84,11 +84,11 @@ impl Default for Layout {
     }
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knus::Decode, Debug, Clone)]
 pub struct Style {
-    #[knuffel(child, unwrap(argument), default = 0)]
+    #[knus(child, unwrap(argument), default = 0)]
     pub border_radius: u16,
-    #[knuffel(child, default = Self::default().background)]
+    #[knus(child, default = Self::default().background)]
     pub background: ConfigColor,
 }
 
@@ -101,7 +101,7 @@ impl Default for Style {
     }
 }
 
-#[derive(knuffel::Decode, Debug)]
+#[derive(knus::Decode, Debug)]
 pub enum Module {
     Cava(Cava),
     Battery(Battery),
@@ -111,27 +111,27 @@ pub enum Module {
     Label(Label),
 }
 
-#[derive(knuffel::Decode, Debug)]
+#[derive(knus::Decode, Debug)]
 pub struct Cava {
-    #[knuffel(child, unwrap(argument), default = 3)]
+    #[knus(child, unwrap(argument), default = 3)]
     pub volume_percent: i32,
 
-    #[knuffel(child, unwrap(argument), default = 0.1)]
+    #[knus(child, unwrap(argument), default = 0.1)]
     pub spacing: f32,
 
-    #[knuffel(flatten(child), default)]
+    #[knus(flatten(child), default)]
     pub binds: MouseBinds,
 }
 
-#[derive(knuffel::Decode, Debug)]
+#[derive(knus::Decode, Debug)]
 pub struct Battery {
-    #[knuffel(child, unwrap(argument), default = Self::default().icon_size)]
+    #[knus(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
 
-    #[knuffel(child, default = Self::default().charging_color)]
+    #[knus(child, default = Self::default().charging_color)]
     pub charging_color: ConfigColor,
 
-    #[knuffel(flatten(child), default)]
+    #[knus(flatten(child), default)]
     pub binds: MouseBinds,
 }
 
@@ -145,70 +145,70 @@ impl Default for Battery {
     }
 }
 
-#[derive(knuffel::Decode, Debug)]
+#[derive(knus::Decode, Debug)]
 pub struct Time {
-    #[knuffel(child, unwrap(argument), default = "%I\n%M".to_string())]
+    #[knus(child, unwrap(argument), default = "%I\n%M".to_string())]
     pub format: String,
 
-    #[knuffel(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
+    #[knus(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
     pub tooltip_format: String,
 
-    #[knuffel(flatten(child), default)]
+    #[knus(flatten(child), default)]
     pub binds: MouseBinds,
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knus::Decode, Debug, Clone)]
 pub struct Mpris {
-    #[knuffel(child, unwrap(argument), default = "󰝚".to_string())]
+    #[knus(child, unwrap(argument), default = "󰝚".to_string())]
     pub placeholder: String,
 
-    #[knuffel(flatten(child), default)]
+    #[knus(flatten(child), default)]
     pub binds: MouseBindsForMpris,
 }
 
-#[derive(knuffel::Decode, Debug, Clone)]
+#[derive(knus::Decode, Debug, Clone)]
 pub struct Niri {
-    #[knuffel(child, unwrap(argument), default = 10)]
+    #[knus(child, unwrap(argument), default = 10)]
     pub spacing: u32,
 
-    #[knuffel(child, unwrap(argument), default = 0)]
+    #[knus(child, unwrap(argument), default = 0)]
     pub workspace_offset: i8,
 }
 
-#[derive(knuffel::Decode, Debug)]
+#[derive(knus::Decode, Debug)]
 pub struct Label {
-    #[knuffel(child, unwrap(argument), default = String::new())]
+    #[knus(child, unwrap(argument), default = String::new())]
     pub text: String,
 
-    #[knuffel(child, unwrap(argument), default = 18)]
+    #[knus(child, unwrap(argument), default = 18)]
     pub size: u32,
 
-    #[knuffel(child, unwrap(argument), default = None)]
+    #[knus(child, unwrap(argument), default = None)]
     pub tooltip: Option<String>,
 
-    #[knuffel(flatten(child), default)]
+    #[knus(flatten(child), default)]
     pub binds: MouseBinds,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, Default)]
+#[derive(knus::Decode, Debug, Clone, Default)]
 pub struct MouseBinds {
-    #[knuffel(child)]
+    #[knus(child)]
     pub mouse_left: Option<Command>,
 
-    #[knuffel(child)]
+    #[knus(child)]
     pub mouse_right: Option<Command>,
 
-    #[knuffel(child)]
+    #[knus(child)]
     pub mouse_middle: Option<Command>,
 
-    #[knuffel(child)]
+    #[knus(child)]
     pub scroll_up: Option<Command>,
 
-    #[knuffel(child)]
+    #[knus(child)]
     pub scroll_down: Option<Command>,
 }
 
-#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
+#[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
 pub enum MediaControl {
     Play,
     Pause,
@@ -218,21 +218,21 @@ pub enum MediaControl {
     Previous,
 }
 
-#[derive(knuffel::Decode, Debug, Clone, Default)]
+#[derive(knus::Decode, Debug, Clone, Default)]
 pub struct MouseBindsForMpris {
-    #[knuffel(child, unwrap(argument))]
+    #[knus(child, unwrap(argument))]
     pub mouse_left: Option<MediaControl>,
 
-    #[knuffel(child, unwrap(argument))]
+    #[knus(child, unwrap(argument))]
     pub mouse_right: Option<MediaControl>,
 
-    #[knuffel(child, unwrap(argument))]
+    #[knus(child, unwrap(argument))]
     pub mouse_middle: Option<MediaControl>,
 
-    #[knuffel(child, unwrap(argument))]
+    #[knus(child, unwrap(argument))]
     pub scroll_up: Option<MediaControl>,
 
-    #[knuffel(child, unwrap(argument))]
+    #[knus(child, unwrap(argument))]
     pub scroll_down: Option<MediaControl>,
 }
 
@@ -243,13 +243,13 @@ pub struct Command {
     pub args: Vec<String>,
 }
 
-impl<S> ::knuffel::Decode<S> for Command
+impl<S> ::knus::Decode<S> for Command
 where
-    S: ::knuffel::traits::ErrorSpan,
+    S: ::knus::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &::knuffel::ast::SpannedNode<S>,
-        ctx: &mut ::knuffel::decode::Context<S>,
+        node: &::knus::ast::SpannedNode<S>,
+        ctx: &mut ::knus::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         if let Some(type_name) = &node.type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -263,7 +263,7 @@ where
         for (name, val) in &node.properties {
             match &***name {
                 "sh" => {
-                    sh = ::knuffel::traits::DecodeScalar::decode(val, ctx)?;
+                    sh = ::knus::traits::DecodeScalar::decode(val, ctx)?;
                 }
                 name_str => {
                     return Err(DecodeError::unexpected(
@@ -290,7 +290,7 @@ where
             ));
         }
         let args = iter_args
-            .map(|val| ::knuffel::traits::DecodeScalar::decode(val, ctx))
+            .map(|val| ::knus::traits::DecodeScalar::decode(val, ctx))
             .collect::<Result<_, _>>()?;
         let children =
             node.children.as_ref().map(|lst| &lst[..]).unwrap_or(&[]);
@@ -327,7 +327,7 @@ impl Config {
     }
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
-        match knuffel::parse::<Config>(filename, text) {
+        match knus::parse::<Config>(filename, text) {
             Ok(config) => {
                 info!("Successfully parsed config");
                 Ok(config)
@@ -445,25 +445,25 @@ impl From<Color> for ConfigColor {
     }
 }
 
-#[derive(knuffel::Decode)]
+#[derive(knus::Decode)]
 struct ColorRgba {
-    #[knuffel(argument)]
+    #[knus(argument)]
     r: u8,
-    #[knuffel(argument)]
+    #[knus(argument)]
     g: u8,
-    #[knuffel(argument)]
+    #[knus(argument)]
     b: u8,
-    #[knuffel(argument)]
+    #[knus(argument)]
     a: Option<f32>,
 }
 
-impl<S> knuffel::Decode<S> for ConfigColor
+impl<S> knus::Decode<S> for ConfigColor
 where
-    S: knuffel::traits::ErrorSpan,
+    S: knus::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &knuffel::ast::SpannedNode<S>,
-        ctx: &mut knuffel::decode::Context<S>,
+        node: &knus::ast::SpannedNode<S>,
+        ctx: &mut knus::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         // Check for unexpected type name.
         if let Some(type_name) = &node.type_name {
@@ -485,7 +485,7 @@ where
             ctx.emit_error(DecodeError::TypeName {
                 span: typ.span().clone(),
                 found: Some((**typ).clone()),
-                expected: knuffel::errors::ExpectedType::no_type(),
+                expected: knus::errors::ExpectedType::no_type(),
                 rust_type: "str",
             });
         }
@@ -493,7 +493,7 @@ where
         // Check the argument type.
         let rv = match *val.literal {
             // If it's a string, use parse.
-            knuffel::ast::Literal::String(ref s) => {
+            knus::ast::Literal::String(ref s) => {
                 Color::parse(s).ok_or_else(|| {
                     DecodeError::conversion(&val.literal, "invalid hex literal")
                 })

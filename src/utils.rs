@@ -237,7 +237,6 @@ pub fn open_window(
     let (id, open_task) = iced::window::open(iced::window::Settings {
         size,
         decorations: false,
-        resizable: false,
         minimizable: false,
         transparent: true,
         platform_specific: PlatformSpecific {

@@ -27,8 +27,8 @@ iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntle
 itertools = { version = "0.14.0", default-features = false, features = [
     "use_alloc",
 ] }
-knuffel = "3.2.0"
-miette = { version = "5.1.1", features = ["fancy-no-backtrace"] }
+knus = "3.3.1"
+miette = { version = "7.6.0", features = ["fancy-no-backtrace"] }
 niri-ipc = { git = "https://github.com/YaLTeR/niri/", branch = "main" }
 notify-rust = "4.11.7"
 profiling = { version = "1.0.17" }
