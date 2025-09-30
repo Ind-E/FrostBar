@@ -1,6 +1,6 @@
 use iced::{
     Color, Subscription,
-    futures::{self, FutureExt, StreamExt, stream::select_all},
+    futures::{StreamExt, stream::select_all},
     widget::image,
 };
 use std::collections::HashMap;
@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::{
     Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
@@ -63,7 +63,7 @@ impl Service for MprisService {
             let mut name_owner_stream = dbus_proxy.receive_signal("NameOwnerChanged").await.unwrap().fuse();
 
             loop {
-                futures::select! {
+                tokio::select! {
                     signal = name_owner_stream.next() => {
                         if let Some(signal) = signal
                             && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>()
@@ -85,7 +85,7 @@ impl Service for MprisService {
                         }
                     },
 
-                    event_result = player_streams.next().fuse() => {
+                    event_result = player_streams.next(), if !player_streams.is_empty() => {
                         if let Some((pname, Ok(event))) = event_result {
                             if let MprisEvent::PlayerVanished {ref name} = event
                                 &&  *name == pname {
@@ -97,10 +97,6 @@ impl Service for MprisService {
                         }
                     }
 
-                    complete => {
-                        debug!("break");
-                        break
-                    },
                 }
             }
 

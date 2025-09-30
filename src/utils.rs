@@ -165,31 +165,23 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
                 }
             }
             if num_files >= MAX_LOG_FILES
-                && let Err(e) = std::fs::remove_file(dbg!(
-                    log_dir.join(format!("frostbar.log-{min_log}"))
-                ))
+                && let Err(e) = std::fs::remove_file(
+                    log_dir.join(format!("frostbar.log-{min_log}")),
+                )
             {
                 eprintln!("failed to remove old log file: {e}");
             }
             nlog += 1;
-
-            info!(
-                "saving logs to {:?}",
-                log_dir.join(LOG_FILE_PREFIX).join(nlog.to_string())
-            );
         }
         Err(e) => {
-            let log_file_suffix = "err".to_string();
-
-            eprintln!(
-                "failed to read log directory: {e}, saving logs to {}",
-                log_dir
-                    .join(LOG_FILE_PREFIX)
-                    .join(&log_file_suffix)
-                    .display()
-            );
+            eprintln!("failed to read log directory: {e}");
         }
     }
+
+    info!(
+        "saving logs to {:?}",
+        log_dir.join(LOG_FILE_PREFIX).join(nlog.to_string())
+    );
 
     let logfile = tracing_appender::rolling::never(
         &log_dir,
