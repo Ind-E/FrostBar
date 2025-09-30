@@ -21,7 +21,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
 };
-use tracing::Level;
+use tracing::{Level, info};
 use tracing_subscriber::{
     fmt::{self, writer::MakeWriterExt},
     prelude::__tracing_subscriber_SubscriberExt,
@@ -135,13 +135,67 @@ pub fn process_modules(
     }
 }
 
+const LOG_FILE_PREFIX: &str = "frostbar.log";
+const MAX_LOG_FILES: usize = 5;
 pub fn init_tracing(config_dir: &Path) -> PathBuf {
     let debug = cfg!(debug_assertions);
 
     let log_dir = config_dir.join("logs/");
 
-    let logfile = tracing_appender::rolling::hourly(&log_dir, "frostbar.log")
-        .with_max_level(Level::INFO);
+    let mut nlog = 0;
+
+    let mut min_log = u64::MAX;
+
+    match read_log_dir(&log_dir) {
+        Ok(log_files) => {
+            let mut num_files = 0;
+            for filename in log_files {
+                num_files += 1;
+                let trailing = filename
+                    .rsplit_once(|c: char| !c.is_ascii_digit())
+                    .map_or(filename.as_str(), |(_head, digits)| digits);
+
+                if let Ok(trailing_digits) = trailing.parse::<u64>() {
+                    if trailing_digits > nlog {
+                        nlog = trailing_digits;
+                    }
+                    if trailing_digits < min_log {
+                        min_log = trailing_digits;
+                    }
+                }
+            }
+            if num_files >= MAX_LOG_FILES
+                && let Err(e) = std::fs::remove_file(dbg!(
+                    log_dir.join(format!("frostbar.log-{min_log}"))
+                ))
+            {
+                eprintln!("failed to remove old log file: {e}");
+            }
+            nlog += 1;
+
+            info!(
+                "saving logs to {:?}",
+                log_dir.join(LOG_FILE_PREFIX).join(nlog.to_string())
+            );
+        }
+        Err(e) => {
+            let log_file_suffix = "err".to_string();
+
+            eprintln!(
+                "failed to read log directory: {e}, saving logs to {}",
+                log_dir
+                    .join(LOG_FILE_PREFIX)
+                    .join(&log_file_suffix)
+                    .display()
+            );
+        }
+    }
+
+    let logfile = tracing_appender::rolling::never(
+        &log_dir,
+        format!("frostbar.log-{nlog}"),
+    )
+    .with_max_level(Level::INFO);
 
     let logfile_layer =
         fmt::layer().compact().with_writer(logfile).with_ansi(false);
@@ -158,7 +212,23 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
         .with(logfile_layer)
         .with(stdout_layer)
         .init();
-    log_dir
+
+    log_dir.join(format!("frostbar.log-{nlog}"))
+}
+
+fn read_log_dir(path: &Path) -> std::io::Result<Vec<String>> {
+    let mut filenames = Vec::new();
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+        {
+            filenames.push(name.to_string());
+        }
+    }
+    Ok(filenames)
 }
 
 pub fn open_dummy_window() -> (iced::window::Id, iced::Task<Message>) {
@@ -214,24 +284,12 @@ pub fn open_window(
 
     // x, y, width, height
     let input_region = Some(match layout.anchor {
-        config::Anchor::Left => {
+        config::Anchor::Left | config::Anchor::Right => {
             (0, 0, layout.width as i32, monitor_size.height as i32)
         }
-        config::Anchor::Right => (
-            monitor_size.width as i32 - layout.width as i32,
-            0,
-            layout.width as i32,
-            monitor_size.height as i32,
-        ),
-        config::Anchor::Top => {
+        config::Anchor::Top | config::Anchor::Bottom => {
             (0, 0, monitor_size.width as i32, layout.width as i32)
         }
-        config::Anchor::Bottom => (
-            0,
-            monitor_size.height as i32 - layout.width as i32,
-            monitor_size.width as i32,
-            layout.width as i32,
-        ),
     });
 
     let (id, open_task) = iced::window::open(iced::window::Settings {
