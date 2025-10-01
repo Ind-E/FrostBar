@@ -4,7 +4,9 @@ use iced::{
 };
 
 use crate::{
-    Message, config, style::styled_tooltip, utils::maybe_mouse_binds,
+    Message, config,
+    style::{container_style, styled_tooltip},
+    utils::maybe_mouse_binds,
     views::BarPosition,
 };
 
@@ -20,6 +22,7 @@ impl<'a> LabelView {
         let mut content = Container::new(
             text(self.config.text.clone()).size(self.config.size),
         )
+        .style(container_style(&self.config.style))
         .id(self.id.clone());
 
         if layout.anchor.vertical() {

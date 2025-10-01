@@ -1,9 +1,8 @@
 use iced::{
-    Border, Color, Element, Length,
-    border::Radius,
+    Element, Length,
     mouse::{Interaction, ScrollDelta},
     widget::{
-        Column, Container, Image, MouseArea, Row, Text, container,
+        Column, Container, Image, MouseArea, Responsive, Row, Text, container,
         text::Shaping,
     },
 };
@@ -12,7 +11,7 @@ use crate::{
     Message,
     config::{self},
     services::mpris::{MprisPlayer, MprisService},
-    style::styled_tooltip,
+    style::{container_style, styled_tooltip},
     views::BarPosition,
 };
 
@@ -81,35 +80,24 @@ impl<'a> MprisPlayerView {
         &self,
         player: &'a MprisPlayer,
         config: &'a config::Mpris,
-        layout: &config::Layout,
+        layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &player.art {
             Container::new(Image::new(art)).into()
         } else {
-            let mut container = Container::new(
-                Text::new(config.placeholder.clone())
-                    .size(20)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center(),
+            let container = Container::new(
+                Text::new(config.placeholder.clone()).size(20).center(),
             )
-            .padding(5)
-            .width(layout.width - layout.gaps as u32 * 4)
-            .height(layout.width - layout.gaps as u32 * 4)
-            .style(|_| container::Style {
-                border: Border {
-                    color: Color::WHITE,
-                    width: 1.0,
-                    radius: Radius::new(1),
-                },
-                ..Default::default()
-            });
+            .style(container_style(&config.placeholder_style))
+            .padding(5);
             if layout.anchor.vertical() {
-                container = container.center_x(Length::Fill);
+                container
+                    .center_x(Length::Fill)
+                    .height(layout.width - 10)
+                    .into()
             } else {
-                container = container.center_y(Length::Fill);
+                container.center_y(Length::Fill).width(layout.width).into()
             }
-            container.into()
         };
 
         let raw_artists =

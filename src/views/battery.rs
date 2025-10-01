@@ -5,8 +5,11 @@ use iced::{
 use tracing::warn;
 
 use crate::{
-    Message, config, services::battery::BatteryService, style::styled_tooltip,
-    utils::maybe_mouse_binds, views::BarPosition,
+    Message, config,
+    services::battery::BatteryService,
+    style::{container_style, styled_tooltip},
+    utils::maybe_mouse_binds,
+    views::BarPosition,
 };
 extern crate starship_battery as battery;
 
@@ -48,7 +51,9 @@ impl<'a> BatteryView {
             Text::new(icon).size(self.config.icon_size)
         };
 
-        let mut icon_widget = Container::new(icon_text).id(self.id.clone());
+        let mut icon_widget = Container::new(icon_text)
+            .id(self.id.clone())
+            .style(container_style(&self.config.style));
 
         if layout.anchor.vertical() {
             icon_widget = icon_widget.center_x(Length::Fill);

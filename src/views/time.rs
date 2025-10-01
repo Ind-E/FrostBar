@@ -4,8 +4,11 @@ use iced::{
 };
 
 use crate::{
-    Message, config, services::time::TimeService, style::styled_tooltip,
-    utils::maybe_mouse_binds, views::BarPosition,
+    Message, config,
+    services::time::TimeService,
+    style::{container_style, styled_tooltip},
+    utils::maybe_mouse_binds,
+    views::BarPosition,
 };
 
 pub struct TimeView {
@@ -26,8 +29,9 @@ impl TimeView {
             service.time.format(&self.config.tooltip_format).to_string(),
         );
 
-        let mut content =
-            Container::new(text(time).size(16)).id(self.id.clone());
+        let mut content = Container::new(text(time).size(16))
+            .id(self.id.clone())
+            .style(container_style(&self.config.style));
 
         if layout.anchor.vertical() {
             content = content.center_x(Length::Fill);

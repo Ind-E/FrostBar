@@ -8,7 +8,7 @@ use std::{
 
 use directories::ProjectDirs;
 use iced::{Color, color};
-use knus::errors::DecodeError;
+use knus::{DecodeScalar, errors::DecodeError};
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
 use tracing::{error, info};
@@ -121,6 +121,9 @@ pub struct Cava {
 
     #[knus(flatten(child), default)]
     pub binds: MouseBinds,
+
+    #[knus(child, default)]
+    pub style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug)]
@@ -131,6 +134,9 @@ pub struct Battery {
     #[knus(child, default = Self::default().charging_color)]
     pub charging_color: ConfigColor,
 
+    #[knus(child, default)]
+    pub style: ContainerStyle,
+
     #[knus(flatten(child), default)]
     pub binds: MouseBinds,
 }
@@ -140,6 +146,7 @@ impl Default for Battery {
         Self {
             icon_size: 22,
             charging_color: color!(0x73F5AB).into(),
+            style: ContainerStyle::default(),
             binds: MouseBinds::default(),
         }
     }
@@ -155,6 +162,9 @@ pub struct Time {
 
     #[knus(flatten(child), default)]
     pub binds: MouseBinds,
+
+    #[knus(child, default)]
+    pub style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone)]
@@ -164,6 +174,9 @@ pub struct Mpris {
 
     #[knus(flatten(child), default)]
     pub binds: MouseBindsForMpris,
+
+    #[knus(child, default)]
+    pub placeholder_style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone)]
@@ -173,6 +186,18 @@ pub struct Niri {
 
     #[knus(child, unwrap(argument), default = 0)]
     pub workspace_offset: i8,
+
+    #[knus(child, default)]
+    pub style: ContainerStyle,
+
+    #[knus(child, default)]
+    pub window_style: ContainerStyle,
+
+    #[knus(child, default)]
+    pub workspace_active_style: ContainerStyle,
+
+    #[knus(child, default)]
+    pub workspace_style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug)]
@@ -188,6 +213,9 @@ pub struct Label {
 
     #[knus(flatten(child), default)]
     pub binds: MouseBinds,
+
+    #[knus(child, default)]
+    pub style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]
@@ -243,13 +271,147 @@ pub struct Command {
     pub args: Vec<String>,
 }
 
-impl<S> ::knus::Decode<S> for Command
+#[derive(knus::Decode, Debug, Clone, Default)]
+pub struct ContainerStyle {
+    #[knus(child)]
+    pub text_color: Option<ConfigColor>,
+    #[knus(child)]
+    pub background: Option<ConfigColor>,
+    #[knus(child)]
+    pub border: Option<ConfigBorder>,
+}
+
+#[derive(knus::Decode, Debug, Clone)]
+pub struct ConfigBorder {
+    #[knus(child, default = Self::default().color)]
+    pub color: ConfigColor,
+    #[knus(child, unwrap(argument), default = Self::default().width)]
+    pub width: f32,
+    #[knus(child, default = Self::default().radius)]
+    pub radius: ConfigRadius,
+}
+
+impl Default for ConfigBorder {
+    fn default() -> Self {
+        Self {
+            color: ConfigColor {
+                inner: iced::Color::WHITE,
+            },
+            width: 0.0,
+            radius: ConfigRadius::All(0.0),
+        }
+    }
+}
+
+impl From<ConfigBorder> for iced::Border {
+    fn from(border: ConfigBorder) -> Self {
+        iced::Border {
+            color: border.color.into(),
+            width: border.width,
+            radius: match border.radius {
+                ConfigRadius::All(r) => iced::border::radius(r),
+                ConfigRadius::PerCorner(PerCorner {
+                    top_left,
+                    top_right,
+                    bottom_left,
+                    bottom_right,
+                }) => iced::border::Radius {
+                    top_left,
+                    top_right,
+                    bottom_right,
+                    bottom_left,
+                },
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ConfigRadius {
+    All(f32),
+    PerCorner(PerCorner),
+}
+
+#[derive(knus::Decode, Debug, Clone, Default)]
+pub struct PerCorner {
+    #[knus(child, unwrap(argument))]
+    top_left: f32,
+    #[knus(child, unwrap(argument))]
+    top_right: f32,
+    #[knus(child, unwrap(argument))]
+    bottom_left: f32,
+    #[knus(child, unwrap(argument))]
+    bottom_right: f32,
+}
+
+impl<S> knus::Decode<S> for ConfigRadius
 where
-    S: ::knus::traits::ErrorSpan,
+    S: knus::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &::knus::ast::SpannedNode<S>,
-        ctx: &mut ::knus::decode::Context<S>,
+        node: &knus::ast::SpannedNode<S>,
+        ctx: &mut knus::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        if let Some(type_name) = &node.type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+
+        for property in node.properties.iter() {
+            ctx.emit_error(DecodeError::unexpected(
+                property.0,
+                "property",
+                "no propertes expected for this node",
+            ));
+        }
+
+        let mut iter_args = node.arguments.iter();
+        let len = iter_args.len();
+        if len == 0 {
+            if node.children.iter().len() == 0 {
+                Err(DecodeError::missing(
+                    node,
+                    "additional argument `radius` is required",
+                ))
+            } else {
+                let per_corner = PerCorner::decode_node(node, ctx)?;
+                Ok(Self::PerCorner(per_corner))
+            }
+        } else if len == 1 {
+            for child in node.children.iter() {
+                ctx.emit_error(DecodeError::unexpected(
+                    &child,
+                    "node",
+                    "no children expected when radius is specified as an argument",
+                ));
+            }
+            let radius = iter_args.next().unwrap();
+            Ok(Self::All(f32::decode(radius, ctx)?))
+        } else {
+            for argument in iter_args {
+                ctx.emit_error(DecodeError::unexpected(
+                    &argument.literal,
+                    "argument",
+                    "expected 1 or 0 arguments",
+                ));
+            }
+
+            let per_corner = PerCorner::decode_node(node, ctx)?;
+            Ok(Self::PerCorner(per_corner))
+        }
+    }
+}
+
+impl<S> knus::Decode<S> for Command
+where
+    S: knus::traits::ErrorSpan,
+{
+    fn decode_node(
+        node: &knus::ast::SpannedNode<S>,
+        ctx: &mut knus::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         if let Some(type_name) = &node.type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -263,7 +425,7 @@ where
         for (name, val) in &node.properties {
             match &***name {
                 "sh" => {
-                    sh = ::knus::traits::DecodeScalar::decode(val, ctx)?;
+                    sh = knus::traits::DecodeScalar::decode(val, ctx)?;
                 }
                 name_str => {
                     return Err(DecodeError::unexpected(
@@ -290,7 +452,7 @@ where
             ));
         }
         let args = iter_args
-            .map(|val| ::knus::traits::DecodeScalar::decode(val, ctx))
+            .map(|val| knus::traits::DecodeScalar::decode(val, ctx))
             .collect::<Result<_, _>>()?;
         let children = node.children.as_ref().map_or(&[][..], |lst| &lst[..]);
         for child in children {
@@ -430,6 +592,12 @@ impl DerefMut for ConfigColor {
 
 impl From<&ConfigColor> for Color {
     fn from(color: &ConfigColor) -> Self {
+        color.inner
+    }
+}
+
+impl From<ConfigColor> for Color {
+    fn from(color: ConfigColor) -> Self {
         color.inner
     }
 }

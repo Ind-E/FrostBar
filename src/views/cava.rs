@@ -1,11 +1,11 @@
 use iced::{
     Color, Element, Length, Point, Renderer, Size,
-    widget::{Canvas, canvas},
+    widget::{Canvas, Container, canvas},
 };
 
 use crate::{
-    Message, config, services::cava::CavaService, utils::maybe_mouse_binds,
-    views::BarPosition,
+    Message, config, services::cava::CavaService, style::container_style,
+    utils::maybe_mouse_binds, views::BarPosition,
 };
 
 const MAX_BAR_HEIGHT: u32 = 12;
@@ -39,7 +39,10 @@ impl<'a> CavaView {
                 .height(Length::Fill)
         };
 
-        maybe_mouse_binds(canvas, &self.config.binds)
+        let container =
+            Container::new(canvas).style(container_style(&self.config.style));
+
+        maybe_mouse_binds(container, &self.config.binds)
     }
 }
 

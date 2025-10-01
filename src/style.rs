@@ -4,7 +4,10 @@ use iced::{
     widget::{Container, Tooltip, container, tooltip::Position},
 };
 
-use crate::{Message, config};
+use crate::{
+    Message,
+    config::{self, ConfigBorder},
+};
 
 pub fn _bg(_theme: &Theme) -> container::Style {
     container::Style {
@@ -54,4 +57,24 @@ pub fn workspace_style<'a>(
         base = base.border(rounded(radius).color(Color::WHITE).width(2));
     }
     Box::new(move |_| base)
+}
+
+pub fn container_style<'a>(
+    style: &config::ContainerStyle,
+) -> container::StyleFn<'a, Theme> {
+    let retval = container::Style {
+        text_color: style.text_color.as_ref().map(|s| s.into()),
+        background: style
+            .background
+            .as_ref()
+            .map(|b| Background::Color(b.into())),
+        border: style
+            .border
+            .clone()
+            .unwrap_or(ConfigBorder::default())
+            .into(),
+        ..Default::default()
+    };
+
+    Box::new(move |_| retval)
 }

@@ -178,11 +178,6 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
         }
     }
 
-    info!(
-        "saving logs to {:?}",
-        log_dir.join(LOG_FILE_PREFIX).join(nlog.to_string())
-    );
-
     let logfile = tracing_appender::rolling::never(
         &log_dir,
         format!("frostbar.log-{nlog}"),
