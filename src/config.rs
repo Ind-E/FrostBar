@@ -113,17 +113,32 @@ pub enum Module {
 
 #[derive(knus::Decode, Debug)]
 pub struct Cava {
-    #[knus(child, unwrap(argument), default = 3)]
-    pub volume_percent: i32,
-
-    #[knus(child, unwrap(argument), default = 0.1)]
+    #[knus(child, unwrap(argument), default = Self::default().spacing)]
     pub spacing: f32,
+
+    #[knus(child, default = Self::default().color)]
+    pub color: ConfigColor,
+
+    #[knus(child, unwrap(argument), default = Self::default().dynamic_color)]
+    pub dynamic_color: bool,
 
     #[knus(flatten(child), default)]
     pub binds: MouseBinds,
 
     #[knus(child, default)]
     pub style: ContainerStyle,
+}
+
+impl Default for Cava {
+    fn default() -> Self {
+        Self {
+            spacing: 0.1,
+            dynamic_color: true,
+            color: Color::WHITE.into(),
+            binds: MouseBinds::default(),
+            style: ContainerStyle::default(),
+        }
+    }
 }
 
 #[derive(knus::Decode, Debug)]

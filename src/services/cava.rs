@@ -23,18 +23,9 @@ pub fn write_temp_cava_config() -> std::io::Result<std::path::PathBuf> {
     Ok(tmp_path)
 }
 
-fn default_gradient() -> Vec<Color> {
-    (0..20)
-        .map(|i| {
-            let intensity = 0.8 + (i as f32 / 20.0) * 0.2;
-            Color::from_rgb(intensity, intensity, intensity)
-        })
-        .collect()
-}
-
 pub struct CavaService {
     pub bars: Vec<u8>,
-    pub colors: Vec<Color>,
+    pub gradient: Option<Vec<Color>>,
 }
 
 struct CavaSubscriptionRecipe {}
@@ -115,7 +106,7 @@ impl CavaService {
     pub fn new() -> Self {
         Self {
             bars: vec![],
-            colors: default_gradient(),
+            gradient: None,
         }
     }
 
@@ -123,7 +114,7 @@ impl CavaService {
         &mut self,
         colors: Option<Vec<Color>>,
     ) -> iced::Task<Message> {
-        self.colors = colors.unwrap_or_else(default_gradient);
+        self.gradient = colors;
         iced::Task::none()
     }
 }

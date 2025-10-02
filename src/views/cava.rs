@@ -1,5 +1,5 @@
 use iced::{
-    Color, Element, Length, Point, Renderer, Size,
+    Element, Length, Point, Renderer, Size,
     widget::{Canvas, Container, canvas},
 };
 
@@ -113,14 +113,14 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
 
                     let pos = i as f32 * bar_thickness_total + spacing / 2.0;
 
-                    let color_index =
-                        (i * self.service.colors.len()) / bars_per_channel;
-
-                    let bar_color = self
-                        .service
-                        .colors
-                        .get(color_index)
-                        .unwrap_or(&Color::WHITE);
+                    let bar_color = if self.config.dynamic_color {
+                        self.service.gradient.as_ref().and_then(|gradient| {
+                            gradient.get(i * gradient.len() / bars_per_channel)
+                        })
+                    } else {
+                        None
+                    }
+                    .unwrap_or(&self.config.color);
 
                     if left_val > 0 {
                         let (top_left, bar_size) = if self.vertical {
