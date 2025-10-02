@@ -193,6 +193,8 @@ pub struct Niri {
     #[knus(child, default)]
     pub window_style: ContainerStyle,
 
+    // #[knus(child, default)]
+    // pub window_active_style: ContainerStyle,
     #[knus(child, default)]
     pub workspace_active_style: ContainerStyle,
 
@@ -360,13 +362,13 @@ where
             ));
         }
 
-        for property in node.properties.iter() {
+        node.properties.iter().for_each(|property| {
             ctx.emit_error(DecodeError::unexpected(
                 property.0,
                 "property",
                 "no propertes expected for this node",
             ));
-        }
+        });
 
         let mut iter_args = node.arguments.iter();
         let len = iter_args.len();
@@ -381,23 +383,23 @@ where
                 Ok(Self::PerCorner(per_corner))
             }
         } else if len == 1 {
-            for child in node.children.iter() {
+            node.children.iter().for_each(|child| {
                 ctx.emit_error(DecodeError::unexpected(
-                    &child,
+                    child,
                     "node",
                     "no children expected when radius is specified as an argument",
                 ));
-            }
+            });
             let radius = iter_args.next().unwrap();
             Ok(Self::All(f32::decode(radius, ctx)?))
         } else {
-            for argument in iter_args {
+            iter_args.for_each(|arg| {
                 ctx.emit_error(DecodeError::unexpected(
-                    &argument.literal,
+                    &arg.literal,
                     "argument",
                     "expected 1 or 0 arguments",
                 ));
-            }
+            });
 
             let per_corner = PerCorner::decode_node(node, ctx)?;
             Ok(Self::PerCorner(per_corner))
@@ -692,17 +694,20 @@ where
                 format!("unexpected property `{}`", name.escape_default()),
             ));
         }
-        for child in node.children.as_ref().map_or(&[][..], |lst| &lst[..]) {
-            ctx.emit_error(DecodeError::unexpected(
-                child,
-                "node",
-                format!(
-                    "unexpected node `{}`",
-                    child.node_name.escape_default()
-                ),
-            ));
-        }
-
+        node.children
+            .as_deref()
+            .into_iter()
+            .flatten()
+            .for_each(|child| {
+                ctx.emit_error(DecodeError::unexpected(
+                    child,
+                    "node",
+                    format!(
+                        "unexpected node `{}`",
+                        child.node_name.escape_default()
+                    ),
+                ));
+            });
         Ok(rv.into())
     }
 }

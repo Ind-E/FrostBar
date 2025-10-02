@@ -4,6 +4,7 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+use tracing::error;
 
 use base64::engine::general_purpose;
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
@@ -127,16 +128,41 @@ impl MprisArtCache {
                         return (None, None);
                     }
                 };
-                let handle = image::Handle::from_bytes(image_bytes.clone());
                 let gradient = load_from_memory(&image_bytes)
                     .ok()
                     .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+                let handle = image::Handle::from_bytes(image_bytes);
                 (Some(handle), gradient)
             } else if let Some(url) = art_url.strip_prefix("file://") {
                 let handle = image::Handle::from_path(url);
                 let gradient = open(url)
                     .ok()
                     .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+                (Some(handle), gradient)
+            } else if art_url.starts_with("https://")
+                || art_url.starts_with("http://")
+            {
+                let response = match reqwest::blocking::get(art_url) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        error!("Failed to fetch album art from {art_url}: {e}");
+                        return (None, None);
+                    }
+                };
+                let image_bytes = match response.bytes() {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        error!(
+                            "Failed to get bytes of album art from {art_url}: {e}"
+                        );
+                        return (None, None);
+                    }
+                };
+
+                let gradient = load_from_memory(&image_bytes)
+                    .ok()
+                    .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+                let handle = image::Handle::from_bytes(image_bytes);
                 (Some(handle), gradient)
             } else {
                 (None, None)

@@ -60,6 +60,7 @@
               rust-bin.nightly.latest.rust-analyzer
 
               pkg-config
+              openssl
 
               alsa-lib
               pipewire

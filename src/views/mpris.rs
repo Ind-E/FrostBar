@@ -2,7 +2,7 @@ use iced::{
     Element, Length,
     mouse::{Interaction, ScrollDelta},
     widget::{
-        Column, Container, Image, MouseArea, Responsive, Row, Text, container,
+        Column, Container, Image, MouseArea, Row, Text, container,
         text::Shaping,
     },
 };

@@ -21,8 +21,9 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
 };
-use tracing::{Level, info};
+use tracing::Level;
 use tracing_subscriber::{
+    EnvFilter,
     fmt::{self, writer::MakeWriterExt},
     prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
@@ -135,15 +136,20 @@ pub fn process_modules(
     }
 }
 
-const LOG_FILE_PREFIX: &str = "frostbar.log";
 const MAX_LOG_FILES: usize = 5;
 pub fn init_tracing(config_dir: &Path) -> PathBuf {
     let debug = cfg!(debug_assertions);
 
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if debug {
+            EnvFilter::new("debug")
+        } else {
+            EnvFilter::new("error,frostbar=info")
+        }
+    });
+
     let log_dir = config_dir.join("logs/");
-
     let mut nlog = 0;
-
     let mut min_log = u64::MAX;
 
     match read_log_dir(&log_dir) {
@@ -178,29 +184,26 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
         }
     }
 
+    let logfile_path = log_dir.join(format!("frostbar.log-{nlog}"));
+
     let logfile = tracing_appender::rolling::never(
         &log_dir,
-        format!("frostbar.log-{nlog}"),
+        logfile_path.file_name().unwrap(),
     )
     .with_max_level(Level::INFO);
 
     let logfile_layer =
         fmt::layer().compact().with_writer(logfile).with_ansi(false);
 
-    let stdout = std::io::stdout.with_max_level(if debug {
-        Level::DEBUG
-    } else {
-        Level::INFO
-    });
-
-    let stdout_layer = fmt::layer().compact().with_writer(stdout);
+    let stdout_layer = fmt::layer().compact().with_writer(std::io::stdout);
 
     tracing_subscriber::registry()
+        .with(filter)
         .with(logfile_layer)
         .with(stdout_layer)
         .init();
 
-    log_dir.join(format!("frostbar.log-{nlog}"))
+    logfile_path
 }
 
 fn read_log_dir(path: &Path) -> std::io::Result<Vec<String>> {
