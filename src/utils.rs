@@ -21,7 +21,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
 };
-use tracing::Level;
+use tracing::{Dispatch, Level, error};
 use tracing_subscriber::{
     EnvFilter,
     fmt::{self, writer::MakeWriterExt},
@@ -138,64 +138,82 @@ pub fn process_modules(
 
 const MAX_LOG_FILES: usize = 5;
 pub fn init_tracing(config_dir: &Path) -> PathBuf {
-    let debug = cfg!(debug_assertions);
+    let temp_sub = tracing_subscriber::fmt()
+        .compact()
+        .with_writer(std::io::stdout)
+        .with_max_level(Level::DEBUG)
+        .finish();
 
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        if debug {
-            EnvFilter::new("debug")
-        } else {
-            EnvFilter::new("error,frostbar=info")
-        }
-    });
+    let temp_dispatch = Dispatch::new(temp_sub);
 
-    let log_dir = config_dir.join("logs/");
-    let mut nlog = 0;
-    let mut min_log = u64::MAX;
+    let (filter, logfile_layer, stdout_layer, logfile_path) =
+        tracing::dispatcher::with_default(&temp_dispatch, || {
+            let debug = cfg!(debug_assertions);
 
-    match read_log_dir(&log_dir) {
-        Ok(log_files) => {
-            let mut num_files = 0;
-            for filename in log_files {
-                num_files += 1;
-                let trailing = filename
-                    .rsplit_once(|c: char| !c.is_ascii_digit())
-                    .map_or(filename.as_str(), |(_head, digits)| digits);
-
-                if let Ok(trailing_digits) = trailing.parse::<u64>() {
-                    if trailing_digits > nlog {
-                        nlog = trailing_digits;
+            let filter =
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    if debug {
+                        EnvFilter::new("debug")
+                    } else {
+                        EnvFilter::new("error,frostbar=info")
                     }
-                    if trailing_digits < min_log {
-                        min_log = trailing_digits;
+                });
+
+            let log_dir = config_dir.join("logs/");
+            let mut nlog = 0;
+            let mut min_log = u64::MAX;
+
+            match read_log_dir(&log_dir) {
+                Ok(log_files) => {
+                    let mut num_files = 0;
+                    for filename in log_files {
+                        num_files += 1;
+                        let trailing = filename
+                            .rsplit_once(|c: char| !c.is_ascii_digit())
+                            .map_or(filename.as_str(), |(_head, digits)| {
+                                digits
+                            });
+
+                        if let Ok(trailing_digits) = trailing.parse::<u64>() {
+                            if trailing_digits > nlog {
+                                nlog = trailing_digits;
+                            }
+                            if trailing_digits < min_log {
+                                min_log = trailing_digits;
+                            }
+                        }
                     }
+                    if num_files >= MAX_LOG_FILES
+                        && let Err(e) = std::fs::remove_file(
+                            log_dir.join(format!("frostbar.log-{min_log}")),
+                        )
+                    {
+                        error!("failed to remove old log file: {e}");
+                    }
+                    nlog += 1;
+                }
+                Err(e) => {
+                    error!("failed to read log directory: {e}");
                 }
             }
-            if num_files >= MAX_LOG_FILES
-                && let Err(e) = std::fs::remove_file(
-                    log_dir.join(format!("frostbar.log-{min_log}")),
-                )
-            {
-                eprintln!("failed to remove old log file: {e}");
-            }
-            nlog += 1;
-        }
-        Err(e) => {
-            eprintln!("failed to read log directory: {e}");
-        }
-    }
 
-    let logfile_path = log_dir.join(format!("frostbar.log-{nlog}"));
+            let logfile_path = log_dir.join(format!("frostbar.log-{nlog}"));
 
-    let logfile = tracing_appender::rolling::never(
-        &log_dir,
-        logfile_path.file_name().unwrap(),
-    )
-    .with_max_level(Level::INFO);
+            let logfile = tracing_appender::rolling::never(
+                &log_dir,
+                logfile_path.file_name().unwrap(),
+            )
+            .with_max_level(Level::INFO);
 
-    let logfile_layer =
-        fmt::layer().compact().with_writer(logfile).with_ansi(false);
+            let logfile_layer =
+                fmt::layer().compact().with_writer(logfile).with_ansi(false);
 
-    let stdout_layer = fmt::layer().compact().with_writer(std::io::stdout);
+            let stdout_layer =
+                fmt::layer().compact().with_writer(std::io::stdout);
+
+            (filter, logfile_layer, stdout_layer, logfile_path)
+        });
+    std::mem::drop(temp_dispatch);
 
     tracing_subscriber::registry()
         .with(filter)
