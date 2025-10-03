@@ -335,12 +335,19 @@ pub fn maybe_mouse_binds<'a>(
         && binds.mouse_middle.is_none()
         && binds.scroll_up.is_none()
         && binds.scroll_down.is_none()
+        && binds.scroll_right.is_none()
+        && binds.scroll_left.is_none()
+        && binds.double_click.is_none()
     {
         element.into()
     } else {
         let mut mouse_area = MouseArea::new(element);
         if let Some(left) = &binds.mouse_left {
             mouse_area = mouse_area.on_release(process_command(left));
+        }
+
+        if let Some(double) = &binds.double_click {
+            mouse_area = mouse_area.on_double_click(process_command(double));
         }
 
         if let Some(right) = &binds.mouse_right {

@@ -241,6 +241,9 @@ pub struct MouseBinds {
     pub mouse_left: Option<Command>,
 
     #[knus(child)]
+    pub double_click: Option<Command>,
+
+    #[knus(child)]
     pub mouse_right: Option<Command>,
 
     #[knus(child)]
@@ -356,6 +359,9 @@ where
 pub struct MouseBindsForMpris {
     #[knus(child)]
     pub mouse_left: Option<MediaControl>,
+
+    #[knus(child)]
+    pub double_click: Option<MediaControl>,
 
     #[knus(child)]
     pub mouse_right: Option<MediaControl>,

@@ -122,6 +122,7 @@ impl<'a> MprisPlayerView {
         let binds = &config.binds;
 
         if binds.mouse_left.is_some()
+            || binds.double_click.is_some()
             || binds.mouse_right.is_some()
             || binds.mouse_middle.is_some()
             || binds.scroll_up.is_some()
@@ -133,6 +134,13 @@ impl<'a> MprisPlayerView {
             if let Some(left) = &binds.mouse_left {
                 mouse_area = mouse_area.on_release(Message::MediaControl(
                     *left,
+                    player.name.clone(),
+                ));
+            }
+
+            if let Some(double) = &binds.double_click {
+                mouse_area = mouse_area.on_double_click(Message::MediaControl(
+                    *double,
                     player.name.clone(),
                 ));
             }
