@@ -55,6 +55,8 @@ pub struct Layout {
     pub gaps: i32,
     #[knus(child, unwrap(argument), default = Self::default().anchor)]
     pub anchor: Anchor,
+    #[knus(child, unwrap(argument), default = Self::default().layer)]
+    pub layer: Layer,
 }
 
 #[derive(knus::DecodeScalar, Debug, Clone, PartialEq)]
@@ -74,12 +76,21 @@ impl Anchor {
     }
 }
 
+#[derive(knus::DecodeScalar, Debug, Clone, PartialEq)]
+pub enum Layer {
+    Background,
+    Bottom,
+    Top,
+    Overlay,
+}
+
 impl Default for Layout {
     fn default() -> Self {
         Self {
             width: 42,
             gaps: 3,
             anchor: Anchor::Left,
+            layer: Layer::Top,
         }
     }
 }

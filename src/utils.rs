@@ -300,6 +300,13 @@ pub fn open_window(
         }
     });
 
+    let layer = Some(match layout.layer {
+        config::Layer::Background => Layer::Background,
+        config::Layer::Bottom => Layer::Bottom,
+        config::Layer::Top => Layer::Top,
+        config::Layer::Overlay => Layer::Overlay,
+    });
+
     let (id, open_task) = iced::window::open(iced::window::Settings {
         size,
         decorations: false,
@@ -310,7 +317,7 @@ pub fn open_window(
                 anchor,
                 margin,
                 input_region,
-                layer: Some(Layer::Top),
+                layer,
                 exclusive_zone: Some(layout.width as i32 + layout.gaps),
                 keyboard_interactivity: Some(KeyboardInteractivity::None),
                 namespace: Some(String::from(BAR_NAMESPACE)),
