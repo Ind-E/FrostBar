@@ -247,12 +247,7 @@ pub fn open_window(
     let anchor = layout.anchor.into();
 
     // top, right, bottom, left
-    let margin = Some(match layout.anchor {
-        config::Anchor::Left => (layout.gaps, 0, layout.gaps, layout.gaps),
-        config::Anchor::Right => (layout.gaps, layout.gaps, layout.gaps, 0),
-        config::Anchor::Top => (layout.gaps, layout.gaps, 0, layout.gaps),
-        config::Anchor::Bottom => (0, layout.gaps, layout.gaps, layout.gaps),
-    });
+    let margin = Some((layout.gaps, layout.gaps, layout.gaps, layout.gaps));
 
     let layer = match layout.layer {
         config::Layer::Background => Layer::Background,

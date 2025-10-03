@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use iced_layershell::settings::{LayerShellSettings, StartMode};
 use itertools::Itertools;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use tokio::process::Command as TokioCommand;
 
@@ -313,15 +313,6 @@ impl Bar {
                                         },
                                     ));
                                 }
-                                if new_layout.gaps != old_layout.gaps {
-                                    let gaps = new_layout.gaps;
-                                    tasks.push(Task::done(
-                                        Message::MarginChange {
-                                            id: self.id,
-                                            margin: (gaps, gaps, gaps, gaps),
-                                        },
-                                    ));
-                                }
                                 if new_layout.layer != old_layout.layer {
                                     tasks.push(Task::done(
                                         Message::LayerChange {
@@ -329,6 +320,22 @@ impl Bar {
                                             layer: new_layout.layer.into(),
                                         },
                                     ));
+                                }
+                                if new_layout.gaps != old_layout.gaps {
+                                    // let gaps = new_layout.gaps;
+                                    // this doesn't work for some reason
+                                    // tasks.push(Task::done(
+                                    //     Message::MarginChange {
+                                    //         id: self.id,
+                                    //         margin: (gaps, gaps, gaps, gaps),
+                                    //     },
+                                    // ));
+
+                                    tasks.push(iced::window::close(self.id));
+                                    let (id, open_task) =
+                                        open_window(new_layout);
+                                    self.id = id;
+                                    tasks.push(open_task);
                                 }
 
                                 self.config = config;
@@ -684,7 +691,8 @@ impl Bar {
         if id == self.id {
             self.view_bar()
         } else {
-            unreachable!()
+            debug!("different id");
+            Column::new().into()
         }
     }
 
