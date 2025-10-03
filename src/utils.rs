@@ -340,14 +340,25 @@ pub fn maybe_mouse_binds<'a>(
                     | ScrollDelta::Pixels { x, y } => (x, y),
                 };
 
-                if (y > 0.0 || x < 0.0)
+                if y > 0.0
                     && let Some(scroll_up) = &binds.scroll_up
                 {
-                    return process_command(scroll_up);
-                } else if let Some(scroll_down) = &binds.scroll_down {
-                    return process_command(scroll_down);
+                    process_command(scroll_up)
+                } else if y < 0.0
+                    && let Some(scroll_down) = &binds.scroll_down
+                {
+                    process_command(scroll_down)
+                } else if x < 0.0
+                    && let Some(scroll_right) = &binds.scroll_right
+                {
+                    process_command(scroll_right)
+                } else if x > 0.0
+                    && let Some(scroll_left) = &binds.scroll_left
+                {
+                    process_command(scroll_left)
+                } else {
+                    Message::NoOp
                 }
-                unreachable!()
             });
         }
 

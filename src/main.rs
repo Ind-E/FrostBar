@@ -410,6 +410,9 @@ impl Bar {
                             MediaControl::Stop => player.stop().await,
                             MediaControl::Next => player.next().await,
                             MediaControl::Previous => player.previous().await,
+                            MediaControl::Seek(amount) => {
+                                player.seek(amount).await
+                            }
                         }
                     {
                         error!("{e}");

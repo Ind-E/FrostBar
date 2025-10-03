@@ -8,7 +8,7 @@ use std::{
 
 use directories::ProjectDirs;
 use iced::{Color, color};
-use knus::{DecodeScalar, errors::DecodeError};
+use knus::{DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError};
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
 use tracing::{error, info};
@@ -251,9 +251,15 @@ pub struct MouseBinds {
 
     #[knus(child)]
     pub scroll_down: Option<Command>,
+
+    #[knus(child)]
+    pub scroll_right: Option<Command>,
+
+    #[knus(child)]
+    pub scroll_left: Option<Command>,
 }
 
-#[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MediaControl {
     Play,
     Pause,
@@ -261,24 +267,113 @@ pub enum MediaControl {
     Stop,
     Next,
     Previous,
+    Seek(i64),
+}
+
+impl<S> knus::Decode<S> for MediaControl
+where
+    S: knus::traits::ErrorSpan,
+{
+    fn decode_node(
+        node: &knus::ast::SpannedNode<S>,
+        ctx: &mut knus::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        for name in node.properties.keys() {
+            ctx.emit_error(DecodeError::unexpected(
+                name,
+                "property",
+                format!("unexpected property `{0}`", name.escape_default()),
+            ));
+        }
+        if let Some(children) = &node.children {
+            for child in children.iter() {
+                ctx.emit_error(DecodeError::unexpected(
+                    child,
+                    "node",
+                    format!(
+                        "unexpected node `{0}`",
+                        child.node_name.escape_default(),
+                    ),
+                ));
+            }
+        }
+
+        let mut iter_args = node.arguments.iter();
+        let Some(first_arg) = iter_args.next() else {
+            return Err(DecodeError::missing(
+                node,
+                "expected additional argument",
+            ));
+        };
+        match &*first_arg.literal {
+            Literal::String(arg) => match arg.as_ref() {
+                "play" => Ok(MediaControl::Play),
+                "pause" => Ok(MediaControl::Pause),
+                "play-pause" => Ok(MediaControl::PlayPause),
+                "stop" => Ok(MediaControl::Stop),
+                "next" => Ok(MediaControl::Next),
+                "previous" => Ok(MediaControl::Previous),
+                "seek" => {
+                    let Some(second_arg) = iter_args.next() else {
+                        return Err(DecodeError::missing(
+                            node,
+                            "seek requires additional argument",
+                        ));
+                    };
+
+                    match &*second_arg.literal {
+                        Literal::Int(seek_amount) => {
+                            match i64::try_from(seek_amount) {
+                                Ok(seek_amount) => Ok(MediaControl::Seek(
+                                    // convert from microseconds to millseconds
+                                    seek_amount * 1000,
+                                )),
+                                Err(e) => Err(DecodeError::conversion(
+                                    &second_arg.literal,
+                                    format!("{e}"),
+                                )),
+                            }
+                        }
+                        _other => Err(DecodeError::scalar_kind(
+                            Kind::Int,
+                            &second_arg.literal,
+                        )),
+                    }
+                }
+                _other => Err(DecodeError::conversion(
+                    &node.node_name,
+                    "expected `play`, `pause`, `play-pause`, `stop`, `next`, `previous`, or `seek`",
+                )),
+            },
+            _other => {
+                Err(DecodeError::scalar_kind(Kind::String, &first_arg.literal))
+            }
+        }
+    }
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]
 pub struct MouseBindsForMpris {
-    #[knus(child, unwrap(argument))]
+    #[knus(child)]
     pub mouse_left: Option<MediaControl>,
 
-    #[knus(child, unwrap(argument))]
+    #[knus(child)]
     pub mouse_right: Option<MediaControl>,
 
-    #[knus(child, unwrap(argument))]
+    #[knus(child)]
     pub mouse_middle: Option<MediaControl>,
 
-    #[knus(child, unwrap(argument))]
+    #[knus(child)]
     pub scroll_up: Option<MediaControl>,
 
-    #[knus(child, unwrap(argument))]
+    #[knus(child)]
     pub scroll_down: Option<MediaControl>,
+
+    #[knus(child)]
+    pub scroll_right: Option<MediaControl>,
+
+    #[knus(child)]
+    pub scroll_left: Option<MediaControl>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

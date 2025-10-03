@@ -126,6 +126,8 @@ impl<'a> MprisPlayerView {
             || binds.mouse_middle.is_some()
             || binds.scroll_up.is_some()
             || binds.scroll_down.is_some()
+            || binds.scroll_left.is_some()
+            || binds.scroll_right.is_some()
         {
             let mut mouse_area = MouseArea::new(content);
             if let Some(left) = &binds.mouse_left {
@@ -147,27 +149,39 @@ impl<'a> MprisPlayerView {
                 );
             }
 
-            if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
+            if binds.scroll_up.is_some()
+                || binds.scroll_down.is_some()
+                || binds.scroll_left.is_some()
+                || binds.scroll_right.is_some()
+            {
                 mouse_area = mouse_area.on_scroll(move |delta| {
                     let (x, y) = match delta {
                         ScrollDelta::Lines { x, y }
                         | ScrollDelta::Pixels { x, y } => (x, y),
                     };
 
-                    if (y > 0.0 || x < 0.0)
+                    if y < 0.0
                         && let Some(scroll_up) = &binds.scroll_up
                     {
-                        return Message::MediaControl(
-                            *scroll_up,
+                        Message::MediaControl(*scroll_up, player.name.clone())
+                    } else if y > 0.0
+                        && let Some(scroll_down) = &binds.scroll_down
+                    {
+                        Message::MediaControl(*scroll_down, player.name.clone())
+                    } else if x < 0.0
+                        && let Some(scroll_right) = &binds.scroll_right
+                    {
+                        Message::MediaControl(
+                            *scroll_right,
                             player.name.clone(),
-                        );
-                    } else if let Some(scroll_down) = &binds.scroll_down {
-                        return Message::MediaControl(
-                            *scroll_down,
-                            player.name.clone(),
-                        );
+                        )
+                    } else if x > 0.0
+                        && let Some(scroll_left) = &binds.scroll_left
+                    {
+                        Message::MediaControl(*scroll_left, player.name.clone())
+                    } else {
+                        Message::NoOp
                     }
-                    unreachable!()
                 });
             }
 
