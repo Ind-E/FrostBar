@@ -45,16 +45,14 @@ defaulting to 1.0).
 Example:
 
 ```kdl
-battery {
-    // As a hex literal
-    charging-color "#73F5AB"
+// As a hex literal
+background "#73F5AB"
 
-    // As RGB with alpha
-    charging-color 115 244 170 1.0
+// As RGB with alpha
+background 115 244 170 1.0
 
-    // As RGB only (alpha defaults to 1.0)
-    charging-color 115 244 170
-}
+// As RGB only (alpha defaults to 1.0)
+background 115 244 170
 ```
 
 ## Planned Features
