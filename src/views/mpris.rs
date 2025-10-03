@@ -2,8 +2,7 @@ use iced::{
     Element, Length,
     mouse::{Interaction, ScrollDelta},
     widget::{
-        Column, Container, Image, MouseArea, Row, Text, container,
-        text::Shaping,
+        self, Column, Container, Image, MouseArea, Row, Text, text::Shaping,
     },
 };
 
@@ -63,13 +62,13 @@ impl MprisView {
 
 #[derive(Clone, Debug)]
 pub struct MprisPlayerView {
-    pub id: container::Id,
+    pub id: widget::Id,
 }
 
 impl MprisPlayerView {
     fn new() -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
         }
     }
 }
@@ -86,7 +85,11 @@ impl<'a> MprisPlayerView {
             Container::new(Image::new(art)).into()
         } else {
             let container = Container::new(
-                Text::new(config.placeholder.clone()).size(20).center(),
+                Text::new(config.placeholder.clone())
+                    .size(20)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(),
             )
             .style(container_style(&config.placeholder_style))
             .padding(5);
@@ -96,7 +99,10 @@ impl<'a> MprisPlayerView {
                     .height(layout.width - 10)
                     .into()
             } else {
-                container.center_y(Length::Fill).width(layout.width).into()
+                container
+                    .center_y(Length::Fill)
+                    .width(layout.width - 10)
+                    .into()
             }
         };
 
@@ -197,11 +203,11 @@ impl<'a> MprisPlayerView {
                 Container::new(mouse_area.interaction(Interaction::Pointer))
                     .id(self.id.clone());
 
-            return styled_tooltip(content, tooltip, &layout.anchor);
+            return styled_tooltip(content, tooltip, layout.anchor);
         }
 
         let content = Container::new(content).id(self.id.clone());
 
-        styled_tooltip(content, tooltip, &layout.anchor)
+        styled_tooltip(content, tooltip, layout.anchor)
     }
 }

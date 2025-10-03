@@ -3,8 +3,7 @@ use iced::{
     mouse::Interaction,
     padding::{left, top},
     widget::{
-        Column, Container, Image, MouseArea, Row, Svg, Text, column,
-        container::{self},
+        self, Column, Container, Image, MouseArea, Row, Svg, Text, column,
         text::Shaping,
     },
 };
@@ -22,14 +21,14 @@ use crate::{
 
 #[derive(Debug, Eq, PartialEq)]
 struct WindowView<'a> {
-    container_id: container::Id,
+    container_id: widget::Id,
     window: &'a Window,
 }
 
 impl<'a> From<&'a Window> for WindowView<'a> {
     fn from(window: &'a Window) -> Self {
         Self {
-            container_id: container::Id::unique(),
+            container_id: widget::Id::unique(),
             window,
         }
     }
@@ -63,7 +62,7 @@ impl<'a> WindowView<'a> {
         let tooltip =
             Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
 
-        styled_tooltip(content, tooltip, &layout.anchor)
+        styled_tooltip(content, tooltip, layout.anchor)
     }
 }
 

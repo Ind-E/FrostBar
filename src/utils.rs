@@ -8,14 +8,10 @@ use crate::{
     },
 };
 use iced::{
-    Element, Size,
-    futures::Stream,
-    mouse::ScrollDelta,
-    widget::MouseArea,
-    window::settings::{
-        Anchor, KeyboardInteractivity, Layer, LayerShellSettings,
-        PlatformSpecific,
-    },
+    Element, futures::Stream, mouse::ScrollDelta, widget::MouseArea, window::Id,
+};
+use iced_layershell::reexport::{
+    KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
 };
 use std::{
     path::{Path, PathBuf},
@@ -153,7 +149,7 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
             let filter =
                 EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                     if debug {
-                        EnvFilter::new("debug")
+                        EnvFilter::new("info,frostbar=debug")
                     } else {
                         EnvFilter::new("error,frostbar=info")
                     }
@@ -239,48 +235,16 @@ fn read_log_dir(path: &Path) -> std::io::Result<Vec<String>> {
     Ok(filenames)
 }
 
-pub fn open_dummy_window() -> (iced::window::Id, iced::Task<Message>) {
-    let (id, open_task) = iced::window::open(iced::window::Settings {
-        transparent: true,
-        platform_specific: PlatformSpecific {
-            layer_shell: LayerShellSettings {
-                layer: Some(Layer::Top),
-                anchor: Some(
-                    Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
-                ),
-                input_region: Some((0, 0, 0, 0)),
-                keyboard_interactivity: Some(KeyboardInteractivity::None),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        exit_on_close_request: false,
-        ..Default::default()
-    });
-
-    (id, open_task.map(|_| Message::NoOp))
-}
-
 #[profiling::function]
 pub fn open_window(
     layout: &config::Layout,
-    monitor_size: iced::Size,
 ) -> (iced::window::Id, iced::Task<Message>) {
-    let size = match layout.anchor {
-        config::Anchor::Left | config::Anchor::Right => {
-            Size::new(monitor_size.width, 0.0)
-        }
-        config::Anchor::Top | config::Anchor::Bottom => {
-            Size::new(0.0, monitor_size.width)
-        }
-    };
-
-    let anchor = Some(match layout.anchor {
-        config::Anchor::Left => Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM,
-        config::Anchor::Right => Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
-        config::Anchor::Top => Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
-        config::Anchor::Bottom => Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+    let size = Some(match layout.anchor {
+        config::Anchor::Left | config::Anchor::Right => (layout.width, 0),
+        config::Anchor::Top | config::Anchor::Bottom => (0, layout.width),
     });
+
+    let anchor = layout.anchor.into();
 
     // top, right, bottom, left
     let margin = Some(match layout.anchor {
@@ -290,46 +254,31 @@ pub fn open_window(
         config::Anchor::Bottom => (0, layout.gaps, layout.gaps, layout.gaps),
     });
 
-    // x, y, width, height
-    let input_region = Some(match layout.anchor {
-        config::Anchor::Left | config::Anchor::Right => {
-            (0, 0, layout.width as i32, monitor_size.height as i32)
-        }
-        config::Anchor::Top | config::Anchor::Bottom => {
-            (0, 0, monitor_size.width as i32, layout.width as i32)
-        }
-    });
-
-    let layer = Some(match layout.layer {
+    let layer = match layout.layer {
         config::Layer::Background => Layer::Background,
         config::Layer::Bottom => Layer::Bottom,
         config::Layer::Top => Layer::Top,
         config::Layer::Overlay => Layer::Overlay,
-    });
+    };
 
-    let (id, open_task) = iced::window::open(iced::window::Settings {
-        size,
-        decorations: false,
-        minimizable: false,
-        transparent: true,
-        platform_specific: PlatformSpecific {
-            layer_shell: LayerShellSettings {
-                anchor,
-                margin,
-                input_region,
-                layer,
-                exclusive_zone: Some(layout.width as i32 + layout.gaps),
-                keyboard_interactivity: Some(KeyboardInteractivity::None),
-                namespace: Some(String::from(BAR_NAMESPACE)),
-                ..Default::default()
-            },
-            ..Default::default()
+    let id = Id::unique();
+
+    let open_task = iced::Task::done(Message::NewLayerShell {
+        settings: NewLayerShellSettings {
+            size,
+            layer,
+            anchor,
+            exclusive_zone: Some(layout.width as i32 + layout.gaps),
+            margin,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            output_option: OutputOption::None,
+            events_transparent: false,
+            namespace: Some(BAR_NAMESPACE.to_string()),
         },
-        exit_on_close_request: false,
-        ..Default::default()
+        id,
     });
 
-    (id, open_task.map(|_| Message::NoOp))
+    (id, open_task)
 }
 
 #[profiling::function]

@@ -70,6 +70,7 @@
               freetype.dev
               libGL
               libxkbcommon
+              zlib
 
               stdenv.cc.cc.lib
 

@@ -1,6 +1,6 @@
 use iced::{
     Element, Length,
-    widget::{Container, Text, container},
+    widget::{self, Container, Text},
 };
 use tracing::warn;
 
@@ -14,7 +14,7 @@ use crate::{
 extern crate starship_battery as battery;
 
 pub struct BatteryView {
-    pub id: container::Id,
+    pub id: widget::Id,
     config: config::Battery,
     pub position: BarPosition,
 }
@@ -80,14 +80,14 @@ impl<'a> BatteryView {
 
         let icon_widget = maybe_mouse_binds(icon_widget, &self.config.binds);
 
-        styled_tooltip(icon_widget, tooltip, &layout.anchor)
+        styled_tooltip(icon_widget, tooltip, layout.anchor)
     }
 }
 
 impl BatteryView {
     pub fn new(config: config::Battery, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
             config,
             position,
         }

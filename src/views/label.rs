@@ -1,6 +1,6 @@
 use iced::{
     Element, Length,
-    widget::{Container, Text, container, text},
+    widget::{self, Container, Text, text},
 };
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub struct LabelView {
-    pub id: container::Id,
+    pub id: widget::Id,
     config: config::Label,
     pub position: BarPosition,
 }
@@ -33,7 +33,7 @@ impl<'a> LabelView {
 
         let element = if let Some(tooltip) = &self.config.tooltip {
             let tooltip = Text::new(tooltip.clone());
-            styled_tooltip(content, tooltip, &layout.anchor)
+            styled_tooltip(content, tooltip, layout.anchor)
         } else {
             content.into()
         };
@@ -45,7 +45,7 @@ impl<'a> LabelView {
 impl LabelView {
     pub fn new(config: config::Label, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
             config,
             position,
         }

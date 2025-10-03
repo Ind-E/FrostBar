@@ -1,6 +1,6 @@
 use iced::{
     Element, Length,
-    widget::{Container, Text, container, text},
+    widget::{self, Container, Text, text},
 };
 
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub struct TimeView {
-    pub id: container::Id,
+    pub id: widget::Id,
     config: config::Time,
     pub position: BarPosition,
 }
@@ -41,14 +41,14 @@ impl TimeView {
 
         let content = maybe_mouse_binds(content, &self.config.binds);
 
-        styled_tooltip(content, tooltip, &layout.anchor)
+        styled_tooltip(content, tooltip, layout.anchor)
     }
 }
 
 impl TimeView {
     pub fn new(config: config::Time, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
             config,
             position,
         }

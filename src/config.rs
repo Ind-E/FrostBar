@@ -59,7 +59,7 @@ pub struct Layout {
     pub layer: Layer,
 }
 
-#[derive(knus::DecodeScalar, Debug, Clone, PartialEq)]
+#[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
 pub enum Anchor {
     Left,
     Right,
@@ -68,20 +68,41 @@ pub enum Anchor {
 }
 
 impl Anchor {
-    pub fn vertical(&self) -> bool {
-        match self {
-            Anchor::Left | Anchor::Right => true,
-            Anchor::Top | Anchor::Bottom => false,
+    pub fn vertical(self) -> bool {
+        matches!(self, Anchor::Left | Anchor::Right)
+    }
+}
+
+impl From<Anchor> for iced_layershell::reexport::Anchor {
+    fn from(anchor: Anchor) -> Self {
+        type LAnchor = iced_layershell::reexport::Anchor;
+        match anchor {
+            Anchor::Left => LAnchor::Left | LAnchor::Top | LAnchor::Bottom,
+            Anchor::Right => LAnchor::Right | LAnchor::Top | LAnchor::Bottom,
+            Anchor::Top => LAnchor::Top | LAnchor::Left | LAnchor::Right,
+            Anchor::Bottom => LAnchor::Bottom | LAnchor::Left | LAnchor::Right,
         }
     }
 }
 
-#[derive(knus::DecodeScalar, Debug, Clone, PartialEq)]
+#[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
 pub enum Layer {
     Background,
     Bottom,
     Top,
     Overlay,
+}
+
+impl From<Layer> for iced_layershell::reexport::Layer {
+    fn from(layer: Layer) -> Self {
+        type LLayer = iced_layershell::reexport::Layer;
+        match layer {
+            Layer::Background => LLayer::Background,
+            Layer::Bottom => LLayer::Bottom,
+            Layer::Top => LLayer::Top,
+            Layer::Overlay => LLayer::Overlay,
+        }
+    }
 }
 
 impl Default for Layout {

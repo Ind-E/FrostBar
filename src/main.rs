@@ -1,12 +1,13 @@
 use chrono::{DateTime, Local};
+use iced_layershell::settings::{LayerShellSettings, StartMode};
 use itertools::Itertools;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    Alignment, Background, Color, Element, Event, Length, Pixels, Settings,
-    Size, Subscription, Task, Theme,
+    Alignment, Background, Color, Element, Event, Length, Pixels, Subscription,
+    Task, Theme,
     advanced::mouse,
     border::rounded,
     event,
@@ -38,10 +39,7 @@ use crate::{
         niri::{NiriEvent, NiriService},
         time::TimeService,
     },
-    utils::{
-        CommandSpec, init_tracing, open_dummy_window, open_window,
-        process_modules,
-    },
+    utils::{CommandSpec, init_tracing, open_window, process_modules},
     views::{
         BarAlignment, battery::BatteryView, cava::CavaView, label::LabelView,
         mpris::MprisView, niri::NiriView, time::TimeView,
@@ -63,11 +61,11 @@ mod views;
 static GLOBAL: tracy_client::ProfiledAllocator<std::alloc::System> =
     tracy_client::ProfiledAllocator::new(std::alloc::System, 100);
 
-pub fn main() -> iced::Result {
+pub fn main() -> iced_layershell::Result {
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();
 
-    iced::daemon(
+    iced_layershell::daemon(
         || {
             let (config, config_path, config_dir) = Config::init();
 
@@ -78,6 +76,7 @@ pub fn main() -> iced::Result {
 
             Bar::new(config, config_path)
         },
+        Bar::namespace,
         Bar::update,
         Bar::view,
     )
@@ -85,13 +84,18 @@ pub fn main() -> iced::Result {
     .style(Bar::style)
     .title(Bar::title)
     .theme(Bar::theme)
-    .settings(Settings {
+    .settings(iced_layershell::Settings {
         id: Some(BAR_NAMESPACE.to_string()),
+        layer_settings: LayerShellSettings {
+            start_mode: StartMode::Background,
+            ..Default::default()
+        },
         fonts: vec![FIRA_CODE_BYTES.into()],
         default_font: FIRA_CODE,
         default_text_size: Pixels(16.0),
         antialiasing: true,
-        ..Default::default()
+        virtual_keyboard_support: None,
+        with_connection: None,
     })
     .run()
 }
@@ -101,6 +105,7 @@ pub enum MouseEvent {
     Workspace(u64),
 }
 
+#[iced_layershell::to_layer_message(multi)]
 #[derive(Debug, Clone)]
 pub enum Message {
     IcedEvent(Event),
@@ -129,9 +134,7 @@ pub enum Message {
 }
 
 pub struct Bar {
-    id: Option<Id>,
-    dummy_id: Id,
-    monitor_size: Option<Size>,
+    id: Id,
     config: Config,
     config_path: PathBuf,
 
@@ -188,13 +191,10 @@ impl Bar {
             &mut label_views,
         );
 
-        let (dummy_id, open_dummy) = open_dummy_window();
-        // let (id, open_task) = open_window(&config.layout);
+        let (id, open_task) = open_window(&config.layout);
 
         let bar = Self {
-            id: None,
-            monitor_size: None,
-            dummy_id,
+            id,
             time_service: Some(time_service),
             time_views,
             battery_service: Some(battery_service),
@@ -210,14 +210,14 @@ impl Bar {
             config_path,
         };
 
-        (bar, Task::batch(vec![open_dummy]))
+        (bar, open_task)
     }
 
-    fn title(&self, _id: Id) -> String {
-        String::from("FrostBar")
+    fn title(&self, _id: Id) -> Option<String> {
+        Some(String::from(BAR_NAMESPACE))
     }
 
-    pub fn namespace(&self) -> String {
+    pub fn namespace() -> String {
         String::from(BAR_NAMESPACE)
     }
 
@@ -258,26 +258,6 @@ impl Bar {
                     return Task::done(Message::MouseExitedBar);
                 }
 
-                if let Event::Window(iced::window::Event::Opened {
-                    position: _,
-                    size,
-                }) = event
-                    && self.id.is_none()
-                {
-                    self.monitor_size = Some(size);
-                    debug!("measured monitor {size:?}");
-
-                    let (id, open_task) =
-                        open_window(&self.config.layout, size);
-                    self.id = Some(id);
-
-                    let close_task = iced::window::close(self.dummy_id);
-                    return Task::batch([open_task, close_task]);
-                }
-
-                if let Event::Window(iced::window::Event::Closed) = event {
-                    debug!("window closed");
-                }
                 Task::none()
             }
             Message::FileWatcherEvent(event) => {
@@ -296,21 +276,68 @@ impl Bar {
                                 );
                                 if self.config.layout == config.layout {
                                     self.config = config;
-                                } else if let Some(id) = self.id {
-                                    self.config = config;
-                                    let close = iced::window::close(id);
-                                    let (id, open) = open_window(
-                                        &self.config.layout,
-                                        self.monitor_size.unwrap(),
-                                    );
-                                    self.id = Some(id);
-                                    return Task::batch([close, open]);
+                                    return Task::none();
                                 }
+
+                                let old_layout = &self.config.layout;
+                                let new_layout = &config.layout;
+                                let mut tasks = Vec::new();
+
+                                if new_layout.anchor != old_layout.anchor {
+                                    tasks.push(Task::done(
+                                        Message::AnchorSizeChange {
+                                            id: self.id,
+                                            anchor: new_layout.anchor.into(),
+                                            size: if new_layout
+                                                .anchor
+                                                .vertical()
+                                            {
+                                                (new_layout.width, 0)
+                                            } else {
+                                                (0, new_layout.width)
+                                            },
+                                        },
+                                    ));
+                                } else if new_layout.width != old_layout.width {
+                                    tasks.push(Task::done(
+                                        Message::SizeChange {
+                                            id: self.id,
+                                            size: if new_layout
+                                                .anchor
+                                                .vertical()
+                                            {
+                                                (new_layout.width, 0)
+                                            } else {
+                                                (0, new_layout.width)
+                                            },
+                                        },
+                                    ));
+                                }
+                                if new_layout.gaps != old_layout.gaps {
+                                    let gaps = new_layout.gaps;
+                                    tasks.push(Task::done(
+                                        Message::MarginChange {
+                                            id: self.id,
+                                            margin: (gaps, gaps, gaps, gaps),
+                                        },
+                                    ));
+                                }
+                                if new_layout.layer != old_layout.layer {
+                                    tasks.push(Task::done(
+                                        Message::LayerChange {
+                                            id: self.id,
+                                            layer: new_layout.layer.into(),
+                                        },
+                                    ));
+                                }
+
+                                self.config = config;
+                                return Task::batch(tasks);
                             }
                             Err(e) => {
-                                eprintln!("{e:?}");
+                                error!("{e:?}");
                                 if let Err(e) = Notification::new()
-                                    .summary(&self.namespace())
+                                    .summary(BAR_NAMESPACE)
                                     .body("Failed to parse config file")
                                     .show()
                                 {
@@ -433,6 +460,22 @@ impl Bar {
                 })
             }
             Message::NoOp => Task::none(),
+            // Message::AnchorChange { id, anchor } => todo!(),
+            // Message::SetInputRegion { id, callback } => todo!(),
+            // Message::AnchorSizeChange { id, anchor, size } => todo!(),
+            // Message::LayerChange { id, layer } => todo!(),
+            // Message::MarginChange { id, margin } => todo!(),
+            // Message::SizeChange { id, size } => todo!(),
+            // Message::ExclusiveZoneChange { id, zone_size } => todo!(),
+            // Message::VirtualKeyboardPressed { time, key } => todo!(),
+            // Message::NewLayerShell { settings, id } => todo!(),
+            // Message::NewBaseWindow { settings, id } => todo!(),
+            // Message::NewPopUp { settings, id } => todo!(),
+            // Message::NewMenu { settings, id } => todo!(),
+            // Message::NewInputPanel { settings, id } => todo!(),
+            // Message::RemoveWindow(id) => todo!(),
+            // Message::ForgetLastOutput => todo!(),
+            _iced_layershell => unreachable!(),
         }
     }
 
@@ -638,10 +681,10 @@ impl Bar {
     }
 
     pub fn view(&self, id: Id) -> Element<'_, Message> {
-        if Some(id) == self.id {
+        if id == self.id {
             self.view_bar()
         } else {
-            Column::new().into()
+            unreachable!()
         }
     }
 
