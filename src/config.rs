@@ -303,6 +303,8 @@ pub enum MediaControl {
     Next,
     Previous,
     Seek(i64),
+    Volume(f64),
+    SetVolume(f64),
 }
 
 impl<S> knus::Decode<S> for MediaControl
@@ -375,9 +377,59 @@ where
                         )),
                     }
                 }
+                "volume" => {
+                    let Some(second_arg) = iter_args.next() else {
+                        return Err(DecodeError::missing(
+                            node,
+                            "volume requires additional argument",
+                        ));
+                    };
+
+                    match &*second_arg.literal {
+                        Literal::Decimal(volume_amount) => {
+                            match f64::try_from(volume_amount) {
+                                Ok(amount) => Ok(MediaControl::Volume(amount)),
+                                Err(e) => Err(DecodeError::conversion(
+                                    &second_arg.literal,
+                                    format!("{e}"),
+                                )),
+                            }
+                        }
+                        _other => Err(DecodeError::scalar_kind(
+                            Kind::Decimal,
+                            &second_arg.literal,
+                        )),
+                    }
+                }
+                "set-volume" => {
+                    let Some(second_arg) = iter_args.next() else {
+                        return Err(DecodeError::missing(
+                            node,
+                            "set-volume requires additional argument",
+                        ));
+                    };
+
+                    match &*second_arg.literal {
+                        Literal::Decimal(volume_amount) => {
+                            match f64::try_from(volume_amount) {
+                                Ok(amount) => {
+                                    Ok(MediaControl::SetVolume(amount))
+                                }
+                                Err(e) => Err(DecodeError::conversion(
+                                    &second_arg.literal,
+                                    format!("{e}"),
+                                )),
+                            }
+                        }
+                        _other => Err(DecodeError::scalar_kind(
+                            Kind::Decimal,
+                            &second_arg.literal,
+                        )),
+                    }
+                }
                 _other => Err(DecodeError::conversion(
                     &node.node_name,
-                    "expected `play`, `pause`, `play-pause`, `stop`, `next`, `previous`, or `seek`",
+                    "expected `play`, `pause`, `play-pause`, `stop`, `next`, `previous`, `seek`, `volume`, or `set-volume`",
                 )),
             },
             _other => {

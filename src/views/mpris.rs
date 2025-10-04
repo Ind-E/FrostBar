@@ -174,11 +174,11 @@ impl<'a> MprisPlayerView {
                         | ScrollDelta::Pixels { x, y } => (x, y),
                     };
 
-                    if y < 0.0
+                    if y > 0.0
                         && let Some(scroll_up) = &binds.scroll_up
                     {
                         Message::MediaControl(*scroll_up, player.name.clone())
-                    } else if y > 0.0
+                    } else if y < 0.0
                         && let Some(scroll_down) = &binds.scroll_down
                     {
                         Message::MediaControl(*scroll_down, player.name.clone())

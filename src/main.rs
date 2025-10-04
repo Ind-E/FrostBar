@@ -51,6 +51,7 @@ mod constants;
 mod dbus_proxy;
 mod file_watcher;
 mod icon_cache;
+mod popup_tooltip;
 mod services;
 mod style;
 mod utils;
@@ -446,6 +447,21 @@ impl Bar {
                             MediaControl::Previous => player.previous().await,
                             MediaControl::Seek(amount) => {
                                 player.seek(amount).await
+                            }
+                            MediaControl::Volume(amount) => {
+                                match player.volume().await {
+                                    Ok(current) => {
+                                        player
+                                            .set_volume(
+                                                (current + amount).max(0.0),
+                                            )
+                                            .await
+                                    }
+                                    Err(e) => Err(e),
+                                }
+                            }
+                            MediaControl::SetVolume(amount) => {
+                                player.set_volume(amount.max(0.0)).await
                             }
                         }
                     {
