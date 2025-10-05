@@ -2,16 +2,14 @@ use iced::{
     Color,
     advanced::subscription::{EventStream, Recipe, from_recipe},
 };
-use std::{
-    env::temp_dir,
-    fs,
-    hash::Hash,
-    io::{self, BufRead},
-    process::{Command, Stdio},
+use std::{env::temp_dir, fs, hash::Hash, process::Stdio};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::Command as TokioCommand,
+    sync::mpsc,
 };
-use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{Message, services::Service, utils::BoxStream};
 
@@ -44,8 +42,8 @@ impl Recipe for CavaSubscriptionRecipe {
         let config_path =
             write_temp_cava_config().unwrap().display().to_string();
 
-        tokio::task::spawn_blocking(move || {
-            let mut command = match Command::new("cava")
+        tokio::task::spawn(async move {
+            let mut command = match TokioCommand::new("cava")
                 .arg("-p")
                 .arg(&config_path)
                 .stdout(Stdio::piped())
@@ -54,30 +52,25 @@ impl Recipe for CavaSubscriptionRecipe {
             {
                 Ok(cmd) => cmd,
                 Err(e) => {
-                    error!("Cava Command Failed: {e}");
+                    error!("{e}");
                     return;
                 }
             };
 
             let Some(stdout) = command.stdout.take() else {
-                error!("Cava Pipe Failed");
+                error!("cava pipe failed");
                 return;
             };
 
-            let reader = io::BufReader::new(stdout);
+            let mut lines = BufReader::new(stdout).lines();
 
-            for line in reader.lines() {
-                match line {
-                    Ok(line_str) => {
-                        if tx.blocking_send(Some(line_str)).is_err() {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
+            while let Ok(Some(line)) = lines.next_line().await {
+                if tx.send(Some(line)).await.is_err() {
+                    break;
                 }
             }
 
-            let _ = command.kill();
+            warn!("cava killed");
         });
 
         Box::pin(ReceiverStream::new(rx))

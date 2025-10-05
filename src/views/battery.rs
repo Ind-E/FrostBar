@@ -1,6 +1,6 @@
 use iced::{
     Element, Length,
-    widget::{Container, Text, container},
+    widget::{Column, Container, Text, container},
 };
 use tracing::warn;
 
@@ -27,7 +27,7 @@ impl<'a> BatteryView {
         layout: &config::Layout,
     ) -> Element<'a, Message> {
         if service.batteries.is_empty() {
-            return Text::new("?").size(self.config.icon_size).into();
+            return Column::new().into();
         }
 
         let total_percentage: f32 =
@@ -80,7 +80,7 @@ impl<'a> BatteryView {
 
         let icon_widget = maybe_mouse_binds(icon_widget, &self.config.binds);
 
-        styled_tooltip(icon_widget, tooltip, &layout.anchor)
+        styled_tooltip(icon_widget, tooltip, layout.anchor)
     }
 }
 

@@ -63,7 +63,7 @@ impl<'a> WindowView<'a> {
         let tooltip =
             Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
 
-        styled_tooltip(content, tooltip, &layout.anchor)
+        styled_tooltip(content, tooltip, layout.anchor)
     }
 }
 

@@ -86,7 +86,11 @@ impl<'a> MprisPlayerView {
             Container::new(Image::new(art)).into()
         } else {
             let container = Container::new(
-                Text::new(config.placeholder.clone()).size(20).center(),
+                Text::new(config.placeholder.clone())
+                    .size(20)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(),
             )
             .style(container_style(&config.placeholder_style))
             .padding(5);
@@ -96,7 +100,10 @@ impl<'a> MprisPlayerView {
                     .height(layout.width - 10)
                     .into()
             } else {
-                container.center_y(Length::Fill).width(layout.width).into()
+                container
+                    .center_y(Length::Fill)
+                    .width(layout.width - 10)
+                    .into()
             }
         };
 
@@ -168,11 +175,11 @@ impl<'a> MprisPlayerView {
                         | ScrollDelta::Pixels { x, y } => (x, y),
                     };
 
-                    if y < 0.0
+                    if y > 0.0
                         && let Some(scroll_up) = &binds.scroll_up
                     {
                         Message::MediaControl(*scroll_up, player.name.clone())
-                    } else if y > 0.0
+                    } else if y < 0.0
                         && let Some(scroll_down) = &binds.scroll_down
                     {
                         Message::MediaControl(*scroll_down, player.name.clone())
@@ -197,11 +204,11 @@ impl<'a> MprisPlayerView {
                 Container::new(mouse_area.interaction(Interaction::Pointer))
                     .id(self.id.clone());
 
-            return styled_tooltip(content, tooltip, &layout.anchor);
+            return styled_tooltip(content, tooltip, layout.anchor);
         }
 
         let content = Container::new(content).id(self.id.clone());
 
-        styled_tooltip(content, tooltip, &layout.anchor)
+        styled_tooltip(content, tooltip, layout.anchor)
     }
 }

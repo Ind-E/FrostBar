@@ -153,7 +153,7 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
             let filter =
                 EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                     if debug {
-                        EnvFilter::new("debug")
+                        EnvFilter::new("info,frostbar=debug")
                     } else {
                         EnvFilter::new("error,frostbar=info")
                     }
@@ -268,10 +268,10 @@ pub fn open_window(
 ) -> (iced::window::Id, iced::Task<Message>) {
     let size = match layout.anchor {
         config::Anchor::Left | config::Anchor::Right => {
-            Size::new(monitor_size.width, 0.0)
+            Size::new(layout.width as f32, 0.0)
         }
         config::Anchor::Top | config::Anchor::Bottom => {
-            Size::new(0.0, monitor_size.width)
+            Size::new(0.0, layout.width as f32)
         }
     };
 
@@ -283,12 +283,7 @@ pub fn open_window(
     });
 
     // top, right, bottom, left
-    let margin = Some(match layout.anchor {
-        config::Anchor::Left => (layout.gaps, 0, layout.gaps, layout.gaps),
-        config::Anchor::Right => (layout.gaps, layout.gaps, layout.gaps, 0),
-        config::Anchor::Top => (layout.gaps, layout.gaps, 0, layout.gaps),
-        config::Anchor::Bottom => (0, layout.gaps, layout.gaps, layout.gaps),
-    });
+    let margin = Some((layout.gaps, layout.gaps, layout.gaps, layout.gaps));
 
     // x, y, width, height
     let input_region = Some(match layout.anchor {
@@ -427,19 +422,14 @@ impl std::fmt::Display for CommandSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(args) = self.args.as_ref()
             && !args.is_empty()
-            && args[0] == "-c"
         {
-            let joined = args[1..].join(" ");
-            write!(f, "{joined}")
+            if args[0] == "-c" {
+                write!(f, "{}", args[1..].join(" "))
+            } else {
+                write!(f, "{} {}", self.command, args.join(" "))
+            }
         } else {
-            write!(
-                f,
-                "{}",
-                self.args
-                    .as_ref()
-                    .map(|v| format!("{} {}", self.command, v.join(" ")))
-                    .unwrap_or_default()
-            )
+            write!(f, "{}", self.command)
         }
     }
 }

@@ -214,7 +214,7 @@ impl Bar {
     }
 
     fn title(&self, _id: Id) -> String {
-        String::from("FrostBar")
+        String::from(BAR_NAMESPACE)
     }
 
     pub fn namespace(&self) -> String {
@@ -308,9 +308,9 @@ impl Bar {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("{e:?}");
+                                error!("{e:?}");
                                 if let Err(e) = Notification::new()
-                                    .summary(&self.namespace())
+                                    .summary(BAR_NAMESPACE)
                                     .body("Failed to parse config file")
                                     .show()
                                 {
@@ -413,6 +413,22 @@ impl Bar {
                             MediaControl::Seek(amount) => {
                                 player.seek(amount).await
                             }
+                            MediaControl::Volume(amount) => {
+                                match player.volume().await {
+                                    Ok(current) => {
+                                        player
+                                            .set_volume(
+                                                (current + amount).max(0.0),
+                                            )
+                                            .await
+                                    }
+                                    Err(e) => Err(e),
+                                }
+                            }
+
+                            MediaControl::SetVolume(amount) => {
+                                player.set_volume(amount.max(0.0)).await
+                            }
                         }
                     {
                         error!("{e}");
@@ -420,18 +436,40 @@ impl Bar {
                 },
                 |()| Message::NoOp,
             ),
-            Message::Command(cmd) => {
-                info!("{cmd}");
-                Task::future(async move {
-                    let mut command = TokioCommand::new(cmd.command);
-                    if let Some(args) = cmd.args {
-                        command.args(args);
+            Message::Command(cmd) => Task::future(async move {
+                let mut command = TokioCommand::new(&cmd.command);
+                if let Some(ref args) = cmd.args {
+                    command.args(args);
+                }
+
+                match command.output().await {
+                    Ok(output) => {
+                        info!(target: "process", "spawned `{cmd}`");
+
+                        if !output.stdout.is_empty() {
+                            info!(target: "process",
+                                "{}",
+                                String::from_utf8_lossy(&output.stdout)
+                            );
+                        }
+
+                        if !output.stderr.is_empty() {
+                            error!(
+                                target: "process",
+                                "{}",
+                                String::from_utf8_lossy(&output.stderr)
+                            );
+                        }
                     }
 
-                    let _ = command.status().await;
-                    Message::NoOp
-                })
-            }
+                    Err(e) => {
+                        error!(target: "process", "failed to spawn `{cmd}`: {e}");
+                    }
+                }
+
+                Message::NoOp
+            }),
+
             Message::NoOp => Task::none(),
         }
     }

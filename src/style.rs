@@ -18,7 +18,7 @@ pub fn _bg(_theme: &Theme) -> container::Style {
 pub fn styled_tooltip<'a>(
     content: impl Into<Element<'a, Message>>,
     tooltip: impl Into<Element<'a, Message>>,
-    anchor: &config::Anchor,
+    anchor: config::Anchor,
 ) -> Element<'a, Message> {
     Tooltip::new(
         content,

@@ -41,7 +41,7 @@ impl TimeView {
 
         let content = maybe_mouse_binds(content, &self.config.binds);
 
-        styled_tooltip(content, tooltip, &layout.anchor)
+        styled_tooltip(content, tooltip, layout.anchor)
     }
 }
 

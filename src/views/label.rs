@@ -33,7 +33,7 @@ impl<'a> LabelView {
 
         let element = if let Some(tooltip) = &self.config.tooltip {
             let tooltip = Text::new(tooltip.clone());
-            styled_tooltip(content, tooltip, &layout.anchor)
+            styled_tooltip(content, tooltip, layout.anchor)
         } else {
             content.into()
         };
