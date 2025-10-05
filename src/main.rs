@@ -51,7 +51,6 @@ mod constants;
 mod dbus_proxy;
 mod file_watcher;
 mod icon_cache;
-mod popup_tooltip;
 mod services;
 mod style;
 mod utils;
@@ -134,7 +133,9 @@ pub enum Message {
     NoOp,
 }
 
-pub struct Bar {
+struct BarTooltip {}
+
+pub struct Bar<'a> {
     id: Id,
     config: Config,
     config_path: PathBuf,
@@ -155,10 +156,12 @@ pub struct Bar {
     cava_service: Option<CavaService>,
 
     label_views: Vec<LabelView>,
+
+    tooltip: Option<Element<'a, Message>>,
 }
 
 #[profiling::all_functions]
-impl Bar {
+impl Bar<'_> {
     pub fn new(
         mut config: Config,
         config_path: PathBuf,
@@ -209,6 +212,7 @@ impl Bar {
             label_views,
             config,
             config_path,
+            tooltip: None,
         };
 
         (bar, open_task)
@@ -465,7 +469,7 @@ impl Bar {
                             }
                         }
                     {
-                        error!("{e}");
+                        warn!("{e}");
                     }
                 },
                 |()| Message::NoOp,

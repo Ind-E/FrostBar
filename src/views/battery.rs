@@ -1,6 +1,6 @@
 use iced::{
     Element, Length,
-    widget::{self, Container, Text},
+    widget::{self, Column, Container, Text},
 };
 use tracing::warn;
 
@@ -27,7 +27,7 @@ impl<'a> BatteryView {
         layout: &config::Layout,
     ) -> Element<'a, Message> {
         if service.batteries.is_empty() {
-            return Text::new("?").size(self.config.icon_size).into();
+            return Column::new().into();
         }
 
         let total_percentage: f32 =

@@ -1,5 +1,3 @@
-use crate::Message;
-
 pub mod battery;
 pub mod cava;
 pub mod label;

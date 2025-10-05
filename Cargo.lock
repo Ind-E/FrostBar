@@ -2043,7 +2043,7 @@ dependencies = [
 [[package]]
 name = "iced_exdevtools"
 version = "0.14.0-dev"
-source = "git+https://github.com/waycrate/exwlshelleventloop#6f7747e27140729331b61c6f3784de2a9aa85b33"
+source = "git+https://github.com/waycrate/exwlshelleventloop#d82683fa3dc4e492aebeb1d94975515f20955232"
 dependencies = [
  "iced_debug",
  "iced_devtools",
@@ -2090,7 +2090,7 @@ dependencies = [
 [[package]]
 name = "iced_layershell"
 version = "0.14.0-dev"
-source = "git+https://github.com/waycrate/exwlshelleventloop#6f7747e27140729331b61c6f3784de2a9aa85b33"
+source = "git+https://github.com/waycrate/exwlshelleventloop#d82683fa3dc4e492aebeb1d94975515f20955232"
 dependencies = [
  "enumflags2",
  "futures",
@@ -2116,7 +2116,7 @@ dependencies = [
 [[package]]
 name = "iced_layershell_macros"
 version = "0.14.0-dev"
-source = "git+https://github.com/waycrate/exwlshelleventloop#6f7747e27140729331b61c6f3784de2a9aa85b33"
+source = "git+https://github.com/waycrate/exwlshelleventloop#d82683fa3dc4e492aebeb1d94975515f20955232"
 dependencies = [
  "darling",
  "manyhow",
@@ -2607,7 +2607,7 @@ dependencies = [
 [[package]]
 name = "layershellev"
 version = "0.14.0-dev"
-source = "git+https://github.com/waycrate/exwlshelleventloop#6f7747e27140729331b61c6f3784de2a9aa85b33"
+source = "git+https://github.com/waycrate/exwlshelleventloop#d82683fa3dc4e492aebeb1d94975515f20955232"
 dependencies = [
  "bitflags 2.9.1",
  "calloop 0.14.3",
@@ -5832,7 +5832,7 @@ dependencies = [
 [[package]]
 name = "waycrate_xkbkeycode"
 version = "0.14.0-dev"
-source = "git+https://github.com/waycrate/exwlshelleventloop#6f7747e27140729331b61c6f3784de2a9aa85b33"
+source = "git+https://github.com/waycrate/exwlshelleventloop#d82683fa3dc4e492aebeb1d94975515f20955232"
 dependencies = [
  "bitflags 2.9.1",
  "calloop 0.14.3",
