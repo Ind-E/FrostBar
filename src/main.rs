@@ -469,23 +469,40 @@ impl Bar<'_> {
                             }
                         }
                     {
-                        warn!("{e}");
+                        warn!(target: "mpris", "{e}");
                     }
                 },
                 |()| Message::NoOp,
             ),
-            Message::Command(cmd) => {
-                info!("{cmd}");
-                Task::future(async move {
-                    let mut command = TokioCommand::new(cmd.command);
-                    if let Some(args) = cmd.args {
-                        command.args(args);
-                    }
+            Message::Command(cmd) => Task::future(async move {
+                let mut command = TokioCommand::new(&cmd.command);
+                if let Some(ref args) = cmd.args {
+                    command.args(args);
+                }
 
-                    let _ = command.status().await;
-                    Message::NoOp
-                })
-            }
+                match command.output().await {
+                    Ok(output) => {
+                        info!(target: "process", "spawned `{cmd}`");
+                        if !output.stdout.is_empty() {
+                            info!(target: "process",
+                                "{}",
+                                String::from_utf8_lossy(&output.stdout)
+                            );
+                        }
+                        if !output.stderr.is_empty() {
+                            error!(
+                                target: "process",
+                                "{}",
+                                String::from_utf8_lossy(&output.stderr)
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        error!(target: "process", "failed to spawn `{cmd}`: {e}");
+                    }
+                }
+                Message::NoOp
+            }),
             Message::NoOp => Task::none(),
             // Message::AnchorChange { id, anchor } => todo!(),
             // Message::SetInputRegion { id, callback } => todo!(),

@@ -52,13 +52,13 @@ impl Recipe for CavaSubscriptionRecipe {
             {
                 Ok(cmd) => cmd,
                 Err(e) => {
-                    error!("Cava Command Failed: {e}");
+                    error!("{e}");
                     return;
                 }
             };
 
             let Some(stdout) = command.stdout.take() else {
-                error!("Cava Pipe Failed");
+                error!("cava pipe failed");
                 return;
             };
 
@@ -71,8 +71,6 @@ impl Recipe for CavaSubscriptionRecipe {
             }
 
             warn!("cava killed");
-
-            let _ = command.kill();
         });
 
         Box::pin(ReceiverStream::new(rx))

@@ -371,19 +371,14 @@ impl std::fmt::Display for CommandSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(args) = self.args.as_ref()
             && !args.is_empty()
-            && args[0] == "-c"
         {
-            let joined = args[1..].join(" ");
-            write!(f, "{joined}")
+            if args[0] == "-c" {
+                write!(f, "{}", args[1..].join(" "))
+            } else {
+                write!(f, "{} {}", self.command, args.join(" "))
+            }
         } else {
-            write!(
-                f,
-                "{}",
-                self.args
-                    .as_ref()
-                    .map(|v| format!("{} {}", self.command, v.join(" ")))
-                    .unwrap_or_default()
-            )
+            write!(f, "{}", self.command)
         }
     }
 }
