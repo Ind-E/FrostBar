@@ -2,6 +2,7 @@ use iced::{
     Subscription,
     futures::{self, FutureExt},
 };
+use std::io;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -76,6 +77,7 @@ pub struct Workspace {
 fn map_window(
     window: &niri_ipc::Window,
     icon_cache: Arc<Mutex<IconCache>>,
+    icon_theme: Option<&str>,
 ) -> Window {
     let mut icon_cache = icon_cache.lock().unwrap();
     Window {
@@ -83,7 +85,7 @@ fn map_window(
         icon: window
             .app_id
             .as_ref()
-            .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
+            .and_then(|app_id| icon_cache.get_icon(app_id, icon_theme).clone()),
         layout: window.layout.clone().into(),
         title: window.title.clone().unwrap_or("N/A".to_string()),
     }
@@ -100,7 +102,7 @@ impl From<WindowLayout> for Layout {
 #[derive(Debug, Clone)]
 pub enum NiriEvent {
     Ready(mpsc::Sender<Request>),
-    Event(Event),
+    Event(Result<Event, String>),
     Action(Action),
 }
 
@@ -110,6 +112,7 @@ pub struct NiriService {
     pub hovered_workspace_id: Option<u64>,
     pub icon_cache: Arc<Mutex<IconCache>>,
     pub sender: Option<mpsc::Sender<Request>>,
+    icon_theme: Option<String>,
 }
 
 #[profiling::all_functions]
@@ -136,7 +139,11 @@ impl Service for NiriService {
                     futures::select! {
                         event = event_rx.recv().fuse() => {
                             if let Some(event) = event {
-                                if let Err(e) = yield_tx.send(NiriEvent::Event(event)) {
+                                let send_result = yield_tx.send(NiriEvent::Event(
+                                    event.map_err(|e| e.kind().to_string()),
+                                ));
+
+                                if let Err(e) = send_result {
                                     error!("{e}");
                                 }
                             } else {
@@ -148,7 +155,7 @@ impl Service for NiriService {
                         request = request_rx.recv().fuse() => {
                             if let Some(request) = request {
                                 if let Err(e) = socket.send(request) {
-                                    error!("Failed to send request to niri socket: {e}");
+                                    error!("failed to send request to niri socket: {e}");
                                 }
                             } else {
                                 error!("failed to receive request");
@@ -199,16 +206,30 @@ impl Service for NiriService {
 }
 
 impl NiriService {
-    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
+    pub fn new(
+        icon_cache: Arc<Mutex<IconCache>>,
+        icon_theme: Option<String>,
+    ) -> Self {
         Self {
             workspaces: HashMap::new(),
             windows: HashMap::new(),
             hovered_workspace_id: None,
             icon_cache,
+            icon_theme,
             sender: None,
         }
     }
-    fn handle_ipc_event(&mut self, event: Event) -> iced::Task<Message> {
+    fn handle_ipc_event(
+        &mut self,
+        event: Result<Event, String>,
+    ) -> iced::Task<Message> {
+        let event = match event {
+            Ok(event) => event,
+            Err(e) => {
+                error!("{e}");
+                return iced::Task::none();
+            }
+        };
         match event {
             Event::WorkspacesChanged { workspaces } => {
                 self.workspaces = workspaces
@@ -223,7 +244,14 @@ impl NiriService {
                             .values()
                             .filter(|w| w.workspace_id == Some(ws.id))
                             .map(|w| {
-                                (w.id, map_window(w, self.icon_cache.clone()))
+                                (
+                                    w.id,
+                                    map_window(
+                                        w,
+                                        self.icon_cache.clone(),
+                                        self.icon_theme.as_deref(),
+                                    ),
+                                )
                             })
                             .collect(),
                     })
@@ -238,7 +266,16 @@ impl NiriService {
                         .windows
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
+                        .map(|w| {
+                            (
+                                w.id,
+                                map_window(
+                                    w,
+                                    self.icon_cache.clone(),
+                                    self.icon_theme.as_deref(),
+                                ),
+                            )
+                        })
                         .collect();
                 });
             }
@@ -264,7 +301,11 @@ impl NiriService {
                     let window_ref = self.windows.get(&window_id).unwrap();
                     new_ws.windows.insert(
                         window_id,
-                        map_window(window_ref, self.icon_cache.clone()),
+                        map_window(
+                            window_ref,
+                            self.icon_cache.clone(),
+                            self.icon_theme.as_deref(),
+                        ),
                     );
                 }
             }
@@ -299,7 +340,16 @@ impl NiriService {
                         .windows
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
+                        .map(|w| {
+                            (
+                                w.id,
+                                map_window(
+                                    w,
+                                    self.icon_cache.clone(),
+                                    self.icon_theme.as_deref(),
+                                ),
+                            )
+                        })
                         .collect();
                 });
             }
@@ -316,7 +366,7 @@ impl NiriService {
     }
 }
 
-fn run_event_listener(tx: &mpsc::UnboundedSender<Event>) {
+fn run_event_listener(tx: &mpsc::UnboundedSender<io::Result<Event>>) {
     let mut sock = match Socket::connect() {
         Ok(s) => s,
         Err(e) => {
@@ -342,15 +392,8 @@ fn run_event_listener(tx: &mpsc::UnboundedSender<Event>) {
     let mut read_event = sock.read_events();
 
     loop {
-        match read_event() {
-            Ok(event) => {
-                if let Err(e) = tx.send(event) {
-                    return error!("{e}");
-                }
-            }
-            Err(e) => {
-                return error!("Failed to read event: {e}");
-            }
+        if let Err(e) = tx.send(read_event()) {
+            return error!("{e}");
         }
     }
 }

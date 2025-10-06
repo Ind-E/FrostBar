@@ -1,5 +1,6 @@
 use base64::Engine;
 use color_thief::ColorFormat;
+use freedesktop_icons::{default_theme_gtk, lookup};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -18,7 +19,9 @@ use iced::{
         svg,
     },
 };
-use xdgkit::icon_finder;
+
+const ICON_SIZE: u16 = 48;
+const ICON_SCALE: u16 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Icon {
@@ -29,36 +32,64 @@ pub enum Icon {
 #[profiling::function]
 pub fn client_icon_path(
     app_id: &str,
-) -> Result<PathBuf, freedesktop_desktop_entry::DecodeError> {
-    let mut paths = default_paths();
+    icon_theme: Option<&str>,
+) -> Option<PathBuf> {
+    if let Some(path) = find_icon_from_desktop_file(app_id, icon_theme) {
+        Some(path)
+    } else if let Some(path) = try_icon_themes(app_id, icon_theme) {
+        Some(path)
+    } else {
+        error!("icon not found for `{app_id}`");
+        None
+    }
+}
 
-    let desktop_file = paths
-        .find_map(|p| {
-            let file = p.join(format!("{app_id}.desktop"));
-            if file.exists() { Some(file) } else { None }
-        })
-        .map(
-            |df| -> Result<
-                Option<PathBuf>,
-                freedesktop_desktop_entry::DecodeError,
-            > {
-                let content = std::fs::read_to_string(&df)?;
+fn find_icon_from_desktop_file(
+    app_id: &str,
+    icon_theme: Option<&str>,
+) -> Option<PathBuf> {
+    for path in default_paths() {
+        let desktop_file_path = path.join(format!("{app_id}.desktop"));
 
-                let entry =
-                    DesktopEntry::from_str(&df, &content, None::<&[&str]>)?;
+        if let Ok(entry) =
+            DesktopEntry::from_path(&desktop_file_path, None::<&[&str]>)
+            && let Some(icon_path) = entry
+                .icon()
+                .and_then(|name| try_icon_themes(name, icon_theme))
+        {
+            return Some(icon_path);
+        }
+    }
+    None
+}
 
-                Ok(entry.desktop_entry("Icon").and_then(|icon_name| {
-                    icon_finder::find_icon(icon_name.to_string(), 128, 1)
-                }))
-            },
-        )
-        .transpose()?
-        .unwrap_or_else(|| {
-            icon_finder::find_icon("default-application".to_string(), 128, 1)
-        })
-        .unwrap_or_else(|| PathBuf::from("x.svg"));
+fn try_icon_themes(
+    icon_path: &str,
+    icon_theme: Option<&str>,
+) -> Option<PathBuf> {
+    if let Some(theme) = icon_theme
+        && let Some(icon) = lookup(icon_path)
+            .with_theme(theme)
+            .with_size(ICON_SIZE)
+            .with_scale(ICON_SCALE)
+            .find()
+    {
+        return Some(icon);
+    } else if let Some(theme) = default_theme_gtk()
+        && let Some(icon) = lookup(icon_path)
+            .with_theme(&theme)
+            .with_size(48)
+            .with_scale(2)
+            .find()
+    {
+        return Some(icon);
+    } else if let Some(icon) =
+        lookup(icon_path).with_size(48).with_scale(2).find()
+    {
+        return Some(icon);
+    }
 
-    Ok(desktop_file)
+    None
 }
 
 #[derive(Debug)]
@@ -91,12 +122,15 @@ impl IconCache {
         }
     }
 
-    pub fn get_icon(&mut self, app_id: &str) -> Option<Icon> {
+    pub fn get_icon(
+        &mut self,
+        app_id: &str,
+        icon_theme: Option<&str>,
+    ) -> Option<Icon> {
         self.inner
             .entry(app_id.to_string())
             .or_insert_with(|| {
-                client_icon_path(app_id)
-                    .ok()
+                client_icon_path(app_id, icon_theme)
                     .and_then(|path| load_icon_from_path(&path))
             })
             .clone()

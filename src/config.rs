@@ -7,11 +7,12 @@ use std::{
 };
 
 use directories::ProjectDirs;
+use freedesktop_icons::list_themes;
 use iced::{Color, color};
 use knus::{DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError};
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::constants::BAR_NAMESPACE;
 
@@ -94,10 +95,12 @@ impl Default for Layout {
 
 #[derive(knus::Decode, Debug, Clone)]
 pub struct Style {
-    #[knus(child, unwrap(argument), default = 0)]
+    #[knus(child, unwrap(argument), default = Self::default().border_radius)]
     pub border_radius: u16,
     #[knus(child, default = Self::default().background)]
     pub background: ConfigColor,
+    #[knus(child, unwrap(argument), default)]
+    pub icon_theme: Option<String>,
 }
 
 impl Default for Style {
@@ -105,6 +108,7 @@ impl Default for Style {
         Self {
             border_radius: 0,
             background: Color::from_rgb(0.0, 0.0, 0.0).into(),
+            icon_theme: None,
         }
     }
 }
@@ -661,6 +665,12 @@ impl Config {
                 .unwrap_or("config.kdl"),
             &contents,
         )?;
+
+        if let Some(ref icon_theme) = config.style.icon_theme
+            && !list_themes().contains(icon_theme)
+        {
+            warn!("{icon_theme} not found in list of installed themes");
+        }
 
         Ok(config)
     }

@@ -12,7 +12,4 @@ pub const FIRA_CODE: Font = Font {
     ..Font::DEFAULT
 };
 
-// icons
-pub const _ICON_THEME: &str = "Flat-Remix-Blue-Dark";
-
 pub const BAR_NAMESPACE: &str = "FrostBar";

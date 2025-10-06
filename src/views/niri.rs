@@ -3,7 +3,7 @@ use iced::{
     mouse::Interaction,
     padding::{left, top},
     widget::{
-        Column, Container, Image, MouseArea, Row, Svg, Text, column,
+        Column, Container, Image, MouseArea, Row, Svg, Text,
         container::{self},
         text::Shaping,
     },
@@ -45,7 +45,27 @@ impl<'a> WindowView<'a> {
             Some(Icon::Raster(handle)) => {
                 Image::new(handle.clone()).height(24).width(24).into()
             }
-            Option::None => column![].into(),
+            Option::None => {
+                let container = Container::new(
+                    Text::new("?")
+                        .size(20)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center(),
+                )
+                .padding(5);
+                if layout.anchor.vertical() {
+                    container
+                        .center_x(Length::Fill)
+                        .height(layout.width - 10)
+                        .into()
+                } else {
+                    container
+                        .center_y(Length::Fill)
+                        .width(layout.width - 10)
+                        .into()
+                }
+            }
         };
 
         let mut content = Container::new(MouseArea::new(icon).on_right_press(

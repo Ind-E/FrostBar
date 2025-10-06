@@ -173,7 +173,10 @@ impl Bar {
         let mpris_service = MprisService::new();
         let mut mpris_views = vec![];
 
-        let niri_service = NiriService::new(icon_cache.clone());
+        let niri_service = NiriService::new(
+            icon_cache.clone(),
+            config.style.icon_theme.clone(),
+        );
         let mut niri_views = vec![];
 
         let mut label_views = vec![];

@@ -136,17 +136,17 @@ pub fn process_modules(
     }
 }
 
-const MAX_LOG_FILES: usize = 5;
+const MAX_LOG_FILES: usize = 10;
 pub fn init_tracing(config_dir: &Path) -> PathBuf {
     let temp_sub = tracing_subscriber::fmt()
         .compact()
-        .with_writer(std::io::stdout)
+        .with_writer(std::io::stderr)
         .with_max_level(Level::DEBUG)
         .finish();
 
     let temp_dispatch = Dispatch::new(temp_sub);
 
-    let (filter, logfile_layer, stdout_layer, logfile_path) =
+    let (filter, logfile_layer, stderr_layer, logfile_path) =
         tracing::dispatcher::with_default(&temp_dispatch, || {
             let debug = cfg!(debug_assertions);
 
@@ -208,17 +208,17 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
             let logfile_layer =
                 fmt::layer().compact().with_writer(logfile).with_ansi(false);
 
-            let stdout_layer =
-                fmt::layer().compact().with_writer(std::io::stdout);
+            let stderr_layer =
+                fmt::layer().compact().with_writer(std::io::stderr);
 
-            (filter, logfile_layer, stdout_layer, logfile_path)
+            (filter, logfile_layer, stderr_layer, logfile_path)
         });
     std::mem::drop(temp_dispatch);
 
     tracing_subscriber::registry()
         .with(filter)
         .with(logfile_layer)
-        .with(stdout_layer)
+        .with(stderr_layer)
         .init();
 
     logfile_path
