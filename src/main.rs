@@ -311,7 +311,7 @@ impl Bar {
                                 }
                             }
                             Err(e) => {
-                                error!("{e:?}");
+                                error!("{:?}", e);
                                 if let Err(e) = Notification::new()
                                     .summary(BAR_NAMESPACE)
                                     .body("Failed to parse config file")

@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-use tracing::error;
+use tracing::{debug, error};
 
 use base64::engine::general_purpose;
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
@@ -35,8 +35,10 @@ pub fn client_icon_path(
     icon_theme: Option<&str>,
 ) -> Option<PathBuf> {
     if let Some(path) = find_icon_from_desktop_file(app_id, icon_theme) {
+        debug!("found icon from desktop file");
         Some(path)
     } else if let Some(path) = try_icon_themes(app_id, icon_theme) {
+        debug!("found icon from app id");
         Some(path)
     } else {
         error!("icon not found for `{app_id}`");
@@ -48,7 +50,7 @@ fn find_icon_from_desktop_file(
     app_id: &str,
     icon_theme: Option<&str>,
 ) -> Option<PathBuf> {
-    for path in default_paths() {
+    for path in default_paths().chain(std::iter::once("hi".into())) {
         let desktop_file_path = path.join(format!("{app_id}.desktop"));
 
         if let Ok(entry) =
@@ -87,6 +89,14 @@ fn try_icon_themes(
         lookup(icon_path).with_size(48).with_scale(2).find()
     {
         return Some(icon);
+    } else if icon_path.contains("steam_app_")
+        && let Some(steam_icon) =
+            lookup(dbg!(&icon_path.replace("steam_app", "steam_icon")))
+                .with_size(48)
+                .with_scale(2)
+                .find()
+    {
+        return Some(steam_icon);
     }
 
     None
