@@ -560,11 +560,7 @@ impl Bar {
                         .filter(|v| v.position.align == *pos)
                         .map(|v| {
                             (
-                                v.view(
-                                    service,
-                                    &self.config.layout,
-                                    &self.config.style,
-                                ),
+                                v.view(service, &self.config.layout),
                                 v.position.idx,
                             )
                         }),

@@ -102,7 +102,7 @@ impl<'a> WorkspaceView<'a> {
     fn view(
         &self,
         hovered: bool,
-        style: &config::Style,
+        style: &config::ContainerStyle,
         offset: i8,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
@@ -148,25 +148,23 @@ impl<'a> WorkspaceView<'a> {
         let windows = windows.style(workspace_style(
             self.workspace.is_active,
             hovered,
-            style.border_radius,
+            style,
         ));
 
-        Container::new(
-            MouseArea::new(windows)
-                .on_press(Message::NiriEvent(NiriEvent::Action(
-                    Action::FocusWorkspace {
-                        reference: WorkspaceReferenceArg::Id(self.workspace.id),
-                    },
-                )))
-                .on_enter(Message::MouseEntered(MouseEvent::Workspace(
-                    self.workspace.id,
-                )))
-                .on_exit(Message::MouseExited(MouseEvent::Workspace(
-                    self.workspace.id,
-                )))
-                .interaction(Interaction::Pointer),
-        )
-        .into()
+        MouseArea::new(windows)
+            .on_press(Message::NiriEvent(NiriEvent::Action(
+                Action::FocusWorkspace {
+                    reference: WorkspaceReferenceArg::Id(self.workspace.id),
+                },
+            )))
+            .on_enter(Message::MouseEntered(MouseEvent::Workspace(
+                self.workspace.id,
+            )))
+            .on_exit(Message::MouseExited(MouseEvent::Workspace(
+                self.workspace.id,
+            )))
+            .interaction(Interaction::Pointer)
+            .into()
     }
 }
 
@@ -187,7 +185,6 @@ impl<'a> NiriView {
         &self,
         service: &'a NiriService,
         layout: &config::Layout,
-        style: &config::Style,
     ) -> Element<'a, Message> {
         if layout.anchor.vertical() {
             service
@@ -200,7 +197,7 @@ impl<'a> NiriView {
                             service
                                 .hovered_workspace_id
                                 .is_some_and(|id| id == ws.id),
-                            style,
+                            &self.config.workspace_active_style,
                             self.config.workspace_offset,
                             layout,
                         ),
@@ -220,7 +217,7 @@ impl<'a> NiriView {
                             service
                                 .hovered_workspace_id
                                 .is_some_and(|id| id == ws.id),
-                            style,
+                            &self.config.workspace_active_style,
                             self.config.workspace_offset,
                             layout,
                         ),

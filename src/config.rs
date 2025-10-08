@@ -222,8 +222,12 @@ pub struct Niri {
 
     // #[knus(child, default)]
     // pub window_active_style: ContainerStyle,
+
     #[knus(child, default)]
     pub workspace_active_style: ContainerStyle,
+
+    #[knus(child, default)]
+    pub workspace_hovered_style: ContainerStyle,
 
     #[knus(child, default)]
     pub workspace_style: ContainerStyle,

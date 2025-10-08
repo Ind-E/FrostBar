@@ -235,26 +235,26 @@ impl MprisPlayer {
 
         if let Some(val) = metadata.get("mpris:artUrl") {
             let art_url = val.to_string().trim_matches('"').to_string();
-            let (handle, colors) = art_cache.get_art(&art_url);
-
-            self.art.clone_from(handle);
-            self.colors.clone_from(colors);
-
-            if self.status == "Playing" {
-                let captured_colors = colors.clone();
-
-                iced::Task::perform(
-                    async move { captured_colors },
-                    Message::CavaColorUpdate,
-                )
+            if let Some((handle, colors)) = art_cache.get_art(&art_url) {
+                self.art = Some(handle.clone());
+                self.colors.clone_from(colors);
+                if self.status == "Playing" {
+                    let captured_colors = colors.clone();
+                    return iced::Task::perform(
+                        async move { captured_colors },
+                        Message::CavaColorUpdate,
+                    );
+                }
             } else {
-                iced::Task::none()
+                self.art = None;
+                self.colors = None;
             }
-        } else {
-            self.art = None;
-            self.colors = None;
-            iced::Task::perform(async { None }, Message::CavaColorUpdate)
+            return iced::Task::none();
         }
+
+        self.art = None;
+        self.colors = None;
+        iced::Task::perform(async { None }, Message::CavaColorUpdate)
     }
 
     pub fn new(name: String, status: String) -> Self {

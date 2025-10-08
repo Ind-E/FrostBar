@@ -84,6 +84,7 @@ fn try_icon_themes(
             .with_scale(2)
             .find()
     {
+        debug!("detected gtk theme {theme}");
         return Some(icon);
     } else if let Some(icon) =
         lookup(icon_path).with_size(48).with_scale(2).find()
@@ -104,7 +105,7 @@ fn try_icon_themes(
 
 #[derive(Debug)]
 pub struct IconCache {
-    inner: BTreeMap<String, Option<Icon>>,
+    inner: BTreeMap<String, Icon>,
 }
 
 #[profiling::function]
@@ -137,18 +138,20 @@ impl IconCache {
         app_id: &str,
         icon_theme: Option<&str>,
     ) -> Option<Icon> {
-        self.inner
-            .entry(app_id.to_string())
-            .or_insert_with(|| {
-                client_icon_path(app_id, icon_theme)
-                    .and_then(|path| load_icon_from_path(&path))
-            })
-            .clone()
+        if let Some(icon) = self.inner.get(app_id) {
+            return Some(icon.clone());
+        }
+
+        let icon = client_icon_path(app_id, icon_theme)
+            .and_then(|path| load_icon_from_path(&path))?;
+
+        self.inner.insert(app_id.to_string(), icon.clone());
+        Some(icon)
     }
 }
 
 pub struct MprisArtCache {
-    inner: BTreeMap<String, (Option<image::Handle>, Option<Vec<Color>>)>,
+    inner: BTreeMap<String, (image::Handle, Option<Vec<Color>>)>,
 }
 
 #[profiling::all_functions]
@@ -162,56 +165,63 @@ impl MprisArtCache {
     pub fn get_art(
         &mut self,
         art_url: &str,
-    ) -> &(Option<image::Handle>, Option<Vec<Color>>) {
-        self.inner.entry(art_url.to_string()).or_insert_with(|| {
-            if let Some(url) = art_url.strip_prefix("data:image/jpeg;base64,") {
-                let image_bytes = match general_purpose::STANDARD.decode(url) {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        eprintln!("icon_cache get_art error: {e}");
-                        return (None, None);
-                    }
-                };
-                let gradient = load_from_memory(&image_bytes)
-                    .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-                let handle = image::Handle::from_bytes(image_bytes);
-                (Some(handle), gradient)
-            } else if let Some(url) = art_url.strip_prefix("file://") {
-                let handle = image::Handle::from_path(url);
-                let gradient = open(url)
-                    .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-                (Some(handle), gradient)
-            } else if art_url.starts_with("https://")
-                || art_url.starts_with("http://")
-            {
-                let response = match reqwest::blocking::get(art_url) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        error!("Failed to fetch album art from {art_url}: {e}");
-                        return (None, None);
-                    }
-                };
-                let image_bytes = match response.bytes() {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        error!(
-                            "Failed to get bytes of album art from {art_url}: {e}"
-                        );
-                        return (None, None);
-                    }
-                };
+    ) -> Option<&(image::Handle, Option<Vec<Color>>)> {
+        if self.inner.contains_key(art_url) {
+            return Some(self.inner.get(art_url).unwrap());
+        }
 
-                let gradient = load_from_memory(&image_bytes)
-                    .ok()
-                    .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-                let handle = image::Handle::from_bytes(image_bytes);
-                (Some(handle), gradient)
-            } else {
-                (None, None)
-            }
-        })
+        let art = if let Some(url) =
+            art_url.strip_prefix("data:image/jpeg;base64,")
+        {
+            let image_bytes = match general_purpose::STANDARD.decode(url) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    eprintln!("icon_cache get_art error: {e}");
+                    return None;
+                }
+            };
+            let gradient = load_from_memory(&image_bytes)
+                .ok()
+                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+            let handle = image::Handle::from_bytes(image_bytes);
+            (handle, gradient)
+        } else if let Some(url) = art_url.strip_prefix("file://") {
+            let handle = image::Handle::from_path(url);
+            let gradient = open(url)
+                .ok()
+                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+            (handle, gradient)
+        } else if art_url.starts_with("https://")
+            || art_url.starts_with("http://")
+        {
+            let response = match reqwest::blocking::get(art_url) {
+                Ok(res) => res,
+                Err(e) => {
+                    error!("Failed to fetch album art: {e}");
+                    return None;
+                }
+            };
+            let image_bytes = match response.bytes() {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    error!(
+                        "Failed to get bytes of album art from {art_url}: {e}"
+                    );
+                    return None;
+                }
+            };
+
+            let gradient = load_from_memory(&image_bytes)
+                .ok()
+                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+            let handle = image::Handle::from_bytes(image_bytes);
+            (handle, gradient)
+        } else {
+            return None;
+        };
+
+        self.inner.insert(art_url.to_string(), art);
+        Some(self.inner.get(art_url).unwrap())
     }
 }
 

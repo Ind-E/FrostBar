@@ -213,7 +213,6 @@ pub fn init_tracing(config_dir: &Path) -> PathBuf {
 
             (filter, logfile_layer, stderr_layer, logfile_path)
         });
-    std::mem::drop(temp_dispatch);
 
     tracing_subscriber::registry()
         .with(filter)
