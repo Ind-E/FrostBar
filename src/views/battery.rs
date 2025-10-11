@@ -8,7 +8,7 @@ use crate::{
     Message, config,
     services::battery::BatteryService,
     style::{container_style, styled_tooltip},
-    utils::maybe_mouse_binds,
+    utils::mouse_binds,
     views::BarPosition,
 };
 extern crate starship_battery as battery;
@@ -78,7 +78,7 @@ impl<'a> BatteryView {
                 .join("\n"),
         );
 
-        let icon_widget = maybe_mouse_binds(icon_widget, &self.config.binds);
+        let icon_widget = mouse_binds(icon_widget, &self.config.binds);
 
         styled_tooltip(icon_widget, tooltip, layout.anchor)
     }

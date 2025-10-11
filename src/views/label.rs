@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     Message, config,
     style::{container_style, styled_tooltip},
-    utils::maybe_mouse_binds,
+    utils::mouse_binds,
     views::BarPosition,
 };
 
@@ -38,7 +38,7 @@ impl<'a> LabelView {
             content.into()
         };
 
-        maybe_mouse_binds(element, &self.config.binds)
+        mouse_binds(element, &self.config.binds)
     }
 }
 

@@ -327,69 +327,60 @@ pub fn open_window(
 }
 
 #[profiling::function]
-pub fn maybe_mouse_binds<'a>(
+pub fn mouse_binds<'a>(
     element: impl Into<Element<'a, Message>>,
+    // tooltip_content: impl Into<Element<'a, Message>>,
+    // tooltip: Arc<RwLock<Element<'a, Message>>>,
     binds: &'a MouseBinds,
 ) -> Element<'a, Message> {
-    if binds.mouse_left.is_none()
-        && binds.mouse_right.is_none()
-        && binds.mouse_middle.is_none()
-        && binds.scroll_up.is_none()
-        && binds.scroll_down.is_none()
-        && binds.scroll_right.is_none()
-        && binds.scroll_left.is_none()
-        && binds.double_click.is_none()
-    {
-        element.into()
-    } else {
-        let mut mouse_area = MouseArea::new(element);
-        if let Some(left) = &binds.mouse_left {
-            mouse_area = mouse_area.on_release(process_command(left));
-        }
-
-        if let Some(double) = &binds.double_click {
-            mouse_area = mouse_area.on_double_click(process_command(double));
-        }
-
-        if let Some(right) = &binds.mouse_right {
-            mouse_area = mouse_area.on_right_release(process_command(right));
-        }
-
-        if let Some(middle) = &binds.mouse_middle {
-            mouse_area = mouse_area.on_middle_release(process_command(middle));
-        }
-
-        if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
-            mouse_area = mouse_area.on_scroll(|delta| {
-                let (x, y) = match delta {
-                    ScrollDelta::Lines { x, y }
-                    | ScrollDelta::Pixels { x, y } => (x, y),
-                };
-
-                if y > 0.0
-                    && let Some(scroll_up) = &binds.scroll_up
-                {
-                    process_command(scroll_up)
-                } else if y < 0.0
-                    && let Some(scroll_down) = &binds.scroll_down
-                {
-                    process_command(scroll_down)
-                } else if x < 0.0
-                    && let Some(scroll_right) = &binds.scroll_right
-                {
-                    process_command(scroll_right)
-                } else if x > 0.0
-                    && let Some(scroll_left) = &binds.scroll_left
-                {
-                    process_command(scroll_left)
-                } else {
-                    Message::NoOp
-                }
-            });
-        }
-
-        mouse_area.into()
+    let mut mouse_area = MouseArea::new(element);
+    if let Some(left) = &binds.mouse_left {
+        mouse_area = mouse_area.on_release(process_command(left));
     }
+
+    if let Some(double) = &binds.double_click {
+        mouse_area = mouse_area.on_double_click(process_command(double));
+    }
+
+    if let Some(right) = &binds.mouse_right {
+        mouse_area = mouse_area.on_right_release(process_command(right));
+    }
+
+    if let Some(middle) = &binds.mouse_middle {
+        mouse_area = mouse_area.on_middle_release(process_command(middle));
+    }
+
+    if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
+        mouse_area = mouse_area.on_scroll(|delta| {
+            let (x, y) = match delta {
+                ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => {
+                    (x, y)
+                }
+            };
+
+            if y > 0.0
+                && let Some(scroll_up) = &binds.scroll_up
+            {
+                process_command(scroll_up)
+            } else if y < 0.0
+                && let Some(scroll_down) = &binds.scroll_down
+            {
+                process_command(scroll_down)
+            } else if x < 0.0
+                && let Some(scroll_right) = &binds.scroll_right
+            {
+                process_command(scroll_right)
+            } else if x > 0.0
+                && let Some(scroll_left) = &binds.scroll_left
+            {
+                process_command(scroll_left)
+            } else {
+                Message::NoOp
+            }
+        });
+    }
+
+    mouse_area.into()
 }
 
 #[profiling::function]

@@ -5,7 +5,7 @@ use iced::{
 
 use crate::{
     Message, config, services::cava::CavaService, style::container_style,
-    utils::maybe_mouse_binds, views::BarPosition,
+    utils::mouse_binds, views::BarPosition,
 };
 
 const MAX_BAR_HEIGHT: u32 = 12;
@@ -42,7 +42,7 @@ impl<'a> CavaView {
         let container =
             Container::new(canvas).style(container_style(&self.config.style));
 
-        maybe_mouse_binds(container, &self.config.binds)
+        mouse_binds(container, &self.config.binds)
     }
 }
 

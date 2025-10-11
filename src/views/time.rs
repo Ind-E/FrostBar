@@ -7,7 +7,7 @@ use crate::{
     Message, config,
     services::time::TimeService,
     style::{container_style, styled_tooltip},
-    utils::maybe_mouse_binds,
+    utils::mouse_binds,
     views::BarPosition,
 };
 
@@ -39,7 +39,7 @@ impl TimeView {
             content = content.center_y(Length::Fill);
         }
 
-        let content = maybe_mouse_binds(content, &self.config.binds);
+        let content = mouse_binds(content, &self.config.binds);
 
         styled_tooltip(content, tooltip, layout.anchor)
     }

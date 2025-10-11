@@ -7,7 +7,6 @@ use tokio::process::Command as TokioCommand;
 use iced::{
     Alignment, Background, Color, Element, Event, Length, Pixels, Settings,
     Size, Subscription, Task, Theme,
-    advanced::mouse,
     border::rounded,
     event,
     padding::left,
@@ -112,7 +111,6 @@ pub enum Message {
 
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
-    MouseExitedBar,
 
     NiriEvent(NiriEvent),
 
@@ -257,10 +255,6 @@ impl Bar {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::IcedEvent(event) => {
-                if let Event::Mouse(mouse::Event::CursorLeft) = event {
-                    return Task::done(Message::MouseExitedBar);
-                }
-
                 if let Event::Window(iced::window::Event::Opened {
                     position: _,
                     size,
@@ -362,12 +356,6 @@ impl Bar {
                     }
                 }
 
-                Task::none()
-            }
-            Message::MouseExitedBar => {
-                self.niri_service
-                    .iter_mut()
-                    .for_each(|s| s.hovered_workspace_id = None);
                 Task::none()
             }
             Message::MouseExited(event) => {
