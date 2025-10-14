@@ -8,7 +8,6 @@ use iced::{
     Alignment, Background, Color, Element, Event, Length, Pixels, Settings,
     Size, Subscription, Task, Theme,
     border::rounded,
-    event,
     padding::left,
     theme,
     widget::{Column, Container, Row, container, stack},
@@ -24,24 +23,15 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{Config, MediaControl, Module},
+    config::{Config, MediaControl},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     file_watcher::{FileWatcherEvent, watch_file},
     icon_cache::IconCache,
-    services::{
-        Service,
-        battery::BatteryService,
-        cava::CavaService,
-        mpris::{MprisEvent, MprisService},
-        niri::{NiriEvent, NiriService},
-        time::TimeService,
-    },
+    module::Modules,
+    services::{mpris::MprisEvent, niri::NiriEvent},
     utils::{CommandSpec, init_tracing, open_dummy_window, open_window},
-    views::{
-        BarAlignment, BarPosition, View, battery::BatteryView, cava::CavaView,
-        label::LabelView, mpris::MprisView, niri::NiriView, time::TimeView,
-    },
+    views::BarAlignment,
 };
 
 mod config;
@@ -49,6 +39,7 @@ mod constants;
 mod dbus_proxy;
 mod file_watcher;
 mod icon_cache;
+mod module;
 mod services;
 mod style;
 mod utils;
@@ -92,7 +83,7 @@ pub fn main() -> iced::Result {
     .run()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum MouseEvent {
     Workspace(u64),
 }
@@ -100,27 +91,28 @@ pub enum MouseEvent {
 #[derive(Debug, Clone)]
 pub enum Message {
     IcedEvent(Event),
-
-    Tick(DateTime<Local>),
-    UpdateBattery,
-
+    MediaControl(MediaControl, String),
     FileWatcherEvent(FileWatcherEvent),
+
+    CavaColorUpdate(Option<Vec<Color>>),
 
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
 
-    NiriEvent(NiriEvent),
-
-    CavaUpdate(Option<String>),
-    CavaColorUpdate(Option<Vec<Color>>),
-
-    MprisEvent(MprisEvent),
-    MediaControl(MediaControl, String),
-
     Command(CommandSpec),
-
     ErrorMessage(String),
     NoOp,
+
+    Msg(ModuleMessage),
+}
+
+#[derive(Debug, Clone)]
+pub enum ModuleMessage {
+    Tick(DateTime<Local>),
+    UpdateBattery(()),
+    Niri(NiriEvent),
+    CavaUpdate(Option<String>),
+    Mpris(MprisEvent),
 }
 
 pub struct Bar {
@@ -130,13 +122,7 @@ pub struct Bar {
     config: Config,
     config_path: PathBuf,
 
-    time_service: Option<TimeService>,
-    battery_service: Option<BatteryService>,
-    niri_service: Option<NiriService>,
-    mpris_service: Option<MprisService>,
-    cava_service: Option<CavaService>,
-
-    views: Vec<View>,
+    modules: Modules,
 }
 
 #[profiling::all_functions]
@@ -147,124 +133,17 @@ impl Bar {
     ) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
-        let battery_service = BatteryService::new();
-
-        let time_service = TimeService::new();
-
-        let cava_service = CavaService::new();
-
-        let mpris_service = MprisService::new();
-
-        let niri_service = NiriService::new(
-            icon_cache.clone(),
-            config.style.icon_theme.clone(),
-        );
-
-        let mut views = Vec::new();
-
-        let mut position = BarPosition {
-            idx: 0,
-            align: BarAlignment::Start,
-        };
-        for module in config.start.modules.drain(..) {
-            match module {
-                Module::Battery(config) => {
-                    views.push(View::Battery(BatteryView::new(
-                        config, position,
-                    )));
-                }
-                Module::Time(config) => {
-                    views.push(View::Time(TimeView::new(config, position)));
-                }
-                Module::Cava(config) => {
-                    views.push(View::Cava(CavaView::new(config, position)));
-                }
-                Module::Mpris(config) => {
-                    views.push(View::Mpris(MprisView::new(config, position)));
-                }
-                Module::Niri(config) => {
-                    views.push(View::Niri(NiriView::new(config, position)));
-                }
-                Module::Label(config) => {
-                    views.push(View::Label(LabelView::new(config, position)));
-                }
-            }
-            position.idx += 1;
-        }
-
-        let mut position = BarPosition {
-            idx: 0,
-            align: BarAlignment::Middle,
-        };
-        for module in config.middle.modules.drain(..) {
-            match module {
-                Module::Battery(config) => {
-                    views.push(View::Battery(BatteryView::new(
-                        config, position,
-                    )));
-                }
-                Module::Time(config) => {
-                    views.push(View::Time(TimeView::new(config, position)));
-                }
-                Module::Cava(config) => {
-                    views.push(View::Cava(CavaView::new(config, position)));
-                }
-                Module::Mpris(config) => {
-                    views.push(View::Mpris(MprisView::new(config, position)));
-                }
-                Module::Niri(config) => {
-                    views.push(View::Niri(NiriView::new(config, position)));
-                }
-                Module::Label(config) => {
-                    views.push(View::Label(LabelView::new(config, position)));
-                }
-            }
-            position.idx += 1;
-        }
-
-        let mut position = BarPosition {
-            idx: 0,
-            align: BarAlignment::End,
-        };
-        for module in config.end.modules.drain(..) {
-            match module {
-                Module::Battery(config) => {
-                    views.push(View::Battery(BatteryView::new(
-                        config, position,
-                    )));
-                }
-                Module::Time(config) => {
-                    views.push(View::Time(TimeView::new(config, position)));
-                }
-                Module::Cava(config) => {
-                    views.push(View::Cava(CavaView::new(config, position)));
-                }
-                Module::Mpris(config) => {
-                    views.push(View::Mpris(MprisView::new(config, position)));
-                }
-                Module::Niri(config) => {
-                    views.push(View::Niri(NiriView::new(config, position)));
-                }
-                Module::Label(config) => {
-                    views.push(View::Label(LabelView::new(config, position)));
-                }
-            }
-            position.idx += 1;
-        }
+        let mut modules =
+            Modules::new(icon_cache, config.style.icon_theme.clone());
+        modules.update_from_config(&mut config);
 
         let (dummy_id, open_dummy) = open_dummy_window();
-        // let (id, open_task) = open_window(&config.layout);
 
         let bar = Self {
             id: None,
             monitor_size: None,
             dummy_id,
-            time_service: Some(time_service),
-            battery_service: Some(battery_service),
-            niri_service: Some(niri_service),
-            mpris_service: Some(mpris_service),
-            cava_service: Some(cava_service),
-            views,
+            modules,
             config,
             config_path,
         };
@@ -284,28 +163,9 @@ impl Bar {
         let mut subscriptions: Vec<Subscription<Message>> =
             Vec::with_capacity(8);
 
-        subscriptions.push(event::listen().map(Message::IcedEvent));
+        subscriptions.push(iced::event::listen().map(Message::IcedEvent));
         subscriptions.push(watch_file(self.config_path.clone()));
-
-        if self.time_service.is_some() {
-            subscriptions.push(TimeService::subscription());
-        }
-
-        if self.battery_service.is_some() {
-            subscriptions.push(BatteryService::subscription());
-        }
-
-        if self.niri_service.is_some() {
-            subscriptions.push(NiriService::subscription());
-        }
-
-        if self.mpris_service.is_some() {
-            subscriptions.push(MprisService::subscription());
-        }
-
-        if self.cava_service.is_some() {
-            subscriptions.push(CavaService::subscription());
-        }
+        subscriptions.extend(self.modules.subscriptions());
 
         Subscription::batch(subscriptions)
     }
@@ -339,150 +199,14 @@ impl Bar {
                 match event {
                     FileWatcherEvent::Changed => {
                         match Config::load(&self.config_path) {
-                            Ok(mut config) => {
-                                let mut views = Vec::new();
-                                let mut position = BarPosition {
-                                    idx: 0,
-                                    align: BarAlignment::Start,
-                                };
-                                for module in config.start.modules.drain(..) {
-                                    match module {
-                                        Module::Battery(config) => {
-                                            views.push(View::Battery(
-                                                BatteryView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                        Module::Time(config) => {
-                                            views.push(View::Time(
-                                                TimeView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Cava(config) => {
-                                            views.push(View::Cava(
-                                                CavaView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Mpris(config) => {
-                                            views.push(View::Mpris(
-                                                MprisView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                        Module::Niri(config) => {
-                                            views.push(View::Niri(
-                                                NiriView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Label(config) => {
-                                            views.push(View::Label(
-                                                LabelView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                    }
-                                    position.idx += 1;
-                                }
+                            Ok(mut new_config) => {
+                                self.modules
+                                    .update_from_config(&mut new_config);
 
-                                let mut position = BarPosition {
-                                    idx: 0,
-                                    align: BarAlignment::Middle,
-                                };
-                                for module in config.middle.modules.drain(..) {
-                                    match module {
-                                        Module::Battery(config) => {
-                                            views.push(View::Battery(
-                                                BatteryView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                        Module::Time(config) => {
-                                            views.push(View::Time(
-                                                TimeView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Cava(config) => {
-                                            views.push(View::Cava(
-                                                CavaView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Mpris(config) => {
-                                            views.push(View::Mpris(
-                                                MprisView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                        Module::Niri(config) => {
-                                            views.push(View::Niri(
-                                                NiriView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Label(config) => {
-                                            views.push(View::Label(
-                                                LabelView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                    }
-                                    position.idx += 1;
-                                }
-
-                                let mut position = BarPosition {
-                                    idx: 0,
-                                    align: BarAlignment::End,
-                                };
-                                for module in config.end.modules.drain(..) {
-                                    match module {
-                                        Module::Battery(config) => {
-                                            views.push(View::Battery(
-                                                BatteryView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                        Module::Time(config) => {
-                                            views.push(View::Time(
-                                                TimeView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Cava(config) => {
-                                            views.push(View::Cava(
-                                                CavaView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Mpris(config) => {
-                                            views.push(View::Mpris(
-                                                MprisView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                        Module::Niri(config) => {
-                                            views.push(View::Niri(
-                                                NiriView::new(config, position),
-                                            ));
-                                        }
-                                        Module::Label(config) => {
-                                            views.push(View::Label(
-                                                LabelView::new(
-                                                    config, position,
-                                                ),
-                                            ));
-                                        }
-                                    }
-                                    position.idx += 1;
-                                }
-                                self.views = views;
-                                if self.config.layout == config.layout {
-                                    self.config = config;
+                                if self.config.layout == new_config.layout {
+                                    self.config = new_config;
                                 } else if let Some(id) = self.id {
-                                    self.config = config;
+                                    self.config = new_config;
                                     let close = iced::window::close(id);
                                     let (id, open) = open_window(
                                         &self.config.layout,
@@ -523,58 +247,20 @@ impl Bar {
 
                 Task::none()
             }
-            Message::Tick(time) => self
-                .time_service
-                .as_mut()
-                .map_or_else(iced::Task::none, |ts| ts.handle_event(time)),
-            Message::UpdateBattery => self
-                .battery_service
-                .as_mut()
-                .map_or_else(iced::Task::none, |bs| bs.handle_event(())),
-            Message::NiriEvent(event) => self
-                .niri_service
-                .as_mut()
-                .map_or_else(iced::Task::none, |ns| ns.handle_event(event)),
+            Message::Msg(module_msg) => self.modules.handle_event(module_msg),
+            Message::CavaColorUpdate(gradient) => {
+                self.modules.handle_cava_color_update(gradient)
+            }
             Message::MouseEntered(event) => {
-                match event {
-                    MouseEvent::Workspace(id) => {
-                        self.niri_service
-                            .iter_mut()
-                            .for_each(|s| s.hovered_workspace_id = Some(id));
-                    }
-                }
-
-                Task::none()
+                self.modules.handle_mouse_entered(event)
             }
             Message::MouseExited(event) => {
-                match event {
-                    MouseEvent::Workspace(..) => {
-                        self.niri_service
-                            .iter_mut()
-                            .for_each(|s| s.hovered_workspace_id = None);
-                    }
-                }
-
-                Task::none()
+                self.modules.handle_mouse_exited(event)
             }
             Message::ErrorMessage(msg) => {
                 error!("error message: {}", msg);
                 Task::none()
             }
-            Message::CavaUpdate(event) => self
-                .cava_service
-                .as_mut()
-                .map_or_else(iced::Task::none, |cs| cs.handle_event(event)),
-            Message::CavaColorUpdate(gradient) => self
-                .cava_service
-                .as_mut()
-                .map_or_else(iced::Task::none, |cs| {
-                    cs.update_gradient(gradient)
-                }),
-            Message::MprisEvent(event) => self
-                .mpris_service
-                .as_mut()
-                .map_or_else(iced::Task::none, |ms| ms.handle_event(event)),
             Message::MediaControl(control, player) => Task::perform(
                 async move {
                     if let Ok(connection) = Connection::session().await
@@ -658,81 +344,18 @@ impl Bar {
         let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
         let mut end_views: Vec<(Element<Message>, usize)> = vec![];
 
-        let mut alignments = [
-            (BarAlignment::Start, &mut start_views),
-            (BarAlignment::Middle, &mut middle_views),
-            (BarAlignment::End, &mut end_views),
-        ];
-
-        if let Some(service) = &self.battery_service {
-            for (pos, target) in &mut alignments {
-                target.extend(self.views.iter().filter_map(|v| match v {
-                    View::Battery(view) if view.position.align == *pos => {
-                        Some((
-                            view.view(service, &self.config.layout),
-                            view.position.idx,
-                        ))
-                    }
-                    _ => None,
-                }));
-            }
-        }
-
-        if let Some(service) = &self.time_service {
-            for (pos, target) in &mut alignments {
-                target.extend(self.views.iter().filter_map(|v| match v {
-                    View::Time(view) if view.position.align == *pos => Some((
-                        view.view(service, &self.config.layout),
-                        view.position.idx,
-                    )),
-                    _ => None,
-                }));
-            }
-        }
-
-        if let Some(service) = &self.cava_service {
-            for (pos, target) in &mut alignments {
-                target.extend(self.views.iter().filter_map(|v| match v {
-                    View::Cava(view) if view.position.align == *pos => Some((
-                        view.view(service, &self.config.layout),
-                        view.position.idx,
-                    )),
-                    _ => None,
-                }));
-            }
-        }
-
-        if let Some(service) = &self.mpris_service {
-            for (pos, target) in &mut alignments {
-                target.extend(self.views.iter().filter_map(|v| match v {
-                    View::Mpris(view) if view.position.align == *pos => Some((
-                        view.view(service, &self.config.layout),
-                        view.position.idx,
-                    )),
-                    _ => None,
-                }));
-            }
-        }
-
-        if let Some(service) = &self.niri_service {
-            for (pos, target) in &mut alignments {
-                target.extend(self.views.iter().filter_map(|v| match v {
-                    View::Niri(view) if view.position.align == *pos => Some((
-                        view.view(service, &self.config.layout),
-                        view.position.idx,
-                    )),
-                    _ => None,
-                }));
-            }
-        }
-
-        for (pos, target) in &mut alignments {
-            target.extend(self.views.iter().filter_map(|v| match v {
-                View::Label(view) if view.position.align == *pos => {
-                    Some((view.view(&self.config.layout), view.position.idx))
+        for (element, position) in
+            self.modules.render_views(&self.config.layout)
+        {
+            match position.align {
+                BarAlignment::Start => {
+                    start_views.push((element, position.idx));
                 }
-                _ => None,
-            }));
+                BarAlignment::Middle => {
+                    middle_views.push((element, position.idx));
+                }
+                BarAlignment::End => end_views.push((element, position.idx)),
+            }
         }
 
         let start_views: Vec<Element<Message>> = start_views

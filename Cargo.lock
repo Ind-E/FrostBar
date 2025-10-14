@@ -1426,6 +1426,7 @@ dependencies = [
  "notify-rust",
  "profiling",
  "reqwest",
+ "rustc-hash 2.1.1",
  "starship-battery",
  "tokio",
  "tokio-stream",

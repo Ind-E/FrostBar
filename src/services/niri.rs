@@ -15,7 +15,7 @@ use std::{
 use tracing::error;
 
 use crate::{
-    Message,
+    Message, ModuleMessage,
     icon_cache::{Icon, IconCache},
     services::Service,
 };
@@ -171,7 +171,7 @@ impl Service for NiriService {
 
             UnboundedReceiverStream::new(yield_rx)
         })
-        .map(Message::NiriEvent)
+        .map(|f| Message::Msg(ModuleMessage::Niri(f)))
     }
 
     type Event = NiriEvent;

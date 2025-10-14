@@ -33,6 +33,7 @@ niri-ipc = { git = "https://github.com/YaLTeR/niri/", branch = "main" }
 notify-rust = "4.11.7"
 profiling = { version = "1.0.17" }
 reqwest = { version = "0.12.23", features = ["blocking"] }
+rustc-hash = { version = "2.1.1" }
 starship-battery = { version = "0.10.2", default-features = false }
 tokio = { version = "1.47.1", features = ["macros"] }
 tokio-stream = "0.1.17"

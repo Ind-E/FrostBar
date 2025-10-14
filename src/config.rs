@@ -33,19 +33,19 @@ pub struct Config {
 #[derive(knus::Decode, Debug, Default)]
 pub struct Start {
     #[knus(children, default)]
-    pub modules: Vec<Module>,
+    pub modules: Vec<ConfigModule>,
 }
 
 #[derive(knus::Decode, Debug, Default)]
 pub struct Middle {
     #[knus(children, default)]
-    pub modules: Vec<Module>,
+    pub modules: Vec<ConfigModule>,
 }
 
 #[derive(knus::Decode, Debug, Default)]
 pub struct End {
     #[knus(children, default)]
-    pub modules: Vec<Module>,
+    pub modules: Vec<ConfigModule>,
 }
 
 #[derive(knus::Decode, Debug, Clone, PartialEq)]
@@ -114,7 +114,7 @@ impl Default for Style {
 }
 
 #[derive(knus::Decode, Debug)]
-pub enum Module {
+pub enum ConfigModule {
     Cava(Cava),
     Battery(Battery),
     Time(Time),

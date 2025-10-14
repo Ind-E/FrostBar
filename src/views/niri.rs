@@ -13,7 +13,7 @@ use itertools::Itertools;
 use niri_ipc::{Action, WorkspaceReferenceArg};
 
 use crate::{
-    Message, MouseEvent, config,
+    Message, ModuleMessage, MouseEvent, config,
     icon_cache::Icon,
     services::niri::{NiriEvent, NiriService, Window, Workspace},
     style::{styled_tooltip, workspace_style},
@@ -69,9 +69,9 @@ impl<'a> WindowView<'a> {
         };
 
         let mut content = Container::new(MouseArea::new(icon).on_right_press(
-            Message::NiriEvent(NiriEvent::Action(Action::FocusWindow {
-                id: self.window.id,
-            })),
+            Message::Msg(ModuleMessage::Niri(NiriEvent::Action(
+                Action::FocusWindow { id: self.window.id },
+            ))),
         ))
         .id(self.container_id.clone());
         if layout.anchor.vertical() {
@@ -152,11 +152,11 @@ impl<'a> WorkspaceView<'a> {
         ));
 
         MouseArea::new(windows)
-            .on_press(Message::NiriEvent(NiriEvent::Action(
+            .on_press(Message::Msg(ModuleMessage::Niri(NiriEvent::Action(
                 Action::FocusWorkspace {
                     reference: WorkspaceReferenceArg::Id(self.workspace.id),
                 },
-            )))
+            ))))
             .on_enter(Message::MouseEntered(MouseEvent::Workspace(
                 self.workspace.id,
             )))

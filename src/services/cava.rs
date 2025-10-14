@@ -11,7 +11,7 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, warn};
 
-use crate::{Message, services::Service, utils::BoxStream};
+use crate::{Message, ModuleMessage, services::Service, utils::BoxStream};
 
 const CAVA_CONFIG: &str = include_str!("../../assets/cava-config");
 
@@ -80,7 +80,8 @@ impl Recipe for CavaSubscriptionRecipe {
 #[profiling::all_functions]
 impl Service for CavaService {
     fn subscription() -> iced::Subscription<Message> {
-        from_recipe(CavaSubscriptionRecipe {}).map(Message::CavaUpdate)
+        from_recipe(CavaSubscriptionRecipe {})
+            .map(|f| Message::Msg(ModuleMessage::CavaUpdate(f)))
     }
 
     type Event = Option<String>;

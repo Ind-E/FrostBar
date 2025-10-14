@@ -1,8 +1,3 @@
-use crate::views::{
-    battery::BatteryView, cava::CavaView, label::LabelView, mpris::MprisView,
-    niri::NiriView, time::TimeView,
-};
-
 pub mod battery;
 pub mod cava;
 pub mod label;
@@ -21,13 +16,4 @@ pub enum BarAlignment {
     Start,
     Middle,
     End,
-}
-
-pub enum View {
-    Battery(BatteryView),
-    Cava(CavaView),
-    Label(LabelView),
-    Mpris(MprisView),
-    Niri(NiriView),
-    Time(TimeView),
 }

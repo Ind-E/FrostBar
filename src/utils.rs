@@ -1,11 +1,7 @@
 use crate::{
     Message,
-    config::{self, Config, Module, MouseBinds},
+    config::{self, MouseBinds},
     constants::BAR_NAMESPACE,
-    views::{
-        BarAlignment, BarPosition, battery::BatteryView, cava::CavaView,
-        label::LabelView, mpris::MprisView, niri::NiriView, time::TimeView,
-    },
 };
 use iced::{
     Color, Element, Size,
@@ -33,111 +29,6 @@ use tracing_subscriber::{
 };
 
 pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
-
-#[allow(clippy::too_many_arguments)]
-#[profiling::function]
-pub fn handle_module(
-    module: Module,
-    position: BarPosition,
-    battery_views: &mut Vec<BatteryView>,
-    time_views: &mut Vec<TimeView>,
-    cava_views: &mut Vec<CavaView>,
-    mpris_views: &mut Vec<MprisView>,
-    niri_views: &mut Vec<NiriView>,
-    label_views: &mut Vec<LabelView>,
-) {
-    match module {
-        Module::Battery(config) => {
-            battery_views.push(BatteryView::new(config, position));
-        }
-        Module::Time(config) => {
-            time_views.push(TimeView::new(config, position));
-        }
-        Module::Cava(config) => {
-            cava_views.push(CavaView::new(config, position));
-        }
-        Module::Mpris(config) => {
-            mpris_views.push(MprisView::new(config, position));
-        }
-        Module::Niri(config) => {
-            niri_views.push(NiriView::new(config, position));
-        }
-        Module::Label(config) => {
-            label_views.push(LabelView::new(config, position));
-        }
-    }
-}
-
-#[profiling::function]
-pub fn process_modules(
-    config: &mut Config,
-    battery_views: &mut Vec<BatteryView>,
-    time_views: &mut Vec<TimeView>,
-    cava_views: &mut Vec<CavaView>,
-    mpris_views: &mut Vec<MprisView>,
-    niri_views: &mut Vec<NiriView>,
-    label_views: &mut Vec<LabelView>,
-) {
-    battery_views.clear();
-    time_views.clear();
-    cava_views.clear();
-    mpris_views.clear();
-    niri_views.clear();
-    label_views.clear();
-
-    let mut idx = 0;
-
-    for module in config.start.modules.drain(..) {
-        handle_module(
-            module,
-            BarPosition {
-                idx,
-                align: BarAlignment::Start,
-            },
-            battery_views,
-            time_views,
-            cava_views,
-            mpris_views,
-            niri_views,
-            label_views,
-        );
-        idx += 1;
-    }
-
-    for module in config.middle.modules.drain(..) {
-        handle_module(
-            module,
-            BarPosition {
-                idx,
-                align: BarAlignment::Middle,
-            },
-            battery_views,
-            time_views,
-            cava_views,
-            mpris_views,
-            niri_views,
-            label_views,
-        );
-        idx += 1;
-    }
-
-    for module in config.end.modules.drain(..) {
-        handle_module(
-            module,
-            BarPosition {
-                idx,
-                align: BarAlignment::End,
-            },
-            battery_views,
-            time_views,
-            cava_views,
-            mpris_views,
-            niri_views,
-            label_views,
-        );
-        idx += 1;
-    }
-}
 
 const MAX_LOG_FILES: usize = 10;
 pub fn init_tracing(config_dir: &Path) -> PathBuf {

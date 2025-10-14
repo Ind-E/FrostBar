@@ -11,7 +11,7 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 use tracing::error;
 
 use crate::{
-    Message,
+    Message, ModuleMessage,
     dbus_proxy::PlayerProxy,
     services::Service,
     utils::{BoxStream, get_art},
@@ -106,7 +106,7 @@ impl Service for MprisService {
         UnboundedReceiverStream::new(yield_rx)
 
 
-        }).map(Message::MprisEvent)
+        }).map(|f| Message::Msg(ModuleMessage::Mpris(f)))
     }
 
     type Event = MprisEvent;
