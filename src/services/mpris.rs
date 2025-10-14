@@ -11,13 +11,14 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 use tracing::error;
 
 use crate::{
-    Message, dbus_proxy::PlayerProxy, icon_cache::MprisArtCache,
-    services::Service, utils::BoxStream,
+    Message,
+    dbus_proxy::PlayerProxy,
+    services::Service,
+    utils::{BoxStream, get_art},
 };
 
 pub struct MprisService {
     pub players: HashMap<String, MprisPlayer>,
-    art_cache: MprisArtCache,
 }
 
 #[profiling::all_functions]
@@ -117,8 +118,7 @@ impl Service for MprisService {
                 metadata,
             } => {
                 let mut player = MprisPlayer::new(name.clone(), status);
-                let task =
-                    player.update_metadata(&metadata, &mut self.art_cache);
+                let task = player.update_metadata(&metadata);
                 self.players.insert(name, player);
                 task
             }
@@ -186,7 +186,7 @@ impl Service for MprisService {
                 metadata,
             } => {
                 if let Some(player) = self.players.get_mut(&player_name) {
-                    player.update_metadata(&metadata, &mut self.art_cache)
+                    player.update_metadata(&metadata)
                 } else {
                     iced::Task::none()
                 }
@@ -199,7 +199,6 @@ impl MprisService {
     pub fn new() -> Self {
         Self {
             players: HashMap::new(),
-            art_cache: MprisArtCache::new(),
         }
     }
 }
@@ -241,7 +240,6 @@ impl MprisPlayer {
     pub fn update_metadata(
         &mut self,
         metadata: &HashMap<String, OwnedValue>,
-        art_cache: &mut MprisArtCache,
     ) -> iced::Task<Message> {
         if let Some(val) = metadata.get("xesam:title") {
             self.title = Some(val.to_string());
@@ -252,11 +250,11 @@ impl MprisPlayer {
 
         if let Some(val) = metadata.get("mpris:artUrl") {
             let art_url = val.to_string().trim_matches('"').to_string();
-            if let Some((handle, colors)) = art_cache.get_art(&art_url) {
-                self.art = Some(handle.clone());
-                self.colors.clone_from(colors);
+            if let Some((handle, colors)) = get_art(&art_url) {
+                self.art = Some(handle);
+                self.colors.clone_from(&colors);
                 if self.status == "Playing" {
-                    let captured_colors = colors.clone();
+                    let captured_colors = colors;
                     return iced::Task::perform(
                         async move { captured_colors },
                         Message::CavaColorUpdate,

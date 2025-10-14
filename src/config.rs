@@ -222,7 +222,6 @@ pub struct Niri {
 
     // #[knus(child, default)]
     // pub window_active_style: ContainerStyle,
-
     #[knus(child, default)]
     pub workspace_active_style: ContainerStyle,
 
@@ -754,10 +753,10 @@ impl Config {
                     {
                         error!("{e}");
                     }
-                    eprintln!(
+                    error!(
                         "\nFailed to parse config file, using default config"
                     );
-                    eprintln!("{e:?}");
+                    error!("{e:?}");
                     Config::default()
                 }
                 Ok(config) => config,
