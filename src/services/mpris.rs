@@ -124,7 +124,24 @@ impl Service for MprisService {
             }
             MprisEvent::PlayerVanished { name } => {
                 self.players.remove(&name);
-                iced::Task::none()
+
+                let players_with_colors = self
+                    .players
+                    .iter()
+                    .filter(|(_, p)| {
+                        p.colors.is_some()
+                            && p.status == "Playing"
+                            && p.name != name
+                    })
+                    .collect::<Vec<_>>();
+
+                if players_with_colors.is_empty() {
+                    return iced::Task::perform(
+                        async move { None },
+                        Message::CavaColorUpdate,
+                    );
+                }
+                return iced::Task::none();
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
@@ -141,7 +158,7 @@ impl Service for MprisService {
                     }
                     player.status = status;
                     let name = player.name.clone();
-                    let players_w_colors = self
+                    let players_with_colors = self
                         .players
                         .iter()
                         .filter(|(_, p)| {
@@ -150,7 +167,7 @@ impl Service for MprisService {
                                 && p.name != name
                         })
                         .collect::<Vec<_>>();
-                    if let Some((_, player)) = players_w_colors.first() {
+                    if let Some((_, player)) = players_with_colors.first() {
                         let colors = player.colors.clone();
                         return iced::Task::perform(
                             async move { colors },

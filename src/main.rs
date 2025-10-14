@@ -24,7 +24,7 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{Config, MediaControl},
+    config::{Config, MediaControl, Module},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     file_watcher::{FileWatcherEvent, watch_file},
@@ -37,13 +37,10 @@ use crate::{
         niri::{NiriEvent, NiriService},
         time::TimeService,
     },
-    utils::{
-        CommandSpec, init_tracing, open_dummy_window, open_window,
-        process_modules,
-    },
+    utils::{CommandSpec, init_tracing, open_dummy_window, open_window},
     views::{
-        BarAlignment, battery::BatteryView, cava::CavaView, label::LabelView,
-        mpris::MprisView, niri::NiriView, time::TimeView,
+        BarAlignment, BarPosition, View, battery::BatteryView, cava::CavaView,
+        label::LabelView, mpris::MprisView, niri::NiriView, time::TimeView,
     },
 };
 
@@ -133,22 +130,13 @@ pub struct Bar {
     config: Config,
     config_path: PathBuf,
 
-    time_views: Vec<TimeView>,
     time_service: Option<TimeService>,
-
-    battery_views: Vec<BatteryView>,
     battery_service: Option<BatteryService>,
-
-    niri_views: Vec<NiriView>,
     niri_service: Option<NiriService>,
-
-    mpris_views: Vec<MprisView>,
     mpris_service: Option<MprisService>,
-
-    cava_views: Vec<CavaView>,
     cava_service: Option<CavaService>,
 
-    label_views: Vec<LabelView>,
+    views: Vec<View>,
 }
 
 #[profiling::all_functions]
@@ -160,34 +148,109 @@ impl Bar {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
         let battery_service = BatteryService::new();
-        let mut battery_views = vec![];
 
         let time_service = TimeService::new();
-        let mut time_views = vec![];
 
         let cava_service = CavaService::new();
-        let mut cava_views = vec![];
 
         let mpris_service = MprisService::new();
-        let mut mpris_views = vec![];
 
         let niri_service = NiriService::new(
             icon_cache.clone(),
             config.style.icon_theme.clone(),
         );
-        let mut niri_views = vec![];
 
-        let mut label_views = vec![];
+        let mut views = Vec::new();
 
-        process_modules(
-            &mut config,
-            &mut battery_views,
-            &mut time_views,
-            &mut cava_views,
-            &mut mpris_views,
-            &mut niri_views,
-            &mut label_views,
-        );
+        let mut position = BarPosition {
+            idx: 0,
+            align: BarAlignment::Start,
+        };
+        for module in config.start.modules.drain(..) {
+            match module {
+                Module::Battery(config) => {
+                    views.push(View::Battery(BatteryView::new(
+                        config, position,
+                    )));
+                }
+                Module::Time(config) => {
+                    views.push(View::Time(TimeView::new(config, position)));
+                }
+                Module::Cava(config) => {
+                    views.push(View::Cava(CavaView::new(config, position)));
+                }
+                Module::Mpris(config) => {
+                    views.push(View::Mpris(MprisView::new(config, position)));
+                }
+                Module::Niri(config) => {
+                    views.push(View::Niri(NiriView::new(config, position)));
+                }
+                Module::Label(config) => {
+                    views.push(View::Label(LabelView::new(config, position)));
+                }
+            }
+            position.idx += 1;
+        }
+
+        let mut position = BarPosition {
+            idx: 0,
+            align: BarAlignment::Middle,
+        };
+        for module in config.middle.modules.drain(..) {
+            match module {
+                Module::Battery(config) => {
+                    views.push(View::Battery(BatteryView::new(
+                        config, position,
+                    )));
+                }
+                Module::Time(config) => {
+                    views.push(View::Time(TimeView::new(config, position)));
+                }
+                Module::Cava(config) => {
+                    views.push(View::Cava(CavaView::new(config, position)));
+                }
+                Module::Mpris(config) => {
+                    views.push(View::Mpris(MprisView::new(config, position)));
+                }
+                Module::Niri(config) => {
+                    views.push(View::Niri(NiriView::new(config, position)));
+                }
+                Module::Label(config) => {
+                    views.push(View::Label(LabelView::new(config, position)));
+                }
+            }
+            position.idx += 1;
+        }
+
+        let mut position = BarPosition {
+            idx: 0,
+            align: BarAlignment::End,
+        };
+        for module in config.end.modules.drain(..) {
+            match module {
+                Module::Battery(config) => {
+                    views.push(View::Battery(BatteryView::new(
+                        config, position,
+                    )));
+                }
+                Module::Time(config) => {
+                    views.push(View::Time(TimeView::new(config, position)));
+                }
+                Module::Cava(config) => {
+                    views.push(View::Cava(CavaView::new(config, position)));
+                }
+                Module::Mpris(config) => {
+                    views.push(View::Mpris(MprisView::new(config, position)));
+                }
+                Module::Niri(config) => {
+                    views.push(View::Niri(NiriView::new(config, position)));
+                }
+                Module::Label(config) => {
+                    views.push(View::Label(LabelView::new(config, position)));
+                }
+            }
+            position.idx += 1;
+        }
 
         let (dummy_id, open_dummy) = open_dummy_window();
         // let (id, open_task) = open_window(&config.layout);
@@ -197,16 +260,11 @@ impl Bar {
             monitor_size: None,
             dummy_id,
             time_service: Some(time_service),
-            time_views,
             battery_service: Some(battery_service),
-            battery_views,
             niri_service: Some(niri_service),
-            niri_views,
             mpris_service: Some(mpris_service),
-            mpris_views,
             cava_service: Some(cava_service),
-            cava_views,
-            label_views,
+            views,
             config,
             config_path,
         };
@@ -282,15 +340,145 @@ impl Bar {
                     FileWatcherEvent::Changed => {
                         match Config::load(&self.config_path) {
                             Ok(mut config) => {
-                                process_modules(
-                                    &mut config,
-                                    &mut self.battery_views,
-                                    &mut self.time_views,
-                                    &mut self.cava_views,
-                                    &mut self.mpris_views,
-                                    &mut self.niri_views,
-                                    &mut self.label_views,
-                                );
+                                let mut views = Vec::new();
+                                let mut position = BarPosition {
+                                    idx: 0,
+                                    align: BarAlignment::Start,
+                                };
+                                for module in config.start.modules.drain(..) {
+                                    match module {
+                                        Module::Battery(config) => {
+                                            views.push(View::Battery(
+                                                BatteryView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                        Module::Time(config) => {
+                                            views.push(View::Time(
+                                                TimeView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Cava(config) => {
+                                            views.push(View::Cava(
+                                                CavaView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Mpris(config) => {
+                                            views.push(View::Mpris(
+                                                MprisView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                        Module::Niri(config) => {
+                                            views.push(View::Niri(
+                                                NiriView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Label(config) => {
+                                            views.push(View::Label(
+                                                LabelView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                    }
+                                    position.idx += 1;
+                                }
+
+                                let mut position = BarPosition {
+                                    idx: 0,
+                                    align: BarAlignment::Middle,
+                                };
+                                for module in config.middle.modules.drain(..) {
+                                    match module {
+                                        Module::Battery(config) => {
+                                            views.push(View::Battery(
+                                                BatteryView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                        Module::Time(config) => {
+                                            views.push(View::Time(
+                                                TimeView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Cava(config) => {
+                                            views.push(View::Cava(
+                                                CavaView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Mpris(config) => {
+                                            views.push(View::Mpris(
+                                                MprisView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                        Module::Niri(config) => {
+                                            views.push(View::Niri(
+                                                NiriView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Label(config) => {
+                                            views.push(View::Label(
+                                                LabelView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                    }
+                                    position.idx += 1;
+                                }
+
+                                let mut position = BarPosition {
+                                    idx: 0,
+                                    align: BarAlignment::End,
+                                };
+                                for module in config.end.modules.drain(..) {
+                                    match module {
+                                        Module::Battery(config) => {
+                                            views.push(View::Battery(
+                                                BatteryView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                        Module::Time(config) => {
+                                            views.push(View::Time(
+                                                TimeView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Cava(config) => {
+                                            views.push(View::Cava(
+                                                CavaView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Mpris(config) => {
+                                            views.push(View::Mpris(
+                                                MprisView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                        Module::Niri(config) => {
+                                            views.push(View::Niri(
+                                                NiriView::new(config, position),
+                                            ));
+                                        }
+                                        Module::Label(config) => {
+                                            views.push(View::Label(
+                                                LabelView::new(
+                                                    config, position,
+                                                ),
+                                            ));
+                                        }
+                                    }
+                                    position.idx += 1;
+                                }
+                                self.views = views;
                                 if self.config.layout == config.layout {
                                     self.config = config;
                                 } else if let Some(id) = self.id {
@@ -478,91 +666,73 @@ impl Bar {
 
         if let Some(service) = &self.battery_service {
             for (pos, target) in &mut alignments {
-                target.extend(
-                    self.battery_views
-                        .iter()
-                        .filter(|v| v.position.align == *pos)
-                        .map(|v| {
-                            (
-                                v.view(service, &self.config.layout),
-                                v.position.idx,
-                            )
-                        }),
-                );
+                target.extend(self.views.iter().filter_map(|v| match v {
+                    View::Battery(view) if view.position.align == *pos => {
+                        Some((
+                            view.view(service, &self.config.layout),
+                            view.position.idx,
+                        ))
+                    }
+                    _ => None,
+                }));
             }
         }
 
         if let Some(service) = &self.time_service {
             for (pos, target) in &mut alignments {
-                target.extend(
-                    self.time_views
-                        .iter()
-                        .filter(|v| v.position.align == *pos)
-                        .map(|v| {
-                            (
-                                v.view(service, &self.config.layout),
-                                v.position.idx,
-                            )
-                        }),
-                );
+                target.extend(self.views.iter().filter_map(|v| match v {
+                    View::Time(view) if view.position.align == *pos => Some((
+                        view.view(service, &self.config.layout),
+                        view.position.idx,
+                    )),
+                    _ => None,
+                }));
             }
         }
 
         if let Some(service) = &self.cava_service {
             for (pos, target) in &mut alignments {
-                target.extend(
-                    self.cava_views
-                        .iter()
-                        .filter(|v| v.position.align == *pos)
-                        .map(|v| {
-                            (
-                                v.view(service, &self.config.layout),
-                                v.position.idx,
-                            )
-                        }),
-                );
+                target.extend(self.views.iter().filter_map(|v| match v {
+                    View::Cava(view) if view.position.align == *pos => Some((
+                        view.view(service, &self.config.layout),
+                        view.position.idx,
+                    )),
+                    _ => None,
+                }));
             }
         }
 
         if let Some(service) = &self.mpris_service {
             for (pos, target) in &mut alignments {
-                target.extend(
-                    self.mpris_views
-                        .iter()
-                        .filter(|v| v.position.align == *pos)
-                        .map(|v| {
-                            (
-                                v.view(service, &self.config.layout),
-                                v.position.idx,
-                            )
-                        }),
-                );
+                target.extend(self.views.iter().filter_map(|v| match v {
+                    View::Mpris(view) if view.position.align == *pos => Some((
+                        view.view(service, &self.config.layout),
+                        view.position.idx,
+                    )),
+                    _ => None,
+                }));
             }
         }
 
         if let Some(service) = &self.niri_service {
             for (pos, target) in &mut alignments {
-                target.extend(
-                    self.niri_views
-                        .iter()
-                        .filter(|v| v.position.align == *pos)
-                        .map(|v| {
-                            (
-                                v.view(service, &self.config.layout),
-                                v.position.idx,
-                            )
-                        }),
-                );
+                target.extend(self.views.iter().filter_map(|v| match v {
+                    View::Niri(view) if view.position.align == *pos => Some((
+                        view.view(service, &self.config.layout),
+                        view.position.idx,
+                    )),
+                    _ => None,
+                }));
             }
         }
 
         for (pos, target) in &mut alignments {
-            target.extend(
-                self.label_views
-                    .iter()
-                    .filter(|v| v.position.align == *pos)
-                    .map(|v| (v.view(&self.config.layout), v.position.idx)),
-            );
+            target.extend(self.views.iter().filter_map(|v| match v {
+                View::Label(view) if view.position.align == *pos => {
+                    Some((view.view(&self.config.layout), view.position.idx))
+                }
+                _ => None,
+            }));
         }
 
         let start_views: Vec<Element<Message>> = start_views
