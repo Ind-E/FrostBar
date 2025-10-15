@@ -10,7 +10,7 @@ use iced::{
     border::rounded,
     padding::left,
     theme,
-    widget::{Column, Container, Row, container, stack},
+    widget::{Column, Container, Row, container, image, stack},
     window::Id,
 };
 use notify_rust::Notification;
@@ -95,6 +95,7 @@ pub enum Message {
     FileWatcherEvent(FileWatcherEvent),
 
     CavaColorUpdate(Option<Vec<Color>>),
+    PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
 
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
@@ -250,6 +251,9 @@ impl Bar {
             Message::Msg(module_msg) => self.modules.handle_event(module_msg),
             Message::CavaColorUpdate(gradient) => {
                 self.modules.handle_cava_color_update(gradient)
+            }
+            Message::PlayerArtUpdate(name, art) => {
+                self.modules.handle_async_mpris_art_update(&name, art)
             }
             Message::MouseEntered(event) => {
                 self.modules.handle_mouse_entered(event)

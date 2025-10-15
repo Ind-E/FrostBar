@@ -1,5 +1,6 @@
 use iced::{
     Color, Subscription,
+    advanced::graphics::image::image_rs,
     futures::{StreamExt, stream::select_all},
     widget::image,
 };
@@ -8,13 +9,13 @@ use tokio::sync::mpsc;
 use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
+use base64::Engine;
+
 use tracing::error;
 
 use crate::{
-    Message, ModuleMessage,
-    dbus_proxy::PlayerProxy,
-    services::Service,
-    utils::{BoxStream, get_art},
+    Message, ModuleMessage, dbus_proxy::PlayerProxy, services::Service,
+    utils::BoxStream,
 };
 
 pub struct MprisService {
@@ -250,26 +251,93 @@ impl MprisPlayer {
 
         if let Some(val) = metadata.get("mpris:artUrl") {
             let art_url = val.to_string().trim_matches('"').to_string();
-            if let Some((handle, colors)) = get_art(&art_url) {
-                self.art = Some(handle);
-                self.colors.clone_from(&colors);
-                if self.status == "Playing" {
-                    let captured_colors = colors;
-                    return iced::Task::perform(
-                        async move { captured_colors },
-                        Message::CavaColorUpdate,
-                    );
+            match self.get_art(art_url) {
+                PlayerArt::Async(task) => {
+                    return task;
                 }
-            } else {
-                self.art = None;
-                self.colors = None;
+                PlayerArt::Sync(art) => {
+                    if let Some((handle, colors)) = art {
+                        self.art = Some(handle);
+                        self.colors.clone_from(&colors);
+                        if self.status == "Playing" {
+                            let captured_colors = colors;
+                            return iced::Task::perform(
+                                async move { captured_colors },
+                                Message::CavaColorUpdate,
+                            );
+                        }
+                    }
+                }
+                PlayerArt::None => {
+                    self.art = None;
+                    self.colors = None;
+                    return iced::Task::none();
+                }
             }
-            return iced::Task::none();
         }
 
         self.art = None;
         self.colors = None;
         iced::Task::perform(async { None }, Message::CavaColorUpdate)
+    }
+
+    pub fn get_art(&self, art_url: String) -> PlayerArt {
+        if let Some(url) = art_url.strip_prefix("data:image/jpeg;base64,") {
+            let image_bytes =
+                match base64::engine::general_purpose::STANDARD.decode(url) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        error!("base64 decode error: {e}");
+                        return PlayerArt::None;
+                    }
+                };
+            let gradient = image_rs::load_from_memory(&image_bytes)
+                .ok()
+                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+            let handle = image::Handle::from_bytes(image_bytes);
+            PlayerArt::Sync(Some((handle, gradient)))
+        } else if let Some(url) = art_url.strip_prefix("file://") {
+            let handle = image::Handle::from_path(url);
+            let gradient = image_rs::open(url)
+                .ok()
+                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+            PlayerArt::Sync(Some((handle, gradient)))
+        } else if art_url.starts_with("https://")
+            || art_url.starts_with("http://")
+        {
+            let name = self.name.clone();
+            let task = iced::Task::perform(
+                async move {
+                    let response = match reqwest::get(&art_url).await {
+                        Ok(res) => res,
+                        Err(e) => {
+                            error!("Failed to fetch album art: {e}");
+                            return None;
+                        }
+                    };
+                    let image_bytes = match response.bytes().await {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            error!(
+                                "Failed to get bytes of album art from {art_url}: {e}"
+                            );
+                            return None;
+                        }
+                    };
+
+                    let gradient = image_rs::load_from_memory(&image_bytes)
+                        .ok()
+                        .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+                    let handle = image::Handle::from_bytes(image_bytes);
+                    Some((handle, gradient))
+                },
+                |art| Message::PlayerArtUpdate(name, art),
+            );
+
+            return PlayerArt::Async(task);
+        } else {
+            PlayerArt::None
+        }
     }
 
     pub fn new(name: String, status: String) -> Self {
@@ -347,4 +415,76 @@ async fn create_player_stream(
     }
 
     Ok(select_all(streams).boxed())
+}
+
+enum PlayerArt {
+    Async(iced::Task<Message>),
+    Sync(Option<(image::Handle, Option<Vec<Color>>)>),
+    None,
+}
+
+#[profiling::function]
+fn generate_gradient(
+    palette: Vec<color_thief::Color>,
+    steps: usize,
+) -> Option<Vec<Color>> {
+    if palette.is_empty() {
+        return None;
+    }
+
+    let iced_palette: Vec<Color> = palette
+        .into_iter()
+        .map(|c| Color::from_rgb8(c.r, c.g, c.b))
+        .collect();
+
+    if iced_palette.len() == 1 {
+        return Some(vec![iced_palette[0]; steps]);
+    }
+
+    let mut gradient = Vec::with_capacity(steps);
+    let segments = (iced_palette.len() - 1) as f32;
+
+    for i in 0..steps {
+        let progress = if steps == 1 {
+            0.0
+        } else {
+            i as f32 / (steps - 1) as f32
+        };
+        let position = progress * segments;
+
+        let start_index = position.floor() as usize;
+        let end_index = (start_index + 1).min(iced_palette.len() - 1);
+
+        let factor = position.fract();
+
+        let start_color = iced_palette[start_index];
+        let end_color = iced_palette[end_index];
+
+        gradient.push(lerp_color(start_color, end_color, factor));
+    }
+
+    Some(gradient)
+}
+
+fn lerp_color(c1: Color, c2: Color, factor: f32) -> Color {
+    let r = c1.r * (1.0 - factor) + c2.r * factor;
+    let g = c1.g * (1.0 - factor) + c2.g * factor;
+    let b = c1.b * (1.0 - factor) + c2.b * factor;
+    Color::from_rgba(r, g, b, 1.0)
+}
+
+#[profiling::function]
+fn extract_gradient(
+    buffer: &image_rs::ImageBuffer<image_rs::Rgb<u8>, Vec<u8>>,
+    bars: usize,
+) -> Option<Vec<Color>> {
+    match color_thief::get_palette(
+        buffer.as_raw(),
+        color_thief::ColorFormat::Rgb,
+        10,
+        3,
+    ) {
+        Ok(palette) => generate_gradient(palette, bars * 2),
+        Err(_) => None,
+    }
 }

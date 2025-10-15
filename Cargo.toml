@@ -60,7 +60,6 @@ tracy-allocations = ["tracy"]
 pedantic = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }
-as_conversions = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
 cast_sign_loss = "allow"

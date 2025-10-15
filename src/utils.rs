@@ -4,11 +4,10 @@ use crate::{
     constants::BAR_NAMESPACE,
 };
 use iced::{
-    Color, Element, Size,
-    advanced::graphics::image::image_rs,
+    Element, Size,
     futures::Stream,
     mouse::ScrollDelta,
-    widget::{MouseArea, image},
+    widget::MouseArea,
     window::settings::{
         Anchor, KeyboardInteractivity, Layer, LayerShellSettings,
         PlatformSpecific,
@@ -19,7 +18,6 @@ use std::{
     pin::Pin,
 };
 
-use base64::Engine;
 use tracing::{Dispatch, Level, error};
 use tracing_subscriber::{
     EnvFilter,
@@ -315,119 +313,5 @@ impl std::fmt::Display for CommandSpec {
         } else {
             write!(f, "{}", self.command)
         }
-    }
-}
-
-pub fn get_art(art_url: &str) -> Option<(image::Handle, Option<Vec<Color>>)> {
-    if let Some(url) = art_url.strip_prefix("data:image/jpeg;base64,") {
-        let image_bytes =
-            match base64::engine::general_purpose::STANDARD.decode(url) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    error!("get_art error: {e}");
-                    return None;
-                }
-            };
-        let gradient = image_rs::load_from_memory(&image_bytes)
-            .ok()
-            .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-        let handle = image::Handle::from_bytes(image_bytes);
-        Some((handle, gradient))
-    } else if let Some(url) = art_url.strip_prefix("file://") {
-        let handle = image::Handle::from_path(url);
-        let gradient = image_rs::open(url)
-            .ok()
-            .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-        Some((handle, gradient))
-    } else if art_url.starts_with("https://") || art_url.starts_with("http://")
-    {
-        let response = match reqwest::blocking::get(art_url) {
-            Ok(res) => res,
-            Err(e) => {
-                error!("Failed to fetch album art: {e}");
-                return None;
-            }
-        };
-        let image_bytes = match response.bytes() {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                error!("Failed to get bytes of album art from {art_url}: {e}");
-                return None;
-            }
-        };
-
-        let gradient = image_rs::load_from_memory(&image_bytes)
-            .ok()
-            .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-        let handle = image::Handle::from_bytes(image_bytes);
-        Some((handle, gradient))
-    } else {
-        None
-    }
-}
-
-#[profiling::function]
-fn generate_gradient(
-    palette: Vec<color_thief::Color>,
-    steps: usize,
-) -> Option<Vec<Color>> {
-    if palette.is_empty() {
-        return None;
-    }
-
-    let iced_palette: Vec<Color> = palette
-        .into_iter()
-        .map(|c| Color::from_rgb8(c.r, c.g, c.b))
-        .collect();
-
-    if iced_palette.len() == 1 {
-        return Some(vec![iced_palette[0]; steps]);
-    }
-
-    let mut gradient = Vec::with_capacity(steps);
-    let segments = (iced_palette.len() - 1) as f32;
-
-    for i in 0..steps {
-        let progress = if steps == 1 {
-            0.0
-        } else {
-            i as f32 / (steps - 1) as f32
-        };
-        let position = progress * segments;
-
-        let start_index = position.floor() as usize;
-        let end_index = (start_index + 1).min(iced_palette.len() - 1);
-
-        let factor = position.fract();
-
-        let start_color = iced_palette[start_index];
-        let end_color = iced_palette[end_index];
-
-        gradient.push(lerp_color(start_color, end_color, factor));
-    }
-
-    Some(gradient)
-}
-
-fn lerp_color(c1: Color, c2: Color, factor: f32) -> Color {
-    let r = c1.r * (1.0 - factor) + c2.r * factor;
-    let g = c1.g * (1.0 - factor) + c2.g * factor;
-    let b = c1.b * (1.0 - factor) + c2.b * factor;
-    Color::from_rgba(r, g, b, 1.0)
-}
-
-#[profiling::function]
-fn extract_gradient(
-    buffer: &image_rs::ImageBuffer<image_rs::Rgb<u8>, Vec<u8>>,
-    bars: usize,
-) -> Option<Vec<Color>> {
-    match color_thief::get_palette(
-        buffer.as_raw(),
-        color_thief::ColorFormat::Rgb,
-        10,
-        3,
-    ) {
-        Ok(palette) => generate_gradient(palette, bars * 2),
-        Err(_) => None,
     }
 }

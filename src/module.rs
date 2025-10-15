@@ -1,4 +1,4 @@
-use iced::{Color, Element, Subscription, Task};
+use iced::{Color, Element, Subscription, Task, widget::image};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -252,9 +252,7 @@ impl Modules {
     pub fn subscriptions(
         &self,
     ) -> impl Iterator<Item = Subscription<Message>> + '_ {
-        self.inner
-            .values()
-            .filter_map(ModuleDyn::subscription)
+        self.inner.values().filter_map(ModuleDyn::subscription)
     }
 
     pub fn render_views<'a>(
@@ -277,13 +275,33 @@ impl Modules {
         }
     }
 
+    pub fn handle_async_mpris_art_update(
+        &mut self,
+        player_name: &str,
+        new_art: Option<(image::Handle, Option<Vec<Color>>)>,
+    ) -> Task<Message> {
+        if let Some(Module::Mpris { service, .. }) = self.inner.get_mut("Mpris")
+            && let Some(player) = service.players.get_mut(player_name)
+            && let Some((art, colors)) = new_art
+        {
+            player.art = Some(art);
+            player.colors.clone_from(&colors);
+            if let Some(Module::Cava { service, .. }) =
+                self.inner.get_mut("Cava")
+            {
+                return service.update_gradient(colors);
+            }
+        }
+        Task::none()
+    }
+
     pub fn handle_mouse_entered(&mut self, event: MouseEvent) -> Task<Message> {
         if let MouseEvent::Workspace(id) = event
             && let Some(Module::Niri { service, .. }) =
                 self.inner.get_mut("Niri")
-            {
-                service.hovered_workspace_id = Some(id);
-            }
+        {
+            service.hovered_workspace_id = Some(id);
+        }
         Task::none()
     }
 
@@ -291,9 +309,9 @@ impl Modules {
         if let MouseEvent::Workspace(..) = event
             && let Some(Module::Niri { service, .. }) =
                 self.inner.get_mut("Niri")
-            {
-                service.hovered_workspace_id = None;
-            }
+        {
+            service.hovered_workspace_id = None;
+        }
         Task::none()
     }
 
