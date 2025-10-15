@@ -89,6 +89,7 @@
             '';
 
             LD_LIBRARY_PATH = "${lib.makeLibraryPath nativeBuildInputs}";
+            RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
 
           };
       }) pkgsFor;
@@ -97,7 +98,9 @@
         frostbar = final: prev: {
           frostbar =
             let
-              toolchain = final.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+              toolchain = (final.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml).override {
+                extensions = [ "rust-src" ];
+              };
               rustPlatform = final.makeRustPlatform {
                 cargo = toolchain;
                 rustc = toolchain;
