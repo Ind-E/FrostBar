@@ -77,7 +77,7 @@ pub fn main() -> iced::Result {
         fonts: vec![FIRA_CODE_BYTES.into()],
         default_font: FIRA_CODE,
         default_text_size: Pixels(16.0),
-        antialiasing: true,
+        antialiasing: false,
         ..Default::default()
     })
     .run()
@@ -313,10 +313,10 @@ impl Bar {
 
                 match command.output().await {
                     Ok(output) => {
-                        info!(target: "process", "spawned `{cmd}`");
+                        info!(target: "child_process", "spawned `{cmd}`");
 
                         if !output.stdout.is_empty() {
-                            info!(target: "process",
+                            info!(target: "child_process",
                                 "{}",
                                 String::from_utf8_lossy(&output.stdout)
                             );
@@ -324,15 +324,15 @@ impl Bar {
 
                         if !output.stderr.is_empty() {
                             error!(
-                                target: "process",
-                                "{}",
+                                target: "child_process",
+                                "{cmd}: {}",
                                 String::from_utf8_lossy(&output.stderr)
                             );
                         }
                     }
 
                     Err(e) => {
-                        error!(target: "process", "failed to spawn `{cmd}`: {e}");
+                        error!(target: "child_process", "failed to spawn `{cmd}`: {e}");
                     }
                 }
 

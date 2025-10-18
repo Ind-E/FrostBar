@@ -102,7 +102,9 @@ impl<'a> WorkspaceView<'a> {
     fn view(
         &self,
         hovered: bool,
-        style: &config::ContainerStyle,
+        active_style: &config::ContainerStyle,
+        hovered_style: &config::ContainerStyle,
+        base_style: &config::ContainerStyle,
         offset: i8,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
@@ -148,7 +150,9 @@ impl<'a> WorkspaceView<'a> {
         let windows = windows.style(workspace_style(
             self.workspace.is_active,
             hovered,
-            style,
+            active_style,
+            hovered_style,
+            base_style,
         ));
 
         MouseArea::new(windows)
@@ -198,6 +202,8 @@ impl<'a> NiriView {
                                 .hovered_workspace_id
                                 .is_some_and(|id| id == ws.id),
                             &self.config.workspace_active_style,
+                            &self.config.workspace_hovered_style,
+                            &self.config.workspace_style,
                             self.config.workspace_offset,
                             layout,
                         ),
@@ -218,6 +224,8 @@ impl<'a> NiriView {
                                 .hovered_workspace_id
                                 .is_some_and(|id| id == ws.id),
                             &self.config.workspace_active_style,
+                            &self.config.workspace_hovered_style,
+                            &self.config.workspace_style,
                             self.config.workspace_offset,
                             layout,
                         ),

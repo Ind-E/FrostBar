@@ -220,8 +220,9 @@ pub struct Niri {
     #[knus(child, default)]
     pub window_style: ContainerStyle,
 
-    // #[knus(child, default)]
-    // pub window_active_style: ContainerStyle,
+    #[knus(child, default)]
+    pub window_focused_style: ContainerStyle,
+
     #[knus(child, default)]
     pub workspace_active_style: ContainerStyle,
 
@@ -470,46 +471,36 @@ pub struct ContainerStyle {
     pub border: Option<ConfigBorder>,
 }
 
-#[derive(knus::Decode, Debug, Clone)]
+#[derive(knus::Decode, Debug, Clone, Default)]
 pub struct ConfigBorder {
-    #[knus(child, default = Self::default().color)]
-    pub color: ConfigColor,
-    #[knus(child, unwrap(argument), default = Self::default().width)]
-    pub width: f32,
-    #[knus(child, default = Self::default().radius)]
-    pub radius: ConfigRadius,
-}
-
-impl Default for ConfigBorder {
-    fn default() -> Self {
-        Self {
-            color: ConfigColor {
-                inner: iced::Color::WHITE,
-            },
-            width: 0.0,
-            radius: ConfigRadius::All(0.0),
-        }
-    }
+    #[knus(child)]
+    pub color: Option<ConfigColor>,
+    #[knus(child, unwrap(argument), default)]
+    pub width: Option<f32>,
+    #[knus(child)]
+    pub radius: Option<ConfigRadius>,
 }
 
 impl From<ConfigBorder> for iced::Border {
     fn from(border: ConfigBorder) -> Self {
+        let default_border = iced::Border::default();
         iced::Border {
-            color: border.color.into(),
-            width: border.width,
+            color: border.color.unwrap_or(default_border.color.into()).into(),
+            width: border.width.unwrap_or(default_border.width),
             radius: match border.radius {
-                ConfigRadius::All(r) => iced::border::radius(r),
-                ConfigRadius::PerCorner(PerCorner {
+                Some(ConfigRadius::All(r)) => iced::border::radius(r),
+                Some(ConfigRadius::PerCorner(PerCorner {
                     top_left,
                     top_right,
                     bottom_left,
                     bottom_right,
-                }) => iced::border::Radius {
+                })) => iced::border::Radius {
                     top_left,
                     top_right,
                     bottom_right,
                     bottom_left,
                 },
+                None => default_border.radius,
             },
         }
     }
@@ -519,6 +510,20 @@ impl From<ConfigBorder> for iced::Border {
 pub enum ConfigRadius {
     All(f32),
     PerCorner(PerCorner),
+}
+
+impl From<ConfigRadius> for iced::border::Radius {
+    fn from(radius: ConfigRadius) -> Self {
+        match radius {
+            ConfigRadius::All(r) => iced::border::radius(r),
+            ConfigRadius::PerCorner(corners) => iced::border::Radius {
+                top_left: corners.top_left,
+                top_right: corners.top_right,
+                bottom_left: corners.bottom_left,
+                bottom_right: corners.bottom_right,
+            },
+        }
+    }
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]
@@ -656,6 +661,7 @@ where
     }
 }
 
+#[profiling::all_functions]
 impl Config {
     pub fn load(path: &Path) -> miette::Result<Self> {
         let contents = fs::read_to_string(path)

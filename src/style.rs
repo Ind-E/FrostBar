@@ -43,16 +43,69 @@ pub fn styled_tooltip<'a>(
 pub fn workspace_style<'a>(
     active: bool,
     hovered: bool,
-    style: &config::ContainerStyle,
+    active_style: &config::ContainerStyle,
+    hovered_style: &config::ContainerStyle,
+    base_style: &config::ContainerStyle,
 ) -> container::StyleFn<'a, Theme> {
-    let mut base = container::Style::default();
+    let mut style = container::Style::default();
+    if let Some(text_color) = &base_style.text_color {
+        style.text_color = Some(text_color.into());
+    }
+    if let Some(background) = &base_style.background {
+        style.background = Some(Background::Color(background.into()));
+    }
+    if let Some(border) = &base_style.border {
+        if let Some(color) = &border.color {
+            style.border.color = color.into();
+        }
+        if let Some(width) = border.width {
+            style.border.width = width;
+        }
+        if let Some(radius) = &border.radius {
+            style.border.radius = radius.clone().into();
+        }
+    }
     if hovered {
-        base = base.background(Color::from_rgba(0.4, 0.4, 0.4, 0.4));
+        if let Some(text_color) = &hovered_style.text_color {
+            style.text_color = Some(text_color.into());
+        };
+        if let Some(background) = &hovered_style.background {
+            style.background = Some(Background::Color(background.into()));
+        }
+
+        if let Some(border) = &hovered_style.border {
+            if let Some(color) = &border.color {
+                style.border.color = color.into();
+            }
+            if let Some(width) = border.width {
+                style.border.width = width;
+            }
+            if let Some(radius) = &border.radius {
+                style.border.radius = radius.clone().into();
+            }
+        }
     }
     if active {
-        return container_style(style);
+        if let Some(text_color) = &active_style.text_color {
+            style.text_color = Some(text_color.into());
+        };
+        if let Some(background) = &active_style.background {
+            style.background = Some(Background::Color(background.into()));
+        }
+
+        if let Some(border) = &active_style.border {
+            if let Some(color) = &border.color {
+                style.border.color = color.into();
+            }
+            if let Some(width) = border.width {
+                style.border.width = width;
+            }
+            if let Some(radius) = &border.radius {
+                style.border.radius = radius.clone().into();
+            }
+        }
     }
-    Box::new(move |_| base)
+    Box::new(move |_| style)
 }
 
 pub fn container_style<'a>(
