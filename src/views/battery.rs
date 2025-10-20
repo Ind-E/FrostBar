@@ -5,11 +5,8 @@ use iced::{
 use tracing::warn;
 
 use crate::{
-    Message, config,
-    services::battery::BatteryService,
-    style::{container_style, styled_tooltip},
-    utils::mouse_binds,
-    views::BarPosition,
+    Message, config, services::battery::BatteryService, style::container_style,
+    utils::mouse_binds, views::BarPosition,
 };
 extern crate starship_battery as battery;
 
@@ -24,7 +21,7 @@ impl<'a> BatteryView {
     pub fn view(
         &'a self,
         service: &BatteryService,
-        layout: &config::Layout,
+        layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         if service.batteries.is_empty() {
             return Column::new().into();
@@ -51,9 +48,9 @@ impl<'a> BatteryView {
             Text::new(icon).size(self.config.icon_size)
         };
 
-        let mut icon_widget = Container::new(icon_text)
-            .id(self.id.clone())
-            .style(container_style(&self.config.style));
+        let mut icon_widget = Container::new(icon_text);
+        icon_widget = container_style(icon_widget, &self.config.style, &layout)
+            .id(self.id.clone());
 
         if layout.anchor.vertical() {
             icon_widget = icon_widget.center_x(Length::Fill);
@@ -61,26 +58,32 @@ impl<'a> BatteryView {
             icon_widget = icon_widget.center_y(Length::Fill);
         }
 
-        let tooltip = Text::new(
-            service
-                .batteries
-                .iter()
-                .enumerate()
-                .map(|(i, bat)| {
-                    format!(
-                        "Battery {}: {}% ({})",
-                        i + 1,
-                        (bat.percentage * 100.0).floor(),
-                        bat.state
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        );
+        mouse_binds(icon_widget, &self.config.binds, Some(self.id.clone()))
+    }
 
-        let icon_widget = mouse_binds(icon_widget, &self.config.binds);
-
-        styled_tooltip(icon_widget, tooltip, layout.anchor)
+    pub fn render_tooltip(
+        &'a self,
+        service: &BatteryService,
+    ) -> Option<Element<'a, Message>> {
+        Some(
+            Text::new(
+                service
+                    .batteries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, bat)| {
+                        format!(
+                            "Battery {}: {}% ({})",
+                            i + 1,
+                            (bat.percentage * 100.0).floor(),
+                            bat.state
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+            .into(),
+        )
     }
 }
 

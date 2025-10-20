@@ -26,7 +26,7 @@ impl<'a> CavaView {
     pub fn view(
         &'a self,
         service: &'a CavaService,
-        layout: &config::Layout,
+        layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
@@ -39,10 +39,13 @@ impl<'a> CavaView {
                 .height(Length::Fill)
         };
 
-        let container =
-            Container::new(canvas).style(container_style(&self.config.style));
+        let container = container_style(
+            Container::new(canvas),
+            &self.config.style,
+            &layout,
+        );
 
-        mouse_binds(container, &self.config.binds)
+        mouse_binds(container, &self.config.binds, None)
     }
 }
 

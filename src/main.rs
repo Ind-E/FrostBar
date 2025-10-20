@@ -30,7 +30,10 @@ use crate::{
     icon_cache::IconCache,
     module::Modules,
     services::{mpris::MprisEvent, niri::NiriEvent},
-    utils::{CommandSpec, init_tracing, open_dummy_window, open_window},
+    utils::{
+        CommandSpec, init_tracing, open_dummy_window, open_tooltip_window,
+        open_window,
+    },
     views::BarAlignment,
 };
 
@@ -104,6 +107,9 @@ pub enum Message {
     ErrorMessage(String),
     NoOp,
 
+    OpenTooltip(container::Id),
+    CloseTooltip(container::Id),
+
     Msg(ModuleMessage),
 }
 
@@ -124,6 +130,9 @@ pub struct Bar {
     config_path: PathBuf,
 
     modules: Modules,
+
+    tooltip_window_id: Option<Id>,
+    active_tooltip_id: Option<container::Id>,
 }
 
 #[profiling::all_functions]
@@ -147,6 +156,8 @@ impl Bar {
             modules,
             config,
             config_path,
+            tooltip_window_id: None,
+            active_tooltip_id: None,
         };
 
         (bar, Task::batch(vec![open_dummy]))
@@ -191,8 +202,40 @@ impl Bar {
                     return Task::batch([open_task, close_task]);
                 }
 
-                if let Event::Window(iced::window::Event::Closed) = event {
-                    debug!("window closed");
+                // if let Event::Window(iced::window::Event::Closed) = event {
+                //     debug!("window closed");
+                // }
+                Task::none()
+            }
+            Message::OpenTooltip(id) => {
+                let old_id = self.tooltip_window_id.take();
+
+                let (win_id, open_task) = open_tooltip_window();
+                self.tooltip_window_id = Some(win_id);
+                self.active_tooltip_id = Some(id);
+
+                if let Some(old_id) = old_id {
+                    debug!(
+                        "opening tooltip {}, closing tooltip {}",
+                        self.tooltip_window_id.unwrap(),
+                        old_id
+                    );
+                    open_task.chain(iced::window::close(old_id))
+                } else {
+                    debug!(
+                        "opening tooltip {}",
+                        self.tooltip_window_id.unwrap()
+                    );
+                    open_task
+                }
+            }
+            Message::CloseTooltip(id) => {
+                if self.active_tooltip_id == Some(id)
+                    && let Some(window_id) = self.tooltip_window_id.take()
+                {
+                    debug!("closing tooltip {}", window_id);
+                    self.active_tooltip_id = None;
+                    return iced::window::close(window_id);
                 }
                 Task::none()
             }
@@ -462,6 +505,23 @@ impl Bar {
     pub fn view(&self, id: Id) -> Element<'_, Message> {
         if Some(id) == self.id {
             self.view_bar()
+        } else if Some(id) == self.tooltip_window_id {
+            let content = self
+                .active_tooltip_id
+                .as_ref()
+                .and_then(|id| self.modules.render_tooltip_for_id(id))
+                .unwrap_or_else(|| Column::new().into());
+
+            Container::new(content)
+                .padding(5)
+                .style(|_theme: &Theme| container::Style {
+                    background: Some(Background::Color(
+                        *self.config.style.background,
+                    )),
+                    border: rounded(self.config.style.border_radius),
+                    ..Default::default()
+                })
+                .into()
         } else {
             Column::new().into()
         }

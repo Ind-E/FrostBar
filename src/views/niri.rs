@@ -5,7 +5,6 @@ use iced::{
     widget::{
         Column, Container, Image, MouseArea, Row, Svg, Text,
         container::{self},
-        text::Shaping,
     },
 };
 
@@ -16,7 +15,7 @@ use crate::{
     Message, ModuleMessage, MouseEvent, config,
     icon_cache::Icon,
     services::niri::{NiriEvent, NiriService, Window, Workspace},
-    style::{styled_tooltip, workspace_style},
+    style::workspace_style,
     views::BarPosition,
 };
 
@@ -45,13 +44,15 @@ impl<'a> WindowView<'a> {
             Some(Icon::Raster(handle)) => {
                 Image::new(handle.clone()).height(24).width(24).into()
             }
-            Option::None => {
+            _ => {
                 let container = Container::new(
-                    Text::new("?")
-                        .size(20)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center(),
+                    Text::new(
+                        self.window.title.chars().take(2).collect::<String>(),
+                    )
+                    .size(20)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(),
                 )
                 .padding(5);
                 if layout.anchor.vertical() {
@@ -80,10 +81,17 @@ impl<'a> WindowView<'a> {
             content = content.center_y(Length::Fill);
         }
 
-        let tooltip =
-            Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
+        // let tooltip =
+        //     Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
+        //
+        // styled_tooltip(content, tooltip, layout.anchor)
 
-        styled_tooltip(content, tooltip, layout.anchor)
+        //TODO: tooltip for niri window
+
+        MouseArea::new(content)
+            // .on_enter(Message::OpenTooltip(self.container_id.clone()))
+            // .on_exit(Message::CloseTooltip(self.container_id.clone()))
+            .into()
     }
 }
 

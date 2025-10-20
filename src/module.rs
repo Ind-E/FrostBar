@@ -1,4 +1,7 @@
-use iced::{Color, Element, Subscription, Task, widget::image};
+use iced::{
+    Color, Element, Subscription, Task,
+    widget::{container, image},
+};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -49,6 +52,11 @@ pub trait ModuleDyn {
         &'a self,
         layout: &'a config::Layout,
     ) -> Box<dyn Iterator<Item = (Element<'a, Message>, BarPosition)> + 'a>;
+
+    fn render_tooltip<'a>(
+        &'a self,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>>;
 }
 
 impl ModuleDyn for Module {
@@ -97,6 +105,39 @@ impl ModuleDyn for Module {
             Module::Label { views } => Box::new(
                 views.iter().map(move |v| (v.view(layout), v.position)),
             ),
+        }
+    }
+
+    fn render_tooltip<'a>(
+        &'a self,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        match self {
+            Module::Label { views, .. } => views.iter().find_map(|v| {
+                if v.id == *id {
+                    v.render_tooltip()
+                } else {
+                    None
+                }
+            }),
+            Module::Battery { service, views } => views.iter().find_map(|v| {
+                if v.id == *id {
+                    v.render_tooltip(service)
+                } else {
+                    None
+                }
+            }),
+            Module::Mpris { service, views } => views
+                .iter()
+                .find_map(|v| v.render_player_tooltip(service, id)),
+            Module::Time { service, views } => views.iter().find_map(|v| {
+                if v.id == *id {
+                    v.render_tooltip(service)
+                } else {
+                    None
+                }
+            }),
+            _ => None,
         }
     }
 }
@@ -264,6 +305,15 @@ impl Modules {
             .flat_map(move |module| module.render_views(layout))
     }
 
+    pub fn render_tooltip_for_id<'a>(
+        &'a self,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        self.inner
+            .values()
+            .find_map(|module| module.render_tooltip(id))
+    }
+
     pub fn handle_cava_color_update(
         &mut self,
         gradient: Option<Vec<Color>>,
@@ -296,20 +346,15 @@ impl Modules {
     }
 
     pub fn handle_mouse_entered(&mut self, event: MouseEvent) -> Task<Message> {
-        if let MouseEvent::Workspace(id) = event
-            && let Some(Module::Niri { service, .. }) =
-                self.inner.get_mut("Niri")
-        {
+        let MouseEvent::Workspace(id) = event;
+        if let Some(Module::Niri { service, .. }) = self.inner.get_mut("Niri") {
             service.hovered_workspace_id = Some(id);
         }
         Task::none()
     }
 
-    pub fn handle_mouse_exited(&mut self, event: MouseEvent) -> Task<Message> {
-        if let MouseEvent::Workspace(..) = event
-            && let Some(Module::Niri { service, .. }) =
-                self.inner.get_mut("Niri")
-        {
+    pub fn handle_mouse_exited(&mut self, _event: MouseEvent) -> Task<Message> {
+        if let Some(Module::Niri { service, .. }) = self.inner.get_mut("Niri") {
             service.hovered_workspace_id = None;
         }
         Task::none()
@@ -324,108 +369,3 @@ impl Modules {
         Mpris(event) => Mpris
     }
 }
-
-// #[profiling::function]
-// pub fn process_modules(
-//     config: &mut Config,
-//     battery_views: &mut Vec<BatteryView>,
-//     time_views: &mut Vec<TimeView>,
-//     cava_views: &mut Vec<CavaView>,
-//     mpris_views: &mut Vec<MprisView>,
-//     niri_views: &mut Vec<NiriView>,
-//     label_views: &mut Vec<LabelView>,
-// ) {
-//     battery_views.clear();
-//     time_views.clear();
-//     cava_views.clear();
-//     mpris_views.clear();
-//     niri_views.clear();
-//     label_views.clear();
-//
-//     let mut idx = 0;
-//
-//     for module in config.start.modules.drain(..) {
-//         handle_module(
-//             module,
-//             BarPosition {
-//                 idx,
-//                 align: BarAlignment::Start,
-//             },
-//             battery_views,
-//             time_views,
-//             cava_views,
-//             mpris_views,
-//             niri_views,
-//             label_views,
-//         );
-//         idx += 1;
-//     }
-//
-//     for module in config.middle.modules.drain(..) {
-//         handle_module(
-//             module,
-//             BarPosition {
-//                 idx,
-//                 align: BarAlignment::Middle,
-//             },
-//             battery_views,
-//             time_views,
-//             cava_views,
-//             mpris_views,
-//             niri_views,
-//             label_views,
-//         );
-//         idx += 1;
-//     }
-//
-//     for module in config.end.modules.drain(..) {
-//         handle_module(
-//             module,
-//             BarPosition {
-//                 idx,
-//                 align: BarAlignment::End,
-//             },
-//             battery_views,
-//             time_views,
-//             cava_views,
-//             mpris_views,
-//             niri_views,
-//             label_views,
-//         );
-//         idx += 1;
-//     }
-// }
-
-// #[allow(clippy::too_many_arguments)]
-// #[profiling::function]
-// pub fn handle_module(
-//     module: Module,
-//     position: BarPosition,
-//     battery_views: &mut Vec<BatteryView>,
-//     time_views: &mut Vec<TimeView>,
-//     cava_views: &mut Vec<CavaView>,
-//     mpris_views: &mut Vec<MprisView>,
-//     niri_views: &mut Vec<NiriView>,
-//     label_views: &mut Vec<LabelView>,
-// ) {
-//     match module {
-//         Module::Battery(config) => {
-//             battery_views.push(BatteryView::new(config, position));
-//         }
-//         Module::Time(config) => {
-//             time_views.push(TimeView::new(config, position));
-//         }
-//         Module::Cava(config) => {
-//             cava_views.push(CavaView::new(config, position));
-//         }
-//         Module::Mpris(config) => {
-//             mpris_views.push(MprisView::new(config, position));
-//         }
-//         Module::Niri(config) => {
-//             niri_views.push(NiriView::new(config, position));
-//         }
-//         Module::Label(config) => {
-//             label_views.push(LabelView::new(config, position));
-//         }
-//     }
-// }

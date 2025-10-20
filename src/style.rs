@@ -1,5 +1,6 @@
 use iced::{
-    Background, Color, Element, Theme,
+    Background, Color, Element, Padding, Theme,
+    padding::{left, top},
     widget::{Container, Tooltip, container, tooltip::Position},
 };
 
@@ -68,7 +69,7 @@ pub fn workspace_style<'a>(
     if hovered {
         if let Some(text_color) = &hovered_style.text_color {
             style.text_color = Some(text_color.into());
-        };
+        }
         if let Some(background) = &hovered_style.background {
             style.background = Some(Background::Color(background.into()));
         }
@@ -88,7 +89,7 @@ pub fn workspace_style<'a>(
     if active {
         if let Some(text_color) = &active_style.text_color {
             style.text_color = Some(text_color.into());
-        };
+        }
         if let Some(background) = &active_style.background {
             style.background = Some(Background::Color(background.into()));
         }
@@ -109,9 +110,11 @@ pub fn workspace_style<'a>(
 }
 
 pub fn container_style<'a>(
-    style: &config::ContainerStyle,
-) -> container::StyleFn<'a, Theme> {
-    let retval = container::Style {
+    container: Container<'a, Message>,
+    style: &'a config::ContainerStyle,
+    layout: &'a config::Layout,
+) -> Container<'a, Message> {
+    let retval = container.style(move |_| container::Style {
         text_color: style.text_color.as_ref().map(Into::into),
         background: style
             .background
@@ -119,7 +122,11 @@ pub fn container_style<'a>(
             .map(|b| Background::Color(b.into())),
         border: style.border.clone().unwrap_or_default().into(),
         ..Default::default()
-    };
-
-    Box::new(move |_| retval)
+    });
+    let padding = style.padding.unwrap_or(0f32);
+    if layout.anchor.vertical() {
+        retval.padding(top(padding).bottom(padding)).into()
+    } else {
+        retval.padding(left(padding).right(padding)).into()
+    }
 }

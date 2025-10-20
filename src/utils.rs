@@ -7,7 +7,7 @@ use iced::{
     Element, Size,
     futures::Stream,
     mouse::ScrollDelta,
-    widget::MouseArea,
+    widget::{MouseArea, container},
     window::settings::{
         Anchor, KeyboardInteractivity, Layer, LayerShellSettings,
         PlatformSpecific,
@@ -218,14 +218,41 @@ pub fn open_window(
     (id, open_task.map(|_| Message::NoOp))
 }
 
+pub fn open_tooltip_window() -> (iced::window::Id, iced::Task<Message>) {
+    let (id, open_task) = iced::window::open(iced::window::Settings {
+        transparent: true,
+        platform_specific: PlatformSpecific {
+            layer_shell: LayerShellSettings {
+                layer: Some(Layer::Top),
+                anchor: Some(
+                    Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
+                ),
+                keyboard_interactivity: Some(KeyboardInteractivity::None),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        exit_on_close_request: false,
+        ..Default::default()
+    });
+
+    (id, open_task.map(|_| Message::NoOp))
+}
+
 #[profiling::function]
 pub fn mouse_binds<'a>(
     element: impl Into<Element<'a, Message>>,
-    // tooltip_content: impl Into<Element<'a, Message>>,
-    // tooltip: Arc<RwLock<Element<'a, Message>>>,
     binds: &'a MouseBinds,
+    tooltip_id: Option<container::Id>,
 ) -> Element<'a, Message> {
     let mut mouse_area = MouseArea::new(element);
+
+    if let Some(id) = tooltip_id {
+        mouse_area = mouse_area
+            .on_enter(Message::OpenTooltip(id.clone()))
+            .on_exit(Message::CloseTooltip(id));
+    }
+
     if let Some(left) = &binds.mouse_left {
         mouse_area = mouse_area.on_release(process_command(left));
     }

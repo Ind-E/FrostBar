@@ -218,10 +218,10 @@ pub struct Niri {
     pub style: ContainerStyle,
 
     #[knus(child, default)]
-    pub window_style: ContainerStyle,
+    pub window_focused_style: ContainerStyle,
 
     #[knus(child, default)]
-    pub window_focused_style: ContainerStyle,
+    pub window_style: ContainerStyle,
 
     #[knus(child, default)]
     pub workspace_active_style: ContainerStyle,
@@ -469,6 +469,8 @@ pub struct ContainerStyle {
     pub background: Option<ConfigColor>,
     #[knus(child)]
     pub border: Option<ConfigBorder>,
+    #[knus(child, unwrap(argument))]
+    pub padding: Option<f32>,
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]

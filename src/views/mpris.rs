@@ -11,7 +11,7 @@ use crate::{
     Message,
     config::{self},
     services::mpris::{MprisPlayer, MprisService},
-    style::{container_style, styled_tooltip},
+    style::container_style,
     views::BarPosition,
 };
 
@@ -53,6 +53,21 @@ impl<'a> MprisView {
                 .into()
         }
     }
+
+    pub fn render_player_tooltip(
+        &'a self,
+        service: &'a MprisService,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        // service.players.values().find_map(|p| {
+        //     if p.id == *id {
+        //         p.render_tooltip()
+        //     } else {
+        //         None
+        //     }
+        // })
+        None
+    }
 }
 
 impl MprisView {
@@ -91,9 +106,9 @@ impl<'a> MprisPlayerView {
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .center(),
-            )
-            .style(container_style(&config.placeholder_style))
-            .padding(5);
+            );
+            let container =
+                container_style(container, &config.placeholder_style, &layout);
             if layout.anchor.vertical() {
                 container
                     .center_x(Length::Fill)
@@ -107,6 +122,82 @@ impl<'a> MprisPlayerView {
             }
         };
 
+        let binds = &config.binds;
+
+        let mut mouse_area = MouseArea::new(content)
+            .on_enter(Message::OpenTooltip(self.id.clone()))
+            .on_exit(Message::CloseTooltip(self.id.clone()));
+
+        if let Some(left) = &binds.mouse_left {
+            mouse_area = mouse_area
+                .on_release(Message::MediaControl(*left, player.name.clone()));
+        }
+
+        if let Some(double) = &binds.double_click {
+            mouse_area = mouse_area.on_double_click(Message::MediaControl(
+                *double,
+                player.name.clone(),
+            ));
+        }
+
+        if let Some(right) = &binds.mouse_right {
+            mouse_area = mouse_area.on_right_release(Message::MediaControl(
+                *right,
+                player.name.clone(),
+            ));
+        }
+
+        if let Some(middle) = &binds.mouse_middle {
+            mouse_area = mouse_area.on_middle_release(Message::MediaControl(
+                *middle,
+                player.name.clone(),
+            ));
+        }
+
+        if binds.scroll_up.is_some()
+            || binds.scroll_down.is_some()
+            || binds.scroll_left.is_some()
+            || binds.scroll_right.is_some()
+        {
+            mouse_area = mouse_area.on_scroll(move |delta| {
+                let (x, y) = match delta {
+                    ScrollDelta::Lines { x, y }
+                    | ScrollDelta::Pixels { x, y } => (x, y),
+                };
+
+                if y > 0.0
+                    && let Some(scroll_up) = &binds.scroll_up
+                {
+                    Message::MediaControl(*scroll_up, player.name.clone())
+                } else if y < 0.0
+                    && let Some(scroll_down) = &binds.scroll_down
+                {
+                    Message::MediaControl(*scroll_down, player.name.clone())
+                } else if x < 0.0
+                    && let Some(scroll_right) = &binds.scroll_right
+                {
+                    Message::MediaControl(*scroll_right, player.name.clone())
+                } else if x > 0.0
+                    && let Some(scroll_left) = &binds.scroll_left
+                {
+                    Message::MediaControl(*scroll_left, player.name.clone())
+                } else {
+                    Message::NoOp
+                }
+            });
+        }
+
+        let content =
+            Container::new(mouse_area.interaction(Interaction::Pointer))
+                .id(self.id.clone());
+
+        content.into()
+    }
+
+    pub fn render_tooltip(
+        &'a self,
+        player: &'a MprisPlayer,
+    ) -> Option<Element<'a, Message>> {
         let raw_artists =
             player.artists.clone().unwrap_or_else(|| "[]".to_string());
         let raw_title =
@@ -123,92 +214,10 @@ impl<'a> MprisPlayerView {
 
         let title = raw_title.trim().trim_matches('"');
 
-        let tooltip = Text::new(format!("{artists} - {title}"))
-            .shaping(Shaping::Advanced);
-
-        let binds = &config.binds;
-
-        if binds.mouse_left.is_some()
-            || binds.double_click.is_some()
-            || binds.mouse_right.is_some()
-            || binds.mouse_middle.is_some()
-            || binds.scroll_up.is_some()
-            || binds.scroll_down.is_some()
-            || binds.scroll_left.is_some()
-            || binds.scroll_right.is_some()
-        {
-            let mut mouse_area = MouseArea::new(content);
-            if let Some(left) = &binds.mouse_left {
-                mouse_area = mouse_area.on_release(Message::MediaControl(
-                    *left,
-                    player.name.clone(),
-                ));
-            }
-
-            if let Some(double) = &binds.double_click {
-                mouse_area = mouse_area.on_double_click(Message::MediaControl(
-                    *double,
-                    player.name.clone(),
-                ));
-            }
-
-            if let Some(right) = &binds.mouse_right {
-                mouse_area = mouse_area.on_right_release(
-                    Message::MediaControl(*right, player.name.clone()),
-                );
-            }
-
-            if let Some(middle) = &binds.mouse_middle {
-                mouse_area = mouse_area.on_middle_release(
-                    Message::MediaControl(*middle, player.name.clone()),
-                );
-            }
-
-            if binds.scroll_up.is_some()
-                || binds.scroll_down.is_some()
-                || binds.scroll_left.is_some()
-                || binds.scroll_right.is_some()
-            {
-                mouse_area = mouse_area.on_scroll(move |delta| {
-                    let (x, y) = match delta {
-                        ScrollDelta::Lines { x, y }
-                        | ScrollDelta::Pixels { x, y } => (x, y),
-                    };
-
-                    if y > 0.0
-                        && let Some(scroll_up) = &binds.scroll_up
-                    {
-                        Message::MediaControl(*scroll_up, player.name.clone())
-                    } else if y < 0.0
-                        && let Some(scroll_down) = &binds.scroll_down
-                    {
-                        Message::MediaControl(*scroll_down, player.name.clone())
-                    } else if x < 0.0
-                        && let Some(scroll_right) = &binds.scroll_right
-                    {
-                        Message::MediaControl(
-                            *scroll_right,
-                            player.name.clone(),
-                        )
-                    } else if x > 0.0
-                        && let Some(scroll_left) = &binds.scroll_left
-                    {
-                        Message::MediaControl(*scroll_left, player.name.clone())
-                    } else {
-                        Message::NoOp
-                    }
-                });
-            }
-
-            let content =
-                Container::new(mouse_area.interaction(Interaction::Pointer))
-                    .id(self.id.clone());
-
-            return styled_tooltip(content, tooltip, layout.anchor);
-        }
-
-        let content = Container::new(content).id(self.id.clone());
-
-        styled_tooltip(content, tooltip, layout.anchor)
+        Some(
+            Text::new(format!("{artists} - {title}"))
+                .shaping(Shaping::Advanced)
+                .into(),
+        )
     }
 }

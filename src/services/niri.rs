@@ -89,7 +89,7 @@ fn map_window(
             .and_then(|app_id| icon_cache.get_icon(app_id, icon_theme).clone()),
         layout: window.layout.clone().into(),
         title: window.title.clone().unwrap_or("N/A".to_string()),
-        is_focused: window.is_focused
+        is_focused: window.is_focused,
     }
 }
 

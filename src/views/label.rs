@@ -4,9 +4,7 @@ use iced::{
 };
 
 use crate::{
-    Message, config,
-    style::{container_style, styled_tooltip},
-    utils::mouse_binds,
+    Message, config, style::container_style, utils::mouse_binds,
     views::BarPosition,
 };
 
@@ -18,12 +16,12 @@ pub struct LabelView {
 
 #[profiling::all_functions]
 impl<'a> LabelView {
-    pub fn view(&'a self, layout: &config::Layout) -> Element<'a, Message> {
+    pub fn view(&'a self, layout: &'a config::Layout) -> Element<'a, Message> {
         let mut content = Container::new(
             text(self.config.text.clone()).size(self.config.size),
-        )
-        .style(container_style(&self.config.style))
-        .id(self.id.clone());
+        );
+        content = container_style(content, &self.config.style, &layout)
+            .id(self.id.clone());
 
         if layout.anchor.vertical() {
             content = content.center_x(Length::Fill);
@@ -31,14 +29,16 @@ impl<'a> LabelView {
             content = content.center_y(Length::Fill);
         }
 
-        let element = if let Some(tooltip) = &self.config.tooltip {
-            let tooltip = Text::new(tooltip.clone());
-            styled_tooltip(content, tooltip, layout.anchor)
-        } else {
-            content.into()
-        };
+        let tooltip_id = self.config.tooltip.as_ref().map(|_| self.id.clone());
 
-        mouse_binds(element, &self.config.binds)
+        mouse_binds(content, &self.config.binds, tooltip_id)
+    }
+
+    pub fn render_tooltip(&'a self) -> Option<Element<'a, Message>> {
+        self.config
+            .tooltip
+            .as_ref()
+            .map(|tooltip| Text::new(tooltip.clone()).into())
     }
 }
 

@@ -32,7 +32,7 @@ pub fn client_icon_path(
         debug!("found icon from app id");
         Some(path)
     } else {
-        error!("icon not found for `{app_id}`");
+        warn!("icon not found for `{app_id}`");
         None
     }
 }
