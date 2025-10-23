@@ -5,8 +5,8 @@ use tracing::{debug, info, warn};
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    Alignment, Background, Color, Element, Event, Length, Pixels, Settings,
-    Size, Subscription, Task, Theme,
+    Alignment, Background, Color, Element, Event, Length, Pixels, Rectangle,
+    Settings, Size, Subscription, Task, Theme,
     border::rounded,
     padding::left,
     theme,
@@ -91,6 +91,12 @@ pub enum MouseEvent {
     Workspace(u64),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct TooltipId {
+    pub id: container::Id,
+    pub bounds: Option<Rectangle>,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     IcedEvent(Event),
@@ -108,6 +114,7 @@ pub enum Message {
     NoOp,
 
     OpenTooltip(container::Id),
+    TooltipPositionMeasured(TooltipId),
     CloseTooltip(container::Id),
 
     Msg(ModuleMessage),
@@ -132,7 +139,7 @@ pub struct Bar {
     modules: Modules,
 
     tooltip_window_id: Option<Id>,
-    active_tooltip_id: Option<container::Id>,
+    active_tooltip_id: Option<TooltipId>,
 }
 
 #[profiling::all_functions]
@@ -207,12 +214,19 @@ impl Bar {
                 // }
                 Task::none()
             }
-            Message::OpenTooltip(id) => {
+            Message::OpenTooltip(id) => container::visible_bounds(id.clone())
+                .map(move |bounds| {
+                    Message::TooltipPositionMeasured(TooltipId {
+                        id: id.clone(),
+                        bounds,
+                    })
+                }),
+            Message::TooltipPositionMeasured(tooltip_id) => {
                 let old_id = self.tooltip_window_id.take();
 
                 let (win_id, open_task) = open_tooltip_window();
                 self.tooltip_window_id = Some(win_id);
-                self.active_tooltip_id = Some(id);
+                self.active_tooltip_id = Some(tooltip_id);
 
                 if let Some(old_id) = old_id {
                     debug!(
@@ -230,7 +244,7 @@ impl Bar {
                 }
             }
             Message::CloseTooltip(id) => {
-                if self.active_tooltip_id == Some(id)
+                if self.active_tooltip_id.as_ref().is_some_and(|t| t.id == id)
                     && let Some(window_id) = self.tooltip_window_id.take()
                 {
                     debug!("closing tooltip {}", window_id);
@@ -386,6 +400,7 @@ impl Bar {
         }
     }
 
+    #[inline(always)]
     fn view_bar(&self) -> Element<'_, Message> {
         let mut start_views: Vec<(Element<Message>, usize)> = vec![];
         let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
@@ -502,26 +517,49 @@ impl Bar {
         .into()
     }
 
-    pub fn view(&self, id: Id) -> Element<'_, Message> {
-        if Some(id) == self.id {
-            self.view_bar()
-        } else if Some(id) == self.tooltip_window_id {
-            let content = self
-                .active_tooltip_id
-                .as_ref()
-                .and_then(|id| self.modules.render_tooltip_for_id(id))
-                .unwrap_or_else(|| Column::new().into());
+    #[inline(always)]
+    fn view_tooltip(&self, tooltip_id: &TooltipId) -> Element<'_, Message> {
+        let content = self
+            .modules
+            .render_tooltip_for_id(&tooltip_id.id)
+            .unwrap_or_else(|| Column::new().into());
 
-            Container::new(content)
-                .padding(5)
-                .style(|_theme: &Theme| container::Style {
+        let bounds = tooltip_id.bounds.unwrap_or_default();
+        let mut container =
+            Container::new(content).padding(5).style(|_theme: &Theme| {
+                container::Style {
                     background: Some(Background::Color(
                         *self.config.style.background,
                     )),
                     border: rounded(self.config.style.border_radius),
                     ..Default::default()
-                })
-                .into()
+                }
+            });
+        match self.config.layout.anchor {
+            config::Anchor::Right => {
+                container = Container::new(container).align_right(Length::Fill);
+            }
+            config::Anchor::Bottom => {
+                container = Container::new(container).align_bottom(Length::Fill);
+            }
+            config::Anchor::Top | config::Anchor::Left => {}
+        }
+
+        let pin = iced::widget::pin(container);
+        if self.config.layout.anchor.vertical() {
+            pin.y(bounds.y).into()
+        } else {
+            pin.x(bounds.x).into()
+        }
+    }
+
+    pub fn view(&self, id: Id) -> Element<'_, Message> {
+        if Some(id) == self.id {
+            self.view_bar()
+        } else if Some(id) == self.tooltip_window_id
+            && let Some(tooltip_id) = &self.active_tooltip_id
+        {
+            self.view_tooltip(tooltip_id)
         } else {
             Column::new().into()
         }

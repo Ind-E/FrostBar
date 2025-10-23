@@ -72,6 +72,10 @@ impl Anchor {
     pub fn vertical(self) -> bool {
         matches!(self, Anchor::Left | Anchor::Right)
     }
+
+    pub fn top_left(self) -> bool {
+        matches!(self, Anchor::Left | Anchor::Top)
+    }
 }
 
 #[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
