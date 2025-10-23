@@ -10,6 +10,7 @@ use iced::{
 
 use itertools::Itertools;
 use niri_ipc::{Action, WorkspaceReferenceArg};
+use rustc_hash::FxHashMap;
 
 use crate::{
     Message, ModuleMessage, MouseEvent, config,
@@ -20,33 +21,36 @@ use crate::{
 };
 
 #[derive(Debug, Eq, PartialEq)]
-struct WindowView<'a> {
+struct WindowView {
     id: container::Id,
-    window: &'a Window,
 }
-
-impl<'a> WindowView<'a> {
-    fn new(window: &'a Window, parent_id: &container::Id) -> Self {
-        Self {
-            id: container::Id::new(format!("{}{:?}", window.id, parent_id)),
-            window,
-        }
-    }
-}
-
-// impl<'a> From<&'a Window> for WindowView<'a> {
-//     fn from(window: &'a Window) -> Self {
-//         Self {
-//             id: container::Id::unique(),
-//             window,
-//         }
-//     }
-// }
 
 #[profiling::all_functions]
-impl<'a> WindowView<'a> {
-    fn view(&self, layout: &config::Layout) -> Element<'a, Message> {
-        let icon: Element<'a, Message> = match &self.window.icon {
+impl WindowView {
+    fn new() -> Self {
+        Self {
+            id: container::Id::unique(),
+        }
+    }
+
+    fn render_tooltip<'a>(
+        &self,
+        window: &'a Window,
+    ) -> Option<Element<'a, Message>> {
+        use iced::widget::text::Shaping;
+        Some(
+            Text::new(window.title.clone())
+                .shaping(Shaping::Advanced)
+                .into(),
+        )
+    }
+
+    fn view<'a>(
+        &self,
+        window: &'a Window,
+        layout: &config::Layout,
+    ) -> Element<'a, Message> {
+        let icon: Element<'a, Message> = match &window.icon {
             Some(Icon::Svg(handle)) => {
                 Svg::new(handle.clone()).height(24).width(24).into()
             }
@@ -55,13 +59,11 @@ impl<'a> WindowView<'a> {
             }
             _ => {
                 let container = Container::new(
-                    Text::new(
-                        self.window.title.chars().take(2).collect::<String>(),
-                    )
-                    .size(20)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center(),
+                    Text::new(window.title.chars().take(2).collect::<String>())
+                        .size(20)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center(),
                 )
                 .padding(5);
                 if layout.anchor.vertical() {
@@ -80,22 +82,16 @@ impl<'a> WindowView<'a> {
 
         let mut content = Container::new(MouseArea::new(icon).on_right_press(
             Message::Msg(ModuleMessage::Niri(NiriEvent::Action(
-                Action::FocusWindow { id: self.window.id },
+                Action::FocusWindow { id: window.id },
             ))),
         ))
         .id(self.id.clone());
+
         if layout.anchor.vertical() {
             content = content.center_x(Length::Fill);
         } else {
             content = content.center_y(Length::Fill);
         }
-
-        // let tooltip =
-        //     Text::new(self.window.title.clone()).shaping(Shaping::Advanced);
-        //
-        // styled_tooltip(content, tooltip, layout.anchor)
-
-        //TODO: tooltip for niri window
 
         MouseArea::new(content)
             .on_enter(Message::OpenTooltip(self.id.clone()))
@@ -104,24 +100,28 @@ impl<'a> WindowView<'a> {
     }
 }
 
-struct WorkspaceView<'a> {
-    parent_id: &'a container::Id,
-    workspace: &'a Workspace,
+struct WorkspaceView {
+    window_views: FxHashMap<u64, WindowView>,
 }
 
-impl<'a> WorkspaceView<'a> {
-    fn new(workspace: &'a Workspace, parent_id: &'a container::Id) -> Self {
+impl WorkspaceView {
+    fn new() -> Self {
         Self {
-            parent_id,
-            workspace,
+            window_views: FxHashMap::default(),
         }
     }
-}
 
-#[profiling::all_functions]
-impl<'a> WorkspaceView<'a> {
-    fn view(
+    fn synchronize(&mut self, workspace: &Workspace) {
+        self.window_views
+            .retain(|id, _| workspace.windows.contains_key(id));
+        for id in workspace.windows.keys() {
+            self.window_views.entry(*id).or_insert_with(WindowView::new);
+        }
+    }
+
+    fn view<'a>(
         &self,
+        workspace: &'a Workspace,
         hovered: bool,
         active_style: &config::ContainerStyle,
         hovered_style: &config::ContainerStyle,
@@ -131,14 +131,17 @@ impl<'a> WorkspaceView<'a> {
     ) -> Element<'a, Message> {
         let windows = if layout.anchor.vertical() {
             Container::new(
-                self.workspace.windows.values().sorted_unstable().fold(
-                    Column::new().align_x(Alignment::Center).spacing(5).push(
-                        Text::new(self.workspace.idx as i8 + offset).size(20),
-                    ),
-                    |col, w| {
-                        col.push(
-                            WindowView::new(w, self.parent_id).view(layout),
-                        )
+                workspace.windows.values().sorted_unstable().fold(
+                    Column::new()
+                        .align_x(Alignment::Center)
+                        .spacing(5)
+                        .push(Text::new(workspace.idx as i8 + offset).size(20)),
+                    |col, window| {
+                        if let Some(view) = self.window_views.get(&window.id) {
+                            col.push(view.view(window, layout))
+                        } else {
+                            col
+                        }
                     },
                 ),
             )
@@ -147,19 +150,18 @@ impl<'a> WorkspaceView<'a> {
             .align_x(Alignment::Center)
         } else {
             Container::new(
-                self.workspace.windows.values().sorted_unstable().fold(
+                workspace.windows.values().sorted_unstable().fold(
                     Row::new()
                         .align_y(Alignment::Center)
                         .spacing(5)
                         .padding(5)
-                        .push(
-                            Text::new(self.workspace.idx as i8 + offset)
-                                .size(20),
-                        ),
-                    |col, w| {
-                        col.push(
-                            WindowView::new(w, self.parent_id).view(layout),
-                        )
+                        .push(Text::new(workspace.idx as i8 + offset).size(20)),
+                    |row, window| {
+                        if let Some(view) = self.window_views.get(&window.id) {
+                            row.push(view.view(window, layout))
+                        } else {
+                            row
+                        }
                     },
                 ),
             )
@@ -169,7 +171,7 @@ impl<'a> WorkspaceView<'a> {
         };
 
         let windows = windows.style(workspace_style(
-            self.workspace.is_active,
+            workspace.is_active,
             hovered,
             active_style,
             hovered_style,
@@ -179,39 +181,69 @@ impl<'a> WorkspaceView<'a> {
         MouseArea::new(windows)
             .on_press(Message::Msg(ModuleMessage::Niri(NiriEvent::Action(
                 Action::FocusWorkspace {
-                    reference: WorkspaceReferenceArg::Id(self.workspace.id),
+                    reference: WorkspaceReferenceArg::Id(workspace.id),
                 },
             ))))
             .on_enter(Message::MouseEntered(MouseEvent::Workspace(
-                self.workspace.id,
+                workspace.id,
             )))
-            .on_exit(Message::MouseExited(MouseEvent::Workspace(
-                self.workspace.id,
-            )))
+            .on_exit(Message::MouseExited(MouseEvent::Workspace(workspace.id)))
             .interaction(Interaction::Pointer)
             .into()
     }
 }
 
 pub struct NiriView {
-    id: container::Id,
     config: config::Niri,
     pub position: BarPosition,
-}
-
-impl NiriView {
-    pub fn new(config: config::Niri, position: BarPosition) -> Self {
-        Self {
-            id: container::Id::unique(),
-            config,
-            position,
-        }
-    }
+    workspace_views: FxHashMap<u64, WorkspaceView>,
 }
 
 #[profiling::all_functions]
-impl<'a> NiriView {
-    pub fn view(
+impl NiriView {
+    pub fn new(config: config::Niri, position: BarPosition) -> Self {
+        Self {
+            config,
+            position,
+            workspace_views: FxHashMap::default(),
+        }
+    }
+
+    pub fn synchronize(&mut self, service: &NiriService) {
+        self.workspace_views
+            .retain(|id, _| service.workspaces.contains_key(id));
+
+        for (id, workspace) in &service.workspaces {
+            let ws_view = self
+                .workspace_views
+                .entry(*id)
+                .or_insert_with(WorkspaceView::new);
+            ws_view.synchronize(workspace);
+        }
+    }
+
+    pub fn render_window_tooltip<'a>(
+        &'a self,
+        service: &'a NiriService,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        for (ws_id, ws_view) in &self.workspace_views {
+            for (win_id, win_view) in &ws_view.window_views {
+                if win_view.id == *id {
+                    if let Some(window) = service
+                        .workspaces
+                        .get(ws_id)
+                        .and_then(|ws| ws.windows.get(win_id))
+                    {
+                        return win_view.render_tooltip(window);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn view<'a>(
         &'a self,
         service: &'a NiriService,
         layout: &config::Layout,
@@ -222,18 +254,23 @@ impl<'a> NiriView {
                 .iter()
                 .sorted_by_key(|(_, ws)| ws.idx)
                 .fold(Column::new(), |col, (_, ws)| {
-                    col.push(
-                        WorkspaceView::new(ws, &self.id).view(
-                            service
-                                .hovered_workspace_id
-                                .is_some_and(|id| id == ws.id),
-                            &self.config.workspace_active_style,
-                            &self.config.workspace_hovered_style,
-                            &self.config.workspace_style,
-                            self.config.workspace_offset,
-                            layout,
-                        ),
-                    )
+                    if let Some(ws_view) = self.workspace_views.get(&ws.id) {
+                        col.push(
+                            ws_view.view(
+                                ws,
+                                service
+                                    .hovered_workspace_id
+                                    .is_some_and(|id| id == ws.id),
+                                &self.config.workspace_active_style,
+                                &self.config.workspace_hovered_style,
+                                &self.config.workspace_style,
+                                self.config.workspace_offset,
+                                layout,
+                            ),
+                        )
+                    } else {
+                        col
+                    }
                 })
                 .align_x(Alignment::Center)
                 .spacing(self.config.spacing)
@@ -244,18 +281,23 @@ impl<'a> NiriView {
                 .iter()
                 .sorted_by_key(|(_, ws)| ws.idx)
                 .fold(Row::new(), |row, (_, ws)| {
-                    row.push(
-                        WorkspaceView::new(ws, &self.id).view(
-                            service
-                                .hovered_workspace_id
-                                .is_some_and(|id| id == ws.id),
-                            &self.config.workspace_active_style,
-                            &self.config.workspace_hovered_style,
-                            &self.config.workspace_style,
-                            self.config.workspace_offset,
-                            layout,
-                        ),
-                    )
+                    if let Some(ws_view) = self.workspace_views.get(&ws.id) {
+                        row.push(
+                            ws_view.view(
+                                ws,
+                                service
+                                    .hovered_workspace_id
+                                    .is_some_and(|id| id == ws.id),
+                                &self.config.workspace_active_style,
+                                &self.config.workspace_hovered_style,
+                                &self.config.workspace_style,
+                                self.config.workspace_offset,
+                                layout,
+                            ),
+                        )
+                    } else {
+                        row
+                    }
                 })
                 .align_y(Alignment::Center)
                 .spacing(self.config.spacing)

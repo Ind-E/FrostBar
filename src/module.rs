@@ -137,6 +137,9 @@ impl ModuleDyn for Module {
                     None
                 }
             }),
+            Module::Niri { service, views } => views
+                .iter()
+                .find_map(|v| v.render_window_tooltip(service, id)),
             _ => None,
         }
     }
@@ -353,10 +356,14 @@ impl Modules {
                 }
             }
             ModuleMessage::Niri(event) => {
-                if let Some(Module::Niri { service, .. }) =
+                if let Some(Module::Niri { service, views }) =
                     self.inner.get_mut("Niri")
                 {
-                    return service.handle_event(event);
+                    let task = service.handle_event(event);
+                    for view in views.iter_mut() {
+                        view.synchronize(service);
+                    }
+                    return task;
                 }
             }
             ModuleMessage::CavaUpdate(event) => {
