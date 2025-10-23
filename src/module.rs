@@ -146,33 +146,6 @@ pub struct Modules {
     inner: FxHashMap<&'static str, Module>,
 }
 
-macro_rules! impl_handle_event_for_modules {
-    (
-        // The first argument is the match target (e.g., `module_message`)
-        $self:ident, $event:ident,
-        // The rest of the arguments are the dispatch mapping:
-        // MessageVariant(payload) => ModuleVariant
-        $( $msg_variant:ident ( $payload:ident ) => $mod_variant:ident ),*
-    ) => {
-        /// Handles a standard `ModuleMessage` by dispatching it to the
-        /// correct service's `handle_event` method.
-        pub fn handle_event(&mut $self, $event: ModuleMessage) -> iced::Task<Message> {
-            match $event {
-                $(
-                    ModuleMessage::$msg_variant($payload) => {
-                        // Find the module by its variant name (e.g., "Time")
-                        if let Some(Module::$mod_variant { service, .. }) = $self.inner.get_mut(stringify!($mod_variant)) {
-                            return service.handle_event($payload);
-                        }
-                    }
-                ),*
-            }
-            // If the module wasn't found (e.g., not in config), do nothing.
-            iced::Task::none()
-        }
-    };
-}
-
 impl Modules {
     pub fn new(
         icon_cache: Arc<Mutex<IconCache>>,
@@ -360,12 +333,51 @@ impl Modules {
         Task::none()
     }
 
-    impl_handle_event_for_modules! {
-        self, module_message,
-        Tick(time) => Time,
-        UpdateBattery(event) => Battery,
-        Niri(event) => Niri,
-        CavaUpdate(event) => Cava,
-        Mpris(event) => Mpris
+    pub fn handle_event(
+        &mut self,
+        module_message: ModuleMessage,
+    ) -> iced::Task<Message> {
+        match module_message {
+            ModuleMessage::Tick(time) => {
+                if let Some(Module::Time { service, .. }) =
+                    self.inner.get_mut("Time")
+                {
+                    return service.handle_event(time);
+                }
+            }
+            ModuleMessage::UpdateBattery(event) => {
+                if let Some(Module::Battery { service, .. }) =
+                    self.inner.get_mut("Battery")
+                {
+                    return service.handle_event(event);
+                }
+            }
+            ModuleMessage::Niri(event) => {
+                if let Some(Module::Niri { service, .. }) =
+                    self.inner.get_mut("Niri")
+                {
+                    return service.handle_event(event);
+                }
+            }
+            ModuleMessage::CavaUpdate(event) => {
+                if let Some(Module::Cava { service, .. }) =
+                    self.inner.get_mut("Cava")
+                {
+                    return service.handle_event(event);
+                }
+            }
+            ModuleMessage::Mpris(event) => {
+                if let Some(Module::Mpris { service, views }) =
+                    self.inner.get_mut("Mpris")
+                {
+                    let task = service.handle_event(event);
+                    for view in views.iter_mut() {
+                        view.synchronize(service);
+                    }
+                    return task;
+                }
+            }
+        }
+        iced::Task::none()
     }
 }

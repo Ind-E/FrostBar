@@ -2,6 +2,7 @@ use iced::{
     Subscription,
     futures::{self, FutureExt},
 };
+use rustc_hash::FxHashMap;
 use std::io;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -9,7 +10,6 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     sync::{Arc, Mutex},
 };
 use tracing::error;
@@ -71,7 +71,7 @@ pub struct Workspace {
     pub idx: u8,
     pub id: u64,
     pub is_active: bool,
-    pub windows: HashMap<u64, Window>,
+    pub windows: FxHashMap<u64, Window>,
 }
 
 #[profiling::function]
@@ -109,8 +109,8 @@ pub enum NiriEvent {
 }
 
 pub struct NiriService {
-    pub workspaces: HashMap<u64, Workspace>,
-    pub windows: HashMap<u64, niri_ipc::Window>,
+    pub workspaces: FxHashMap<u64, Workspace>,
+    pub windows: FxHashMap<u64, niri_ipc::Window>,
     pub hovered_workspace_id: Option<u64>,
     pub icon_cache: Arc<Mutex<IconCache>>,
     pub sender: Option<mpsc::Sender<Request>>,
@@ -213,8 +213,8 @@ impl NiriService {
         icon_theme: Option<String>,
     ) -> Self {
         Self {
-            workspaces: HashMap::new(),
-            windows: HashMap::new(),
+            workspaces: FxHashMap::default(),
+            windows: FxHashMap::default(),
             hovered_workspace_id: None,
             icon_cache,
             icon_theme,

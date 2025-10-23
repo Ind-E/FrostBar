@@ -6,6 +6,7 @@ use iced::{
         text::Shaping,
     },
 };
+use rustc_hash::FxHashMap;
 
 use crate::{
     Message,
@@ -18,6 +19,7 @@ use crate::{
 pub struct MprisView {
     config: config::Mpris,
     pub position: BarPosition,
+    player_views: FxHashMap<String, MprisPlayerView>,
 }
 
 #[profiling::all_functions]
@@ -30,26 +32,40 @@ impl<'a> MprisView {
         if layout.anchor.vertical() {
             service
                 .players
-                .values()
-                .fold(Column::new().spacing(5).padding(5), |col, player| {
-                    col.push(MprisPlayerView::new().view(
-                        player,
-                        &self.config,
-                        layout,
-                    ))
-                })
+                .iter()
+                .fold(
+                    Column::new().spacing(5).padding(5),
+                    |col, (name, player)| {
+                        if let Some(player_view) = self.player_views.get(name) {
+                            col.push(player_view.view(
+                                player,
+                                &self.config,
+                                layout,
+                            ))
+                        } else {
+                            col
+                        }
+                    },
+                )
                 .into()
         } else {
             service
                 .players
-                .values()
-                .fold(Row::new().spacing(5).padding(5), |col, player| {
-                    col.push(MprisPlayerView::new().view(
-                        player,
-                        &self.config,
-                        layout,
-                    ))
-                })
+                .iter()
+                .fold(
+                    Row::new().spacing(5).padding(5),
+                    |row, (name, player)| {
+                        if let Some(player_view) = self.player_views.get(name) {
+                            row.push(player_view.view(
+                                player,
+                                &self.config,
+                                layout,
+                            ))
+                        } else {
+                            row
+                        }
+                    },
+                )
                 .into()
         }
     }
@@ -59,20 +75,37 @@ impl<'a> MprisView {
         service: &'a MprisService,
         id: &container::Id,
     ) -> Option<Element<'a, Message>> {
-        // service.players.values().find_map(|p| {
-        //     if p.id == *id {
-        //         p.render_tooltip()
-        //     } else {
-        //         None
-        //     }
-        // })
-        None
+        self.player_views.iter().find_map(|(name, view)| {
+            if view.id == *id {
+                service
+                    .players
+                    .get(name)
+                    .and_then(|p| view.render_tooltip(p))
+            } else {
+                None
+            }
+        })
     }
 }
 
 impl MprisView {
     pub fn new(config: config::Mpris, position: BarPosition) -> Self {
-        Self { config, position }
+        Self {
+            config,
+            position,
+            player_views: FxHashMap::default(),
+        }
+    }
+
+    pub fn synchronize(&mut self, service: &MprisService) {
+        self.player_views
+            .retain(|name, _| service.players.contains_key(name));
+
+        for name in service.players.keys() {
+            self.player_views
+                .entry(name.clone())
+                .or_insert_with(MprisPlayerView::new);
+        }
     }
 }
 
@@ -187,9 +220,13 @@ impl<'a> MprisPlayerView {
             });
         }
 
-        let content =
-            Container::new(mouse_area.interaction(Interaction::Pointer))
-                .id(self.id.clone());
+        let content = Container::new(
+            mouse_area
+                .interaction(Interaction::Pointer)
+                .on_enter(Message::OpenTooltip(self.id.clone()))
+                .on_exit(Message::CloseTooltip(self.id.clone())),
+        )
+        .id(self.id.clone());
 
         content.into()
     }

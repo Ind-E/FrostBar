@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use iced::{
     Color, Subscription,
     advanced::graphics::image::image_rs,
     futures::{StreamExt, stream::select_all},
     widget::image,
 };
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use tokio::sync::mpsc;
 use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
@@ -19,7 +21,7 @@ use crate::{
 };
 
 pub struct MprisService {
-    pub players: HashMap<String, MprisPlayer>,
+    pub players: FxHashMap<String, MprisPlayer>,
 }
 
 #[profiling::all_functions]
@@ -199,7 +201,7 @@ impl Service for MprisService {
 impl MprisService {
     pub fn new() -> Self {
         Self {
-            players: HashMap::new(),
+            players: FxHashMap::default(),
         }
     }
 }

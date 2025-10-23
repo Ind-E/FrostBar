@@ -21,18 +21,27 @@ use crate::{
 
 #[derive(Debug, Eq, PartialEq)]
 struct WindowView<'a> {
-    container_id: container::Id,
+    id: container::Id,
     window: &'a Window,
 }
 
-impl<'a> From<&'a Window> for WindowView<'a> {
-    fn from(window: &'a Window) -> Self {
+impl<'a> WindowView<'a> {
+    fn new(window: &'a Window, parent_id: &container::Id) -> Self {
         Self {
-            container_id: container::Id::unique(),
+            id: container::Id::new(format!("{}{:?}", window.id, parent_id)),
             window,
         }
     }
 }
+
+// impl<'a> From<&'a Window> for WindowView<'a> {
+//     fn from(window: &'a Window) -> Self {
+//         Self {
+//             id: container::Id::unique(),
+//             window,
+//         }
+//     }
+// }
 
 #[profiling::all_functions]
 impl<'a> WindowView<'a> {
@@ -74,7 +83,7 @@ impl<'a> WindowView<'a> {
                 Action::FocusWindow { id: self.window.id },
             ))),
         ))
-        .id(self.container_id.clone());
+        .id(self.id.clone());
         if layout.anchor.vertical() {
             content = content.center_x(Length::Fill);
         } else {
@@ -89,19 +98,23 @@ impl<'a> WindowView<'a> {
         //TODO: tooltip for niri window
 
         MouseArea::new(content)
-            // .on_enter(Message::OpenTooltip(self.container_id.clone()))
-            // .on_exit(Message::CloseTooltip(self.container_id.clone()))
+            .on_enter(Message::OpenTooltip(self.id.clone()))
+            .on_exit(Message::CloseTooltip(self.id.clone()))
             .into()
     }
 }
 
 struct WorkspaceView<'a> {
+    parent_id: &'a container::Id,
     workspace: &'a Workspace,
 }
 
-impl<'a> From<&'a Workspace> for WorkspaceView<'a> {
-    fn from(workspace: &'a Workspace) -> Self {
-        Self { workspace }
+impl<'a> WorkspaceView<'a> {
+    fn new(workspace: &'a Workspace, parent_id: &'a container::Id) -> Self {
+        Self {
+            parent_id,
+            workspace,
+        }
     }
 }
 
@@ -124,7 +137,7 @@ impl<'a> WorkspaceView<'a> {
                     ),
                     |col, w| {
                         col.push(
-                            <&Window as Into<WindowView>>::into(w).view(layout),
+                            WindowView::new(w, self.parent_id).view(layout),
                         )
                     },
                 ),
@@ -145,7 +158,7 @@ impl<'a> WorkspaceView<'a> {
                         ),
                     |col, w| {
                         col.push(
-                            <&Window as Into<WindowView>>::into(w).view(layout),
+                            WindowView::new(w, self.parent_id).view(layout),
                         )
                     },
                 ),
@@ -181,20 +194,25 @@ impl<'a> WorkspaceView<'a> {
 }
 
 pub struct NiriView {
+    id: container::Id,
     config: config::Niri,
     pub position: BarPosition,
 }
 
 impl NiriView {
     pub fn new(config: config::Niri, position: BarPosition) -> Self {
-        Self { config, position }
+        Self {
+            id: container::Id::unique(),
+            config,
+            position,
+        }
     }
 }
 
 #[profiling::all_functions]
 impl<'a> NiriView {
     pub fn view(
-        &self,
+        &'a self,
         service: &'a NiriService,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
@@ -205,7 +223,7 @@ impl<'a> NiriView {
                 .sorted_by_key(|(_, ws)| ws.idx)
                 .fold(Column::new(), |col, (_, ws)| {
                     col.push(
-                        <&Workspace as Into<WorkspaceView>>::into(ws).view(
+                        WorkspaceView::new(ws, &self.id).view(
                             service
                                 .hovered_workspace_id
                                 .is_some_and(|id| id == ws.id),
@@ -227,7 +245,7 @@ impl<'a> NiriView {
                 .sorted_by_key(|(_, ws)| ws.idx)
                 .fold(Row::new(), |row, (_, ws)| {
                     row.push(
-                        <&Workspace as Into<WorkspaceView>>::into(ws).view(
+                        WorkspaceView::new(ws, &self.id).view(
                             service
                                 .hovered_workspace_id
                                 .is_some_and(|id| id == ws.id),
