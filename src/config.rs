@@ -12,7 +12,7 @@ use iced::{Color, color};
 use knus::{DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError};
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::constants::BAR_NAMESPACE;
 
@@ -101,7 +101,7 @@ impl Default for Layout {
 pub struct Style {
     #[knus(child, unwrap(argument), default = Self::default().border_radius)]
     pub border_radius: u16,
-    #[knus(child, default = Self::default().background)]
+    #[knus(child, unwrap(argument), default = Self::default().background)]
     pub background: ConfigColor,
     #[knus(child, unwrap(argument), default)]
     pub icon_theme: Option<String>,
@@ -115,6 +115,20 @@ impl Default for Style {
             icon_theme: None,
         }
     }
+}
+
+#[derive(knus::Decode, Debug, Default)]
+struct Colors {
+    #[knus(children, default)]
+    pub vars: Vec<ColorVariable>,
+}
+
+#[derive(knus::Decode, Debug)]
+struct ColorVariable {
+    #[knus(node_name)]
+    pub name: String,
+    #[knus(argument)]
+    pub color: ConfigColor,
 }
 
 #[derive(knus::Decode, Debug)]
@@ -132,7 +146,7 @@ pub struct Cava {
     #[knus(child, unwrap(argument), default = Self::default().spacing)]
     pub spacing: f32,
 
-    #[knus(child, default = Self::default().color)]
+    #[knus(child, unwrap(argument), default = Self::default().color)]
     pub color: ConfigColor,
 
     #[knus(child, unwrap(argument), default = Self::default().dynamic_color)]
@@ -162,7 +176,7 @@ pub struct Battery {
     #[knus(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
 
-    #[knus(child, default = Self::default().charging_color)]
+    #[knus(child, unwrap(argument), default = Self::default().charging_color)]
     pub charging_color: ConfigColor,
 
     #[knus(child, default)]
@@ -467,9 +481,9 @@ pub struct Command {
 
 #[derive(knus::Decode, Debug, Clone, Default)]
 pub struct ContainerStyle {
-    #[knus(child)]
+    #[knus(child, unwrap(argument))]
     pub text_color: Option<ConfigColor>,
-    #[knus(child)]
+    #[knus(child, unwrap(argument))]
     pub background: Option<ConfigColor>,
     #[knus(child)]
     pub border: Option<ConfigBorder>,
@@ -479,7 +493,7 @@ pub struct ContainerStyle {
 
 #[derive(knus::Decode, Debug, Clone, Default)]
 pub struct ConfigBorder {
-    #[knus(child)]
+    #[knus(child, unwrap(argument))]
     pub color: Option<ConfigColor>,
     #[knus(child, unwrap(argument), default)]
     pub width: Option<f32>,
@@ -667,6 +681,33 @@ where
     }
 }
 
+impl Colors {
+    pub fn load(path: &Path) -> miette::Result<Self> {
+        let contents = fs::read_to_string(path)
+            .into_diagnostic()
+            .with_context(|| format!("error reading {}", path.display()))?;
+
+        let colors = Self::parse(
+            path.file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or("config.kdl"),
+            &contents,
+        )?;
+
+        Ok(colors)
+    }
+
+    pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
+        match knus::parse::<Colors>(filename, text) {
+            Ok(colors) => {
+                info!("Successfully parsed colors");
+                Ok(colors)
+            }
+            Err(e) => Err(miette::Report::new(e)),
+        }
+    }
+}
+
 #[profiling::all_functions]
 impl Config {
     pub fn load(path: &Path) -> miette::Result<Self> {
@@ -753,6 +794,33 @@ impl Config {
         let config_dir = project_dir.config_dir().to_path_buf();
 
         let config_path = config_dir.join("config.kdl");
+
+        // let colors_path = config_dir.join("colors.kdl");
+
+        // let colors = {
+        //     match Colors::load(&colors_path) {
+        //         Err(e) => {
+        //             if let Err(e) = Notification::new()
+        //                 .summary(BAR_NAMESPACE)
+        //                 .body(
+        //                     "Failed to parse colors file, custom colors will be rendered as red",
+        //                 )
+        //                 .show()
+        //             {
+        //                 error!("{e}");
+        //             }
+        //             error!(
+        //                 "Failed to parse colors file, custom colors will be rendered as red",
+        //             );
+        //             error!("{e:?}");
+        //             Colors::default()
+        //         }
+        //         Ok(colors) => colors,
+        //     }
+        // };
+        //
+        // println!("{colors:?}");
+
         let config = {
             match Config::load_or_create(&config_path) {
                 Err(e) => {
@@ -803,104 +871,36 @@ impl From<Color> for ConfigColor {
     }
 }
 
-#[derive(knus::Decode)]
-struct ColorRgba {
-    #[knus(argument)]
-    r: u8,
-    #[knus(argument)]
-    g: u8,
-    #[knus(argument)]
-    b: u8,
-    #[knus(argument)]
-    a: Option<f32>,
-}
-
-impl<S> knus::Decode<S> for ConfigColor
+impl<S> knus::DecodeScalar<S> for ConfigColor
 where
     S: knus::traits::ErrorSpan,
 {
-    fn decode_node(
-        node: &knus::ast::SpannedNode<S>,
+    fn type_check(
+        type_name: &Option<knus::span::Spanned<knus::ast::TypeName, S>>,
         ctx: &mut knus::decode::Context<S>,
-    ) -> Result<Self, DecodeError<S>> {
-        // Check for unexpected type name.
-        if let Some(type_name) = &node.type_name {
+    ) {
+        if let Some(type_name) = &type_name {
             ctx.emit_error(DecodeError::unexpected(
                 type_name,
                 "type name",
                 "no type name expected for this node",
             ));
         }
+    }
 
-        // Get the first argument.
-        let mut iter_args = node.arguments.iter();
-        let val = iter_args.next().ok_or_else(|| {
-            DecodeError::missing(node, "additional argument is required")
-        })?;
-
-        // Check for unexpected type name.
-        if let Some(typ) = &val.type_name {
-            ctx.emit_error(DecodeError::TypeName {
-                span: typ.span().clone(),
-                found: Some((**typ).clone()),
-                expected: knus::errors::ExpectedType::no_type(),
-                rust_type: "str",
-            });
-        }
-
-        // Check the argument type.
-        let rv = match *val.literal {
-            // If it's a string, use parse.
+    fn raw_decode(
+        value: &knus::span::Spanned<Literal, S>,
+        _ctx: &mut knus::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        let color = match **value {
             knus::ast::Literal::String(ref s) => {
                 Color::parse(s).ok_or_else(|| {
-                    DecodeError::conversion(&val.literal, "invalid hex literal")
+                    DecodeError::conversion(&value, "invalid hex literal")
                 })
             }
-            // Otherwise, fall back to the 4-argument RGBA form.
-            _ => {
-                return ColorRgba::decode_node(node, ctx).map(
-                    |ColorRgba { r, g, b, a }| {
-                        if let Some(a) = a {
-                            Color::from_rgba8(r, g, b, a).into()
-                        } else {
-                            Color::from_rgb8(r, g, b).into()
-                        }
-                    },
-                );
-            }
+            _ => Err(DecodeError::conversion(&value, "invalid hex literal")),
         }?;
 
-        // Check for unexpected following arguments.
-        if let Some(val) = iter_args.next() {
-            ctx.emit_error(DecodeError::unexpected(
-                &val.literal,
-                "argument",
-                "unexpected argument",
-            ));
-        }
-
-        // Check for unexpected properties and children.
-        for name in node.properties.keys() {
-            ctx.emit_error(DecodeError::unexpected(
-                name,
-                "property",
-                format!("unexpected property `{}`", name.escape_default()),
-            ));
-        }
-        node.children
-            .as_deref()
-            .into_iter()
-            .flatten()
-            .for_each(|child| {
-                ctx.emit_error(DecodeError::unexpected(
-                    child,
-                    "node",
-                    format!(
-                        "unexpected node `{}`",
-                        child.node_name.escape_default()
-                    ),
-                ));
-            });
-        Ok(rv.into())
+        Ok(color.into())
     }
 }
