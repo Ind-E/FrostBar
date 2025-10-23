@@ -229,14 +229,13 @@ impl NiriView {
     ) -> Option<Element<'a, Message>> {
         for (ws_id, ws_view) in &self.workspace_views {
             for (win_id, win_view) in &ws_view.window_views {
-                if win_view.id == *id {
-                    if let Some(window) = service
+                if win_view.id == *id
+                    && let Some(window) = service
                         .workspaces
                         .get(ws_id)
                         .and_then(|ws| ws.windows.get(win_id))
-                    {
-                        return win_view.render_tooltip(window);
-                    }
+                {
+                    return win_view.render_tooltip(window);
                 }
             }
         }

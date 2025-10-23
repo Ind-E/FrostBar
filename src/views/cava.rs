@@ -39,11 +39,8 @@ impl<'a> CavaView {
                 .height(Length::Fill)
         };
 
-        let container = container_style(
-            Container::new(canvas),
-            &self.config.style,
-            &layout,
-        );
+        let container =
+            container_style(Container::new(canvas), &self.config.style, layout);
 
         mouse_binds(container, &self.config.binds, None)
     }

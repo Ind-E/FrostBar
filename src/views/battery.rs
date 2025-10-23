@@ -43,13 +43,13 @@ impl<'a> BatteryView {
         let icon_text = if is_charging {
             Text::new(icon)
                 .size(self.config.icon_size)
-                .color(&self.config.charging_color)
+                .color(*self.config.charging_color)
         } else {
             Text::new(icon).size(self.config.icon_size)
         };
 
         let mut icon_widget = Container::new(icon_text);
-        icon_widget = container_style(icon_widget, &self.config.style, &layout)
+        icon_widget = container_style(icon_widget, &self.config.style, layout)
             .id(self.id.clone());
 
         if layout.anchor.vertical() {

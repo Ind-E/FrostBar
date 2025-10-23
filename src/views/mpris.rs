@@ -141,7 +141,7 @@ impl<'a> MprisPlayerView {
                     .center(),
             );
             let container =
-                container_style(container, &config.placeholder_style, &layout);
+                container_style(container, &config.placeholder_style, layout);
             if layout.anchor.vertical() {
                 container
                     .center_x(Length::Fill)

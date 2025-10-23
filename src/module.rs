@@ -140,7 +140,7 @@ impl ModuleDyn for Module {
             Module::Niri { service, views } => views
                 .iter()
                 .find_map(|v| v.render_window_tooltip(service, id)),
-            _ => None,
+            Module::Cava { .. } => None,
         }
     }
 }

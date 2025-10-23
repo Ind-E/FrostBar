@@ -3,7 +3,7 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
 use iced::widget::{

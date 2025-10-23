@@ -1,5 +1,5 @@
 use iced::{
-    Background, Color, Element, Padding, Theme,
+    Background, Color, Element, Theme,
     padding::{left, top},
     widget::{Container, Tooltip, container, tooltip::Position},
 };
@@ -50,14 +50,14 @@ pub fn workspace_style<'a>(
 ) -> container::StyleFn<'a, Theme> {
     let mut style = container::Style::default();
     if let Some(text_color) = &base_style.text_color {
-        style.text_color = Some(text_color.into());
+        style.text_color = Some(**text_color);
     }
     if let Some(background) = &base_style.background {
-        style.background = Some(Background::Color(background.into()));
+        style.background = Some(Background::Color(**background));
     }
     if let Some(border) = &base_style.border {
         if let Some(color) = &border.color {
-            style.border.color = color.into();
+            style.border.color = **color;
         }
         if let Some(width) = border.width {
             style.border.width = width;
@@ -68,15 +68,15 @@ pub fn workspace_style<'a>(
     }
     if hovered {
         if let Some(text_color) = &hovered_style.text_color {
-            style.text_color = Some(text_color.into());
+            style.text_color = Some(**text_color);
         }
         if let Some(background) = &hovered_style.background {
-            style.background = Some(Background::Color(background.into()));
+            style.background = Some(Background::Color(**background));
         }
 
         if let Some(border) = &hovered_style.border {
             if let Some(color) = &border.color {
-                style.border.color = color.into();
+                style.border.color = **color;
             }
             if let Some(width) = border.width {
                 style.border.width = width;
@@ -88,15 +88,15 @@ pub fn workspace_style<'a>(
     }
     if active {
         if let Some(text_color) = &active_style.text_color {
-            style.text_color = Some(text_color.into());
+            style.text_color = Some(**text_color);
         }
         if let Some(background) = &active_style.background {
-            style.background = Some(Background::Color(background.into()));
+            style.background = Some(Background::Color(**background));
         }
 
         if let Some(border) = &active_style.border {
             if let Some(color) = &border.color {
-                style.border.color = color.into();
+                style.border.color = **color;
             }
             if let Some(width) = border.width {
                 style.border.width = width;
@@ -115,18 +115,15 @@ pub fn container_style<'a>(
     layout: &'a config::Layout,
 ) -> Container<'a, Message> {
     let retval = container.style(move |_| container::Style {
-        text_color: style.text_color.as_ref().map(Into::into),
-        background: style
-            .background
-            .as_ref()
-            .map(|b| Background::Color(b.into())),
+        text_color: style.text_color.as_ref().map(|x| **x),
+        background: style.background.as_ref().map(|b| Background::Color(**b)),
         border: style.border.clone().unwrap_or_default().into(),
         ..Default::default()
     });
     let padding = style.padding.unwrap_or(0f32);
     if layout.anchor.vertical() {
-        retval.padding(top(padding).bottom(padding)).into()
+        retval.padding(top(padding).bottom(padding))
     } else {
-        retval.padding(left(padding).right(padding)).into()
+        retval.padding(left(padding).right(padding))
     }
 }

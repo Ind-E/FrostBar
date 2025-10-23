@@ -487,7 +487,7 @@ impl From<ConfigBorder> for iced::Border {
     fn from(border: ConfigBorder) -> Self {
         let default_border = iced::Border::default();
         iced::Border {
-            color: border.color.unwrap_or(default_border.color.into()).into(),
+            color: (*border.color.unwrap_or(default_border.color.into())),
             width: border.width.unwrap_or(default_border.width),
             radius: match border.radius {
                 Some(ConfigRadius::All(r)) => iced::border::radius(r),
@@ -790,18 +790,6 @@ impl Deref for ConfigColor {
 impl DerefMut for ConfigColor {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
-    }
-}
-
-impl From<&ConfigColor> for Color {
-    fn from(color: &ConfigColor) -> Self {
-        color.inner
-    }
-}
-
-impl From<ConfigColor> for Color {
-    fn from(color: ConfigColor) -> Self {
-        color.inner
     }
 }
 
