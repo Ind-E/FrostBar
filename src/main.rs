@@ -149,6 +149,7 @@ pub enum ModuleMessage {
     Niri(NiriEvent),
     CavaUpdate(Option<String>),
     Mpris(MprisEvent),
+    SynchronizeAll,
 }
 
 pub struct Bar {
@@ -293,6 +294,9 @@ impl Bar {
                                                 == new_config.layout
                                             {
                                                 self.config = new_config;
+                                                return Task::done(Message::Msg(
+                                                    ModuleMessage::SynchronizeAll,
+                                                ));
                                             } else if let Some(id) = self.id {
                                                 self.config = new_config;
                                                 let close =
@@ -303,7 +307,7 @@ impl Bar {
                                                 );
                                                 self.id = Some(id);
                                                 return Task::batch([
-                                                    close, open,
+                                                    close, open, Task::done(Message::Msg(ModuleMessage::SynchronizeAll))
                                                 ]);
                                             }
                                         }
@@ -360,6 +364,9 @@ impl Bar {
 
                                 if self.config.layout == new_config.layout {
                                     self.config = new_config;
+                                    return Task::done(Message::Msg(
+                                        ModuleMessage::SynchronizeAll,
+                                    ));
                                 } else if let Some(id) = self.id {
                                     self.config = new_config;
                                     let close = iced::window::close(id);
@@ -368,7 +375,13 @@ impl Bar {
                                         self.monitor_size.unwrap(),
                                     );
                                     self.id = Some(id);
-                                    return Task::batch([close, open]);
+                                    return Task::batch([
+                                        close,
+                                        open,
+                                        Task::done(Message::Msg(
+                                            ModuleMessage::SynchronizeAll,
+                                        )),
+                                    ]);
                                 }
                             }
                             Err(e) => {

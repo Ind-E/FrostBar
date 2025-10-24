@@ -384,6 +384,23 @@ impl Modules {
                     return task;
                 }
             }
+            ModuleMessage::SynchronizeAll => {
+                if let Some(Module::Niri { service, views }) =
+                    self.inner.get_mut("Niri")
+                {
+                    for view in views.iter_mut() {
+                        view.synchronize(service);
+                    }
+                }
+
+                if let Some(Module::Mpris { service, views }) =
+                    self.inner.get_mut("Mpris")
+                {
+                    for view in views.iter_mut() {
+                        view.synchronize(service);
+                    }
+                }
+            }
         }
         iced::Task::none()
     }
