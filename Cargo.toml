@@ -28,6 +28,7 @@ itertools = { version = "0.14.0", default-features = false, features = [
     "use_alloc",
 ] }
 knus = "3.3.1"
+linicon = "2.3.0"
 miette = { version = "7.6.0", features = ["fancy-no-backtrace"] }
 niri-ipc = { git = "https://github.com/YaLTeR/niri/", branch = "main" }
 notify-rust = "4.11.7"

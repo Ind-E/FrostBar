@@ -150,10 +150,7 @@ pub struct Modules {
 }
 
 impl Modules {
-    pub fn new(
-        icon_cache: Arc<Mutex<IconCache>>,
-        icon_theme: Option<String>,
-    ) -> Self {
+    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
         let mut modules = FxHashMap::default();
 
         modules.insert(
@@ -188,7 +185,7 @@ impl Modules {
         modules.insert(
             "Niri",
             Module::Niri {
-                service: NiriService::new(icon_cache, icon_theme),
+                service: NiriService::new(icon_cache),
                 views: Vec::new(),
             },
         );

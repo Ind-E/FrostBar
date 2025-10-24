@@ -50,31 +50,34 @@ impl WindowView {
         window: &'a Window,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
+        let icon_size = layout.width as f32 * 0.7;
+        let placehdoler_text_size = icon_size * 0.6;
         let icon: Element<'a, Message> = match &window.icon {
-            Some(Icon::Svg(handle)) => {
-                Svg::new(handle.clone()).height(24).width(24).into()
-            }
-            Some(Icon::Raster(handle)) => {
-                Image::new(handle.clone()).height(24).width(24).into()
-            }
+            Some(Icon::Svg(handle)) => Svg::new(handle.clone())
+                .height(icon_size)
+                .width(icon_size)
+                .into(),
+            Some(Icon::Raster(handle)) => Image::new(handle.clone())
+                .height(icon_size)
+                .width(icon_size)
+                .into(),
             _ => {
                 let container = Container::new(
                     Text::new(window.title.chars().take(2).collect::<String>())
-                        .size(20)
+                        .size(placehdoler_text_size)
                         .width(Length::Fill)
                         .height(Length::Fill)
                         .center(),
-                )
-                .padding(5);
+                );
                 if layout.anchor.vertical() {
                     container
                         .center_x(Length::Fill)
-                        .height(layout.width - 10)
+                        .height(icon_size)
                         .into()
                 } else {
                     container
                         .center_y(Length::Fill)
-                        .width(layout.width - 10)
+                        .width(icon_size)
                         .into()
                 }
             }

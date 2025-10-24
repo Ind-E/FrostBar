@@ -31,6 +31,7 @@ impl Service for MprisService {
         let (yield_tx, yield_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {
+            profiling::register_thread!("mpris watcher");
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {
@@ -100,7 +101,6 @@ impl Service for MprisService {
                             }
                         }
                     }
-
                 }
             }
 

@@ -170,8 +170,7 @@ impl Bar {
     pub fn new(mut config: Config, path: ConfigPath) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
-        let mut modules =
-            Modules::new(icon_cache, config.style.icon_theme.clone());
+        let mut modules = Modules::new(icon_cache);
         modules.update_from_config(&mut config);
 
         let (dummy_id, open_dummy) = open_dummy_window();

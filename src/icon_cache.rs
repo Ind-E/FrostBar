@@ -1,7 +1,7 @@
-use freedesktop_icons::{default_theme_gtk, lookup};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 use tracing::{debug, warn};
 
@@ -14,6 +14,9 @@ use iced::widget::{
 const ICON_SIZE: u16 = 48;
 const ICON_SCALE: u16 = 2;
 
+static ICON_THEME: LazyLock<Option<String>> =
+    LazyLock::new(|| linicon::get_system_theme());
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Icon {
     Svg(svg::Handle),
@@ -21,72 +24,63 @@ pub enum Icon {
 }
 
 #[profiling::function]
-pub fn client_icon_path(
-    app_id: &str,
-    icon_theme: Option<&str>,
-) -> Option<PathBuf> {
-    if let Some(path) = find_icon_from_desktop_file(app_id, icon_theme) {
-        debug!("found icon from desktop file");
-        Some(path)
-    } else if let Some(path) = try_icon_themes(app_id, icon_theme) {
-        debug!("found icon from app id");
-        Some(path)
-    } else {
-        warn!("icon not found for `{app_id}`");
-        None
-    }
+pub fn find_icon_path(app_id: &str) -> Option<PathBuf> {
+    let icon_name =
+        if let Some(icon_from_desktop_file) = from_desktop_file(app_id) {
+            icon_from_desktop_file
+        } else {
+            app_id.to_owned()
+        };
+
+    icon_path_from_name(&icon_name)
 }
 
-fn find_icon_from_desktop_file(
-    app_id: &str,
-    icon_theme: Option<&str>,
-) -> Option<PathBuf> {
-    for path in default_paths().chain(std::iter::once("hi".into())) {
+#[profiling::function]
+fn from_desktop_file(app_id: &str) -> Option<String> {
+    for path in default_paths() {
         let desktop_file_path = path.join(format!("{app_id}.desktop"));
 
         if let Ok(entry) =
             DesktopEntry::from_path(&desktop_file_path, None::<&[&str]>)
-            && let Some(icon_path) = entry
-                .icon()
-                .and_then(|name| try_icon_themes(name, icon_theme))
         {
-            return Some(icon_path);
+            return entry
+                .icon()
+                .and_then(|icon_name| Some(icon_name.to_owned()));
         }
     }
     None
 }
 
-fn try_icon_themes(
-    icon_path: &str,
-    icon_theme: Option<&str>,
-) -> Option<PathBuf> {
-    if let Some(theme) = icon_theme
-        && let Some(icon) = lookup(icon_path)
-            .with_theme(theme)
+#[profiling::function]
+fn icon_path_from_name(icon_path: &str) -> Option<PathBuf> {
+    if let Some(Ok(icon)) = linicon::lookup_icon(icon_path)
+        .with_size(ICON_SIZE)
+        .with_scale(ICON_SCALE)
+        .next()
+    {
+        debug!("linicon");
+        return Some(icon.path);
+    } else if let Some(theme) = &*ICON_THEME
+        && let Some(icon) = freedesktop_icons::lookup(icon_path)
+            .with_theme(&theme)
             .with_size(ICON_SIZE)
             .with_scale(ICON_SCALE)
             .find()
     {
         return Some(icon);
-    } else if let Some(theme) = default_theme_gtk()
-        && let Some(icon) = lookup(icon_path)
-            .with_theme(&theme)
-            .with_size(48)
-            .with_scale(2)
-            .find()
-    {
-        debug!("detected gtk theme {theme}");
-        return Some(icon);
-    } else if let Some(icon) =
-        lookup(icon_path).with_size(48).with_scale(2).find()
+    } else if let Some(icon) = freedesktop_icons::lookup(icon_path)
+        .with_size(ICON_SIZE)
+        .with_scale(ICON_SCALE)
+        .find()
     {
         return Some(icon);
     } else if icon_path.contains("steam_app_")
-        && let Some(steam_icon) =
-            lookup(dbg!(&icon_path.replace("steam_app", "steam_icon")))
-                .with_size(48)
-                .with_scale(2)
-                .find()
+        && let Some(steam_icon) = freedesktop_icons::lookup(
+            &icon_path.replace("steam_app", "steam_icon"),
+        )
+        .with_size(ICON_SIZE)
+        .with_scale(ICON_SCALE)
+        .find()
     {
         return Some(steam_icon);
     }
@@ -124,16 +118,12 @@ impl IconCache {
         }
     }
 
-    pub fn get_icon(
-        &mut self,
-        app_id: &str,
-        icon_theme: Option<&str>,
-    ) -> Option<Icon> {
+    pub fn get_icon(&mut self, app_id: &str) -> Option<Icon> {
         if let Some(icon) = self.inner.get(app_id) {
             return Some(icon.clone());
         }
 
-        let icon = client_icon_path(app_id, icon_theme)
+        let icon = find_icon_path(app_id)
             .and_then(|path| load_icon_from_path(&path))?;
 
         self.inner.insert(app_id.to_string(), icon.clone());

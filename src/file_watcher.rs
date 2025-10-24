@@ -43,9 +43,9 @@ impl Default for CheckResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckType {
+    Changed,
     Missing,
     Unchanged,
-    Changed,
 }
 
 struct FileWatcherProps {
@@ -118,6 +118,7 @@ impl Recipe for FileWatcher {
         let (tx, rx) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {
+            profiling::register_thread!("file watcher");
             let mut watcher = FileWatcherInner::new(self.path);
             loop {
                 tokio::time::sleep(POLLING_INTERVAL).await;

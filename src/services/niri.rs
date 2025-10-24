@@ -78,7 +78,6 @@ pub struct Workspace {
 fn map_window(
     window: &niri_ipc::Window,
     icon_cache: Arc<Mutex<IconCache>>,
-    icon_theme: Option<&str>,
 ) -> Window {
     let mut icon_cache = icon_cache.lock().unwrap();
     Window {
@@ -86,7 +85,7 @@ fn map_window(
         icon: window
             .app_id
             .as_ref()
-            .and_then(|app_id| icon_cache.get_icon(app_id, icon_theme).clone()),
+            .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
         layout: window.layout.clone().into(),
         title: window.title.clone().unwrap_or("N/A".to_string()),
         is_focused: window.is_focused,
@@ -114,7 +113,6 @@ pub struct NiriService {
     pub hovered_workspace_id: Option<u64>,
     pub icon_cache: Arc<Mutex<IconCache>>,
     pub sender: Option<mpsc::Sender<Request>>,
-    icon_theme: Option<String>,
 }
 
 #[profiling::all_functions]
@@ -208,16 +206,12 @@ impl Service for NiriService {
 }
 
 impl NiriService {
-    pub fn new(
-        icon_cache: Arc<Mutex<IconCache>>,
-        icon_theme: Option<String>,
-    ) -> Self {
+    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
         Self {
             workspaces: FxHashMap::default(),
             windows: FxHashMap::default(),
             hovered_workspace_id: None,
             icon_cache,
-            icon_theme,
             sender: None,
         }
     }
@@ -246,14 +240,7 @@ impl NiriService {
                             .values()
                             .filter(|w| w.workspace_id == Some(ws.id))
                             .map(|w| {
-                                (
-                                    w.id,
-                                    map_window(
-                                        w,
-                                        self.icon_cache.clone(),
-                                        self.icon_theme.as_deref(),
-                                    ),
-                                )
+                                (w.id, map_window(w, self.icon_cache.clone()))
                             })
                             .collect(),
                     })
@@ -268,16 +255,7 @@ impl NiriService {
                         .windows
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| {
-                            (
-                                w.id,
-                                map_window(
-                                    w,
-                                    self.icon_cache.clone(),
-                                    self.icon_theme.as_deref(),
-                                ),
-                            )
-                        })
+                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
                         .collect();
                 });
             }
@@ -303,11 +281,7 @@ impl NiriService {
                     let window_ref = self.windows.get(&window_id).unwrap();
                     new_ws.windows.insert(
                         window_id,
-                        map_window(
-                            window_ref,
-                            self.icon_cache.clone(),
-                            self.icon_theme.as_deref(),
-                        ),
+                        map_window(window_ref, self.icon_cache.clone()),
                     );
                 }
             }
@@ -342,16 +316,7 @@ impl NiriService {
                         .windows
                         .values()
                         .filter(|w| w.workspace_id == Some(ws.id))
-                        .map(|w| {
-                            (
-                                w.id,
-                                map_window(
-                                    w,
-                                    self.icon_cache.clone(),
-                                    self.icon_theme.as_deref(),
-                                ),
-                            )
-                        })
+                        .map(|w| (w.id, map_window(w, self.icon_cache.clone())))
                         .collect();
                 });
             }
