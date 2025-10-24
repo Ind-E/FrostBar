@@ -18,99 +18,75 @@ use std::{
     pin::Pin,
 };
 
-use tracing::{Dispatch, Level, error};
+use tracing::{Level, error};
 use tracing_subscriber::{
-    EnvFilter,
     fmt::{self, writer::MakeWriterExt},
-    prelude::__tracing_subscriber_SubscriberExt,
-    util::SubscriberInitExt,
+    registry::LookupSpan,
+    reload,
 };
 
 pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
+type BoxedLayer<S> =
+    Box<dyn tracing_subscriber::layer::Layer<S> + Send + Sync + 'static>;
+
 const MAX_LOG_FILES: usize = 10;
-pub fn init_tracing(config_dir: &Path) -> PathBuf {
-    let temp_sub = tracing_subscriber::fmt()
-        .compact()
-        .with_writer(std::io::stderr)
-        .with_max_level(Level::DEBUG)
-        .finish();
+pub fn init_tracing<S: tracing::Subscriber + for<'a> LookupSpan<'a>>(
+    config_dir: &Path,
+    handle: &reload::Handle<Option<BoxedLayer<S>>, S>,
+) -> PathBuf {
+    let log_dir = config_dir.join("logs/");
+    let mut nlog = 0;
+    let mut min_log = u64::MAX;
 
-    let temp_dispatch = Dispatch::new(temp_sub);
+    match read_log_dir(&log_dir) {
+        Ok(log_files) => {
+            let mut num_files = 0;
+            for filename in log_files {
+                num_files += 1;
+                let trailing = filename
+                    .rsplit_once(|c: char| !c.is_ascii_digit())
+                    .map_or(filename.as_str(), |(_head, digits)| digits);
 
-    let (filter, logfile_layer, stderr_layer, logfile_path) =
-        tracing::dispatcher::with_default(&temp_dispatch, || {
-            let debug = cfg!(debug_assertions);
-
-            let filter =
-                EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                    if debug {
-                        EnvFilter::new("info,frostbar=debug")
-                    } else {
-                        EnvFilter::new("error,frostbar=info")
+                if let Ok(trailing_digits) = trailing.parse::<u64>() {
+                    if trailing_digits > nlog {
+                        nlog = trailing_digits;
                     }
-                });
-
-            let log_dir = config_dir.join("logs/");
-            let mut nlog = 0;
-            let mut min_log = u64::MAX;
-
-            match read_log_dir(&log_dir) {
-                Ok(log_files) => {
-                    let mut num_files = 0;
-                    for filename in log_files {
-                        num_files += 1;
-                        let trailing = filename
-                            .rsplit_once(|c: char| !c.is_ascii_digit())
-                            .map_or(filename.as_str(), |(_head, digits)| {
-                                digits
-                            });
-
-                        if let Ok(trailing_digits) = trailing.parse::<u64>() {
-                            if trailing_digits > nlog {
-                                nlog = trailing_digits;
-                            }
-                            if trailing_digits < min_log {
-                                min_log = trailing_digits;
-                            }
-                        }
+                    if trailing_digits < min_log {
+                        min_log = trailing_digits;
                     }
-                    if num_files >= MAX_LOG_FILES
-                        && let Err(e) = std::fs::remove_file(
-                            log_dir.join(format!("frostbar.log-{min_log}")),
-                        )
-                    {
-                        error!("failed to remove old log file: {e}");
-                    }
-                    nlog += 1;
-                }
-                Err(e) => {
-                    error!("failed to read log directory: {e}");
                 }
             }
+            if num_files >= MAX_LOG_FILES
+                && let Err(e) = std::fs::remove_file(
+                    log_dir.join(format!("frostbar.log-{min_log}")),
+                )
+            {
+                error!("failed to remove old log file: {e}");
+            }
+            nlog += 1;
+        }
+        Err(e) => {
+            error!("failed to read log directory: {e}");
+        }
+    }
 
-            let logfile_path = log_dir.join(format!("frostbar.log-{nlog}"));
+    let logfile_path = log_dir.join(format!("frostbar.log-{nlog}"));
 
-            let logfile = tracing_appender::rolling::never(
-                &log_dir,
-                logfile_path.file_name().unwrap(),
-            )
-            .with_max_level(Level::INFO);
+    let logfile = tracing_appender::rolling::never(
+        &log_dir,
+        logfile_path.file_name().unwrap(),
+    )
+    .with_max_level(Level::INFO);
 
-            let logfile_layer =
-                fmt::layer().compact().with_writer(logfile).with_ansi(false);
+    let logfile_layer =
+        fmt::layer().compact().with_writer(logfile).with_ansi(false);
 
-            let stderr_layer =
-                fmt::layer().compact().with_writer(std::io::stderr);
+    let boxed_layer: BoxedLayer<S> = Box::new(logfile_layer);
 
-            (filter, logfile_layer, stderr_layer, logfile_path)
-        });
-
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(logfile_layer)
-        .with(stderr_layer)
-        .init();
+    if let Err(e) = handle.modify(|layer| *layer = Some(boxed_layer)) {
+        tracing::error!("Failed to reload file logging layer: {}", e);
+    }
 
     logfile_path
 }

@@ -4,6 +4,7 @@ use std::{
     io::Write,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
+    sync::{OnceLock, RwLock},
 };
 
 use directories::ProjectDirs;
@@ -14,7 +15,9 @@ use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
 use tracing::{debug, error, info, warn};
 
-use crate::constants::BAR_NAMESPACE;
+use crate::{constants::BAR_NAMESPACE, file_watcher::ConfigPath};
+
+pub static COLORS: OnceLock<RwLock<Colors>> = OnceLock::new();
 
 #[derive(knus::Decode, Default, Debug)]
 pub struct Config {
@@ -118,9 +121,9 @@ impl Default for Style {
 }
 
 #[derive(knus::Decode, Debug, Default)]
-struct Colors {
+pub struct Colors {
     #[knus(children, default)]
-    pub vars: Vec<ColorVariable>,
+    vars: Vec<ColorVariable>,
 }
 
 #[derive(knus::Decode, Debug)]
@@ -697,10 +700,21 @@ impl Colors {
         Ok(colors)
     }
 
+    pub fn get(&self, name: &str) -> Option<Color> {
+        let name = name.strip_prefix('$');
+        self.vars.iter().find_map(|c| {
+            if Some(c.name.as_str()) == name {
+                Some(*c.color)
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knus::parse::<Colors>(filename, text) {
             Ok(colors) => {
-                info!("Successfully parsed colors");
+                debug!("Successfully parsed colors");
                 Ok(colors)
             }
             Err(e) => Err(miette::Report::new(e)),
@@ -786,41 +800,37 @@ impl Config {
         Config::load(path)
     }
 
-    pub fn init() -> (Config, PathBuf, PathBuf) {
+    pub fn init() -> (Config, ConfigPath, PathBuf) {
         let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
             std::process::exit(1);
         };
 
         let config_dir = project_dir.config_dir().to_path_buf();
 
+        let colors_path = config_dir.join("colors.kdl");
+        let colors = {
+            match Colors::load(&colors_path) {
+                Err(e) => {
+                    if let Err(e) = Notification::new()
+                        .summary(BAR_NAMESPACE)
+                        .body("Failed to parse colors file")
+                        .show()
+                    {
+                        error!("{e}");
+                    }
+                    error!("Failed to parse colors file ",);
+                    error!("{e:?}");
+                    None
+                }
+                Ok(colors) => Some(colors),
+            }
+        };
+
+        if let Err(e) = COLORS.set(RwLock::new(colors.unwrap_or_default())) {
+            error!("colors already initialized: {e:?}");
+        }
+
         let config_path = config_dir.join("config.kdl");
-
-        // let colors_path = config_dir.join("colors.kdl");
-
-        // let colors = {
-        //     match Colors::load(&colors_path) {
-        //         Err(e) => {
-        //             if let Err(e) = Notification::new()
-        //                 .summary(BAR_NAMESPACE)
-        //                 .body(
-        //                     "Failed to parse colors file, custom colors will be rendered as red",
-        //                 )
-        //                 .show()
-        //             {
-        //                 error!("{e}");
-        //             }
-        //             error!(
-        //                 "Failed to parse colors file, custom colors will be rendered as red",
-        //             );
-        //             error!("{e:?}");
-        //             Colors::default()
-        //         }
-        //         Ok(colors) => colors,
-        //     }
-        // };
-        //
-        // println!("{colors:?}");
-
         let config = {
             match Config::load_or_create(&config_path) {
                 Err(e) => {
@@ -833,9 +843,7 @@ impl Config {
                     {
                         error!("{e}");
                     }
-                    error!(
-                        "\nFailed to parse config file, using default config"
-                    );
+                    error!("Failed to parse config file, using default config");
                     error!("{e:?}");
                     Config::default()
                 }
@@ -843,13 +851,26 @@ impl Config {
             }
         };
 
-        (config, config_path, config_dir)
+        let path = ConfigPath {
+            config: config_path,
+            colors: colors_path,
+        };
+
+        (config, path, config_dir)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigColor {
     inner: Color,
+}
+
+impl Default for ConfigColor {
+    fn default() -> Self {
+        Self {
+            inner: Color::from_rgb(1.0, 0.0, 0.0),
+        }
+    }
 }
 
 impl Deref for ConfigColor {
@@ -894,11 +915,25 @@ where
     ) -> Result<Self, DecodeError<S>> {
         let color = match **value {
             knus::ast::Literal::String(ref s) => {
-                Color::parse(s).ok_or_else(|| {
-                    DecodeError::conversion(&value, "invalid hex literal")
-                })
+                if s.starts_with('$')
+                    && let Some(Ok(colors)) =
+                        COLORS.get().map(|rwlock| rwlock.read())
+                {
+                    if let Some(color) = colors.get(s) {
+                        Ok(color)
+                    } else {
+                        Err(DecodeError::conversion(
+                            value,
+                            "custom color not found",
+                        ))
+                    }
+                } else {
+                    Color::parse(s).ok_or_else(|| {
+                        DecodeError::conversion(value, "invalid hex literal")
+                    })
+                }
             }
-            _ => Err(DecodeError::conversion(&value, "invalid hex literal")),
+            _ => Err(DecodeError::conversion(value, "invalid hex literal")),
         }?;
 
         Ok(color.into())

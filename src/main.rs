@@ -14,19 +14,19 @@ use iced::{
     window::Id,
 };
 use notify_rust::Notification;
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
+use std::sync::{Arc, Mutex};
+use tracing_subscriber::{
+    EnvFilter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
 };
 use zbus::Connection;
 
 use tracing::error;
 
 use crate::{
-    config::{Config, MediaControl},
+    config::{COLORS, Colors, Config, MediaControl},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
-    file_watcher::{FileWatcherEvent, watch_file},
+    file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
     module::Modules,
     services::{mpris::MprisEvent, niri::NiriEvent},
@@ -59,12 +59,34 @@ pub fn main() -> iced::Result {
 
     iced::daemon(
         || {
+            let debug = cfg!(debug_assertions);
+
+            let filter =
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    if debug {
+                        EnvFilter::new("info,frostbar=debug")
+                    } else {
+                        EnvFilter::new("error,frostbar=info")
+                    }
+                });
+
+            let stderr_layer =
+                fmt::layer().compact().with_writer(std::io::stderr);
+
+            let (file_layer, handle) = reload::Layer::new(None);
+
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(stderr_layer)
+                .with(file_layer)
+                .init();
+
             let (config, config_path, config_dir) = Config::init();
 
-            let log_dir = init_tracing(&config_dir);
+            let logfile_path = init_tracing(&config_dir, &handle);
 
             info!("starting version {}", env!("CARGO_PKG_VERSION"));
-            info!("saving logs to {:?}", log_dir);
+            info!("saving logs to {:?}", logfile_path);
 
             Bar::new(config, config_path)
         },
@@ -101,7 +123,7 @@ pub struct TooltipId {
 pub enum Message {
     IcedEvent(Event),
     MediaControl(MediaControl, String),
-    FileWatcherEvent(FileWatcherEvent),
+    FileWatcherEvent(CheckResult),
 
     CavaColorUpdate(Option<Vec<Color>>),
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
@@ -134,7 +156,7 @@ pub struct Bar {
     dummy_id: Id,
     monitor_size: Option<Size>,
     config: Config,
-    config_path: PathBuf,
+    path: ConfigPath,
 
     modules: Modules,
 
@@ -144,10 +166,7 @@ pub struct Bar {
 
 #[profiling::all_functions]
 impl Bar {
-    pub fn new(
-        mut config: Config,
-        config_path: PathBuf,
-    ) -> (Self, Task<Message>) {
+    pub fn new(mut config: Config, path: ConfigPath) -> (Self, Task<Message>) {
         let icon_cache = Arc::new(Mutex::new(IconCache::new()));
 
         let mut modules =
@@ -162,7 +181,7 @@ impl Bar {
             dummy_id,
             modules,
             config,
-            config_path,
+            path,
             tooltip_window_id: None,
             active_tooltip_id: None,
         };
@@ -183,7 +202,7 @@ impl Bar {
             Vec::with_capacity(8);
 
         subscriptions.push(iced::event::listen().map(Message::IcedEvent));
-        subscriptions.push(watch_file(self.config_path.clone()));
+        subscriptions.push(watch_config(self.path.clone()));
         subscriptions.extend(self.modules.subscriptions());
 
         Subscription::batch(subscriptions)
@@ -254,9 +273,87 @@ impl Bar {
                 Task::none()
             }
             Message::FileWatcherEvent(event) => {
-                match event {
-                    FileWatcherEvent::Changed => {
-                        match Config::load(&self.config_path) {
+                match event.colors {
+                    CheckType::Changed => {
+                        match Colors::load(&self.path.colors) {
+                            Ok(new_colors) => {
+                                if let Some(Ok(mut rwlock)) =
+                                    COLORS.get().map(|rwlock| rwlock.write())
+                                {
+                                    *rwlock = new_colors;
+                                    std::mem::drop(rwlock);
+
+                                    match Config::load(&self.path.config) {
+                                        Ok(mut new_config) => {
+                                            self.modules.update_from_config(
+                                                &mut new_config,
+                                            );
+
+                                            if self.config.layout
+                                                == new_config.layout
+                                            {
+                                                self.config = new_config;
+                                            } else if let Some(id) = self.id {
+                                                self.config = new_config;
+                                                let close =
+                                                    iced::window::close(id);
+                                                let (id, open) = open_window(
+                                                    &self.config.layout,
+                                                    self.monitor_size.unwrap(),
+                                                );
+                                                self.id = Some(id);
+                                                return Task::batch([
+                                                    close, open,
+                                                ]);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("{:?}", e);
+                                            if let Err(e) = Notification::new()
+                                    .summary(BAR_NAMESPACE)
+                                    .body("Failed to parse config file")
+                                    .show()
+                                {
+                                    warn!(
+                                        "Failed to send config parse error notification: {e:?}"
+                                    );
+                                }
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("{:?}", e);
+                                if let Err(e) = Notification::new()
+                                    .summary(BAR_NAMESPACE)
+                                    .body("Failed to parse colors file")
+                                    .show()
+                                {
+                                    warn!(
+                                        "Failed to send colors parse error notification: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    CheckType::Missing => {
+                        if let Err(e) = Notification::new()
+                            .summary(&format!(
+                                "Colors file not found at {}",
+                                self.path.config.display()
+                            ))
+                            .show()
+                        {
+                            warn!(
+                                "Failed to send colors parse error notification: {e:?}"
+                            );
+                        }
+                    }
+                    CheckType::Unchanged => {}
+                }
+                match event.config {
+                    CheckType::Changed => {
+                        match Config::load(&self.path.config) {
                             Ok(mut new_config) => {
                                 self.modules
                                     .update_from_config(&mut new_config);
@@ -288,11 +385,11 @@ impl Bar {
                             }
                         }
                     }
-                    FileWatcherEvent::Missing => {
+                    CheckType::Missing => {
                         if let Err(e) = Notification::new()
                             .summary(&format!(
                                 "Config file not found at {}",
-                                self.config_path.display()
+                                self.path.config.display()
                             ))
                             .show()
                         {
@@ -301,6 +398,7 @@ impl Bar {
                             );
                         }
                     }
+                    CheckType::Unchanged => {}
                 }
 
                 Task::none()
@@ -540,7 +638,8 @@ impl Bar {
                 container = Container::new(container).align_right(Length::Fill);
             }
             config::Anchor::Bottom => {
-                container = Container::new(container).align_bottom(Length::Fill);
+                container =
+                    Container::new(container).align_bottom(Length::Fill);
             }
             config::Anchor::Top | config::Anchor::Left => {}
         }

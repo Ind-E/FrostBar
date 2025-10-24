@@ -21,37 +21,94 @@ use crate::{Message, utils::BoxStream};
 const POLLING_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
-pub enum FileWatcherEvent {
-    Changed,
-    Missing,
+pub struct ConfigPath {
+    pub config: PathBuf,
+    pub colors: PathBuf,
 }
 
-pub struct FileWatcherInner {
-    path: PathBuf,
-
-    last_props: Option<(SystemTime, PathBuf)>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckResult {
+    pub config: CheckType,
+    pub colors: CheckType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum CheckResult {
+impl Default for CheckResult {
+    fn default() -> Self {
+        Self {
+            config: CheckType::Unchanged,
+            colors: CheckType::Unchanged,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckType {
     Missing,
     Unchanged,
     Changed,
 }
 
+struct FileWatcherProps {
+    config: Option<(SystemTime, PathBuf)>,
+    colors: Option<(SystemTime, PathBuf)>,
+}
+
+struct FileWatcherInner {
+    path: ConfigPath,
+    props: FileWatcherProps,
+}
+
+#[profiling::all_functions]
+impl FileWatcherInner {
+    pub fn new(path: ConfigPath) -> Self {
+        Self {
+            props: FileWatcherProps {
+                config: see_path(&path.config).ok(),
+                colors: see_path(&path.colors).ok(),
+            },
+            path,
+        }
+    }
+
+    pub fn check(&mut self) -> CheckResult {
+        let mut result = CheckResult::default();
+        if let Ok(new_props) = see_path(&self.path.colors) {
+            if self.props.colors.as_ref() != Some(&new_props) {
+                self.props.colors = Some(new_props);
+                result.colors = CheckType::Changed;
+            }
+            // unchanged
+        } else {
+            result.colors = CheckType::Missing;
+        }
+
+        if let Ok(new_props) = see_path(&self.path.config) {
+            if self.props.config.as_ref() != Some(&new_props) {
+                self.props.config = Some(new_props);
+                result.config = CheckType::Changed;
+            }
+            // unchanged
+        } else {
+            result.config = CheckType::Missing;
+        }
+
+        result
+    }
+}
+
 struct FileWatcher {
-    path: PathBuf,
+    path: ConfigPath,
 }
 
 impl FileWatcher {
-    fn new(path: PathBuf) -> Self {
+    fn new(path: ConfigPath) -> Self {
         Self { path }
     }
 }
 
 #[profiling::all_functions]
 impl Recipe for FileWatcher {
-    type Output = FileWatcherEvent;
+    type Output = CheckResult;
 
     fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
         std::any::TypeId::of::<Self>().hash(state);
@@ -65,15 +122,9 @@ impl Recipe for FileWatcher {
             loop {
                 tokio::time::sleep(POLLING_INTERVAL).await;
 
-                let event = match watcher.check() {
-                    CheckResult::Changed => Some(FileWatcherEvent::Changed),
-                    CheckResult::Missing => Some(FileWatcherEvent::Missing),
-                    CheckResult::Unchanged => None,
-                };
+                let event = watcher.check();
 
-                if let Some(event) = event
-                    && tx.send(event).is_err()
-                {
+                if tx.send(event).is_err() {
                     break;
                 }
             }
@@ -83,7 +134,7 @@ impl Recipe for FileWatcher {
     }
 }
 
-pub fn watch_file(path: PathBuf) -> Subscription<Message> {
+pub fn watch_config(path: ConfigPath) -> Subscription<Message> {
     from_recipe(FileWatcher::new(path)).map(Message::FileWatcherEvent)
 }
 
@@ -91,25 +142,4 @@ fn see_path(path: &Path) -> io::Result<(SystemTime, PathBuf)> {
     let canon = path.canonicalize()?;
     let mtime = canon.metadata()?.modified()?;
     Ok((mtime, canon))
-}
-
-#[profiling::all_functions]
-impl FileWatcherInner {
-    pub fn new(path: PathBuf) -> Self {
-        let last_props = see_path(&path).ok();
-        Self { path, last_props }
-    }
-
-    pub fn check(&mut self) -> CheckResult {
-        if let Ok(new_props) = see_path(&self.path) {
-            if self.last_props.as_ref() == Some(&new_props) {
-                CheckResult::Unchanged
-            } else {
-                self.last_props = Some(new_props);
-                CheckResult::Changed
-            }
-        } else {
-            CheckResult::Missing
-        }
-    }
 }
