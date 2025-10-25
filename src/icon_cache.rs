@@ -15,7 +15,7 @@ const ICON_SIZE: u16 = 48;
 const ICON_SCALE: u16 = 2;
 
 static ICON_THEME: LazyLock<Option<String>> =
-    LazyLock::new(|| linicon::get_system_theme());
+    LazyLock::new(linicon::get_system_theme);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Icon {
@@ -43,9 +43,7 @@ fn from_desktop_file(app_id: &str) -> Option<String> {
         if let Ok(entry) =
             DesktopEntry::from_path(&desktop_file_path, None::<&[&str]>)
         {
-            return entry
-                .icon()
-                .and_then(|icon_name| Some(icon_name.to_owned()));
+            return entry.icon().map(ToString::to_string);
         }
     }
     None
@@ -62,7 +60,7 @@ fn icon_path_from_name(icon_path: &str) -> Option<PathBuf> {
         return Some(icon.path);
     } else if let Some(theme) = &*ICON_THEME
         && let Some(icon) = freedesktop_icons::lookup(icon_path)
-            .with_theme(&theme)
+            .with_theme(theme)
             .with_size(ICON_SIZE)
             .with_scale(ICON_SCALE)
             .find()

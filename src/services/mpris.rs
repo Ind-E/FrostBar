@@ -13,7 +13,7 @@ use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 use base64::Engine;
 
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     Message, ModuleMessage, dbus_proxy::PlayerProxy, services::Service,
@@ -126,30 +126,16 @@ impl Service for MprisService {
                 task
             }
             MprisEvent::PlayerVanished { name } => {
+                debug!("player vanished: {name}");
                 self.players.remove(&name);
 
-                let players_with_colors = self
-                    .players
-                    .iter()
-                    .filter(|(_, p)| {
-                        p.colors.is_some()
-                            && p.status == "Playing"
-                            && p.name != name
-                    })
-                    .collect::<Vec<_>>();
-
-                if players_with_colors.is_empty() {
-                    return iced::Task::perform(
-                        async move { None },
-                        Message::CavaColorUpdate,
-                    );
-                }
                 return iced::Task::none();
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
                 status,
             } => {
+                debug!("{player_name} status changed: {status}");
                 if let Some(player) = self.players.get_mut(&player_name) {
                     if status == "Playing" {
                         player.status = status;
@@ -160,14 +146,11 @@ impl Service for MprisService {
                         );
                     }
                     player.status = status;
-                    let name = player.name.clone();
                     let players_with_colors = self
                         .players
                         .iter()
                         .filter(|(_, p)| {
-                            p.colors.is_some()
-                                && p.status == "Playing"
-                                && p.name != name
+                            p.colors.is_some() && p.status == "Playing"
                         })
                         .collect::<Vec<_>>();
                     if let Some((_, player)) = players_with_colors.first() {
