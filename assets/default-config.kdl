@@ -3,6 +3,8 @@
 layout {
     width 42
     gaps 0
+    anchor "left"
+    layer "top"
 }
 
 style {
@@ -15,6 +17,7 @@ start {
     label {
         text ""
         size 28
+        mouse-left "notify-send" "Hello, World!"
     }
 
     battery {
@@ -43,7 +46,17 @@ middle {
 
     niri {
         spacing 10
-        // workspace-offset 0
+        workspace-active-style {
+            text-color "#fff"
+            border {
+                color "$fg"
+                width 3.0
+                radius 0.0
+            }
+        }
+        workspace-hovered-style {
+            background "#aaa4"
+        }
     }
 
 }
