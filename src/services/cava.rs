@@ -11,7 +11,7 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, warn};
 
-use crate::{Message, ModuleMessage, services::Service, utils::BoxStream};
+use crate::{Message, module, utils::BoxStream};
 
 const CAVA_CONFIG: &str = include_str!("../../assets/cava-config");
 
@@ -26,7 +26,7 @@ pub struct CavaService {
     pub gradient: Option<Vec<Color>>,
 }
 
-struct CavaSubscriptionRecipe {}
+pub struct CavaSubscriptionRecipe {}
 
 #[profiling::all_functions]
 impl Recipe for CavaSubscriptionRecipe {
@@ -47,7 +47,7 @@ impl Recipe for CavaSubscriptionRecipe {
                 .arg("-p")
                 .arg(&config_path)
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::inherit())
                 .spawn()
             {
                 Ok(cmd) => cmd,
@@ -78,24 +78,6 @@ impl Recipe for CavaSubscriptionRecipe {
 }
 
 #[profiling::all_functions]
-impl Service for CavaService {
-    fn subscription() -> iced::Subscription<Message> {
-        from_recipe(CavaSubscriptionRecipe {})
-            .map(|f| Message::Msg(ModuleMessage::CavaUpdate(f)))
-    }
-
-    type Event = Option<String>;
-    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
-        if let Some(line) = event {
-            self.bars = line
-                .split(';')
-                .map(|s| s.parse::<u8>().unwrap_or(0))
-                .collect();
-        }
-        iced::Task::none()
-    }
-}
-
 impl CavaService {
     pub fn new() -> Self {
         Self {
@@ -104,11 +86,21 @@ impl CavaService {
         }
     }
 
-    pub fn update_gradient(
-        &mut self,
-        colors: Option<Vec<Color>>,
-    ) -> iced::Task<Message> {
+    pub fn subscription() -> iced::Subscription<Message> {
+        from_recipe(CavaSubscriptionRecipe {})
+            .map(|f| Message::Module(module::Message::CavaUpdate(f)))
+    }
+
+    pub fn handle_event(&mut self, event: Option<String>) {
+        if let Some(line) = event {
+            self.bars = line
+                .split(';')
+                .map(|s| s.parse::<u8>().unwrap_or(0))
+                .collect();
+        }
+    }
+
+    pub fn update_gradient(&mut self, colors: Option<Vec<Color>>) {
         self.gradient = colors;
-        iced::Task::none()
     }
 }

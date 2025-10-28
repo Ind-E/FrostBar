@@ -4,28 +4,24 @@ use iced::{
     time::{self, Duration},
 };
 
-use crate::{Message, ModuleMessage, services::Service};
+use crate::{Message, module};
 
 pub struct TimeService {
     pub time: DateTime<Local>,
 }
 
 #[profiling::all_functions]
-impl Service for TimeService {
-    fn subscription() -> Subscription<Message> {
-        time::every(Duration::from_secs(1))
-            .map(|_| Message::Msg(ModuleMessage::Tick(Local::now())))
-    }
-
-    type Event = DateTime<Local>;
-    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
-        self.time = event;
-        iced::Task::none()
-    }
-}
-
 impl TimeService {
     pub fn new() -> Self {
         Self { time: Local::now() }
+    }
+
+    pub fn subscription() -> Subscription<Message> {
+        time::every(Duration::from_secs(1))
+            .map(|_| Message::Module(module::Message::Tick(Local::now())))
+    }
+
+    pub fn handle_event(&mut self, event: DateTime<Local>) {
+        self.time = event;
     }
 }

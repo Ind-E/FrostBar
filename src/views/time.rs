@@ -4,8 +4,11 @@ use iced::{
 };
 
 use crate::{
-    Message, config, services::time::TimeService, style::container_style,
-    utils::mouse_binds, views::BarPosition,
+    Message, config,
+    module::Modules,
+    style::container_style,
+    utils::mouse_binds,
+    views::{BarPosition, ViewTrait},
 };
 
 pub struct TimeView {
@@ -15,12 +18,13 @@ pub struct TimeView {
 }
 
 #[profiling::all_functions]
-impl TimeView {
-    pub fn view<'a>(
+impl ViewTrait<Modules> for TimeView {
+    fn view<'a>(
         &'a self,
-        service: &TimeService,
+        modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
+        let service = &modules.time;
         let time = service.time.format(&self.config.format).to_string();
 
         let mut content =
@@ -36,10 +40,19 @@ impl TimeView {
         mouse_binds(content, &self.config.binds, Some(self.id.clone()))
     }
 
-    pub fn render_tooltip<'a>(
+    fn position(&self) -> BarPosition {
+        self.position
+    }
+
+    fn tooltip<'a>(
         &'a self,
-        service: &TimeService,
+        service: &Modules,
+        id: &container::Id,
     ) -> Option<Element<'a, Message>> {
+        if *id != self.id {
+            return None;
+        }
+        let service = &service.time;
         Some(
             Text::new(
                 service.time.format(&self.config.tooltip_format).to_string(),

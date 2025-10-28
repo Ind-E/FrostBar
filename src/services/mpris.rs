@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use iced::{
-    Color, Subscription,
+    Color, Subscription, Task,
     advanced::graphics::image::image_rs,
     futures::{StreamExt, stream::select_all},
     widget::image,
@@ -16,7 +16,9 @@ use base64::Engine;
 use tracing::{debug, error};
 
 use crate::{
-    Message, ModuleMessage, dbus_proxy::PlayerProxy, services::Service,
+    Message,
+    dbus_proxy::PlayerProxy,
+    module::{self, ModuleAction},
     utils::BoxStream,
 };
 
@@ -25,8 +27,14 @@ pub struct MprisService {
 }
 
 #[profiling::all_functions]
-impl Service for MprisService {
-    fn subscription() -> iced::Subscription<Message> {
+impl MprisService {
+    pub fn new() -> Self {
+        Self {
+            players: FxHashMap::default(),
+        }
+    }
+
+    pub fn subscription() -> iced::Subscription<Message> {
         Subscription::run(|| {
         let (yield_tx, yield_rx) = mpsc::unbounded_channel();
 
@@ -109,11 +117,10 @@ impl Service for MprisService {
         UnboundedReceiverStream::new(yield_rx)
 
 
-        }).map(|f| Message::Msg(ModuleMessage::Mpris(f)))
+        }).map(|f| Message::Module(module::Message::Mpris(f)))
     }
 
-    type Event = MprisEvent;
-    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
+    pub fn handle_event(&mut self, event: MprisEvent) -> ModuleAction {
         match event {
             MprisEvent::PlayerAppeared {
                 name,
@@ -121,15 +128,13 @@ impl Service for MprisService {
                 metadata,
             } => {
                 let mut player = MprisPlayer::new(name.clone(), status);
-                let task = player.update_metadata(&metadata);
+                let action = player.update_metadata(&metadata);
                 self.players.insert(name, player);
-                task
+                return action;
             }
             MprisEvent::PlayerVanished { name } => {
                 debug!("player vanished: {name}");
                 self.players.remove(&name);
-
-                return iced::Task::none();
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
@@ -140,10 +145,10 @@ impl Service for MprisService {
                     if status == "Playing" {
                         player.status = status;
                         let colors = player.colors.clone();
-                        return iced::Task::perform(
+                        return ModuleAction::Task(Task::perform(
                             async move { colors },
-                            Message::CavaColorUpdate,
-                        );
+                            module::Message::CavaColorUpdate,
+                        ));
                     }
                     player.status = status;
                     let players_with_colors = self
@@ -155,37 +160,27 @@ impl Service for MprisService {
                         .collect::<Vec<_>>();
                     if let Some((_, player)) = players_with_colors.first() {
                         let colors = player.colors.clone();
-                        return iced::Task::perform(
+                        return ModuleAction::Task(iced::Task::perform(
                             async move { colors },
-                            Message::CavaColorUpdate,
-                        );
+                            module::Message::CavaColorUpdate,
+                        ));
                     }
-                    return iced::Task::perform(
+                    return ModuleAction::Task(Task::perform(
                         async move { None },
-                        Message::CavaColorUpdate,
-                    );
+                        module::Message::CavaColorUpdate,
+                    ));
                 }
-                iced::Task::none()
             }
             MprisEvent::MetadataChanged {
                 player_name,
                 metadata,
             } => {
                 if let Some(player) = self.players.get_mut(&player_name) {
-                    player.update_metadata(&metadata)
-                } else {
-                    iced::Task::none()
+                    return player.update_metadata(&metadata);
                 }
             }
         }
-    }
-}
-
-impl MprisService {
-    pub fn new() -> Self {
-        Self {
-            players: FxHashMap::default(),
-        }
+        ModuleAction::None
     }
 }
 
@@ -226,7 +221,7 @@ impl MprisPlayer {
     pub fn update_metadata(
         &mut self,
         metadata: &HashMap<String, OwnedValue>,
-    ) -> iced::Task<Message> {
+    ) -> ModuleAction {
         if let Some(val) = metadata.get("xesam:title") {
             self.title = Some(val.to_string());
         }
@@ -238,7 +233,7 @@ impl MprisPlayer {
             let art_url = val.to_string().trim_matches('"').to_string();
             match self.get_art(art_url) {
                 PlayerArt::Async(task) => {
-                    return task;
+                    return ModuleAction::Task(task);
                 }
                 PlayerArt::Sync(art) => {
                     if let Some((handle, colors)) = art {
@@ -246,24 +241,27 @@ impl MprisPlayer {
                         self.colors.clone_from(&colors);
                         if self.status == "Playing" {
                             let captured_colors = colors;
-                            return iced::Task::perform(
+                            return ModuleAction::Task(iced::Task::perform(
                                 async move { captured_colors },
-                                Message::CavaColorUpdate,
-                            );
+                                module::Message::CavaColorUpdate,
+                            ));
                         }
                     }
                 }
                 PlayerArt::None => {
                     self.art = None;
                     self.colors = None;
-                    return iced::Task::none();
+                    return ModuleAction::None;
                 }
             }
         }
 
         self.art = None;
         self.colors = None;
-        iced::Task::perform(async { None }, Message::CavaColorUpdate)
+        ModuleAction::Task(Task::perform(
+            async { None },
+            module::Message::CavaColorUpdate,
+        ))
     }
 
     pub fn get_art(&self, art_url: String) -> PlayerArt {
@@ -316,7 +314,7 @@ impl MprisPlayer {
                     let handle = image::Handle::from_bytes(image_bytes);
                     Some((handle, gradient))
                 },
-                |art| Message::PlayerArtUpdate(name, art),
+                |art| module::Message::PlayerArtUpdate(name, art),
             );
 
             return PlayerArt::Async(task);
@@ -403,7 +401,7 @@ async fn create_player_stream(
 }
 
 enum PlayerArt {
-    Async(iced::Task<Message>),
+    Async(iced::Task<module::Message>),
     Sync(Option<(image::Handle, Option<Vec<Color>>)>),
     None,
 }

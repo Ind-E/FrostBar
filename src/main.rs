@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+use chrono::Local;
 use itertools::Itertools;
 use tracing::{debug, info, warn};
 
@@ -7,14 +7,18 @@ use tokio::process::Command as TokioCommand;
 use iced::{
     Alignment, Background, Color, Element, Event, Length, Pixels, Rectangle,
     Settings, Size, Subscription, Task, Theme,
+    advanced::subscription::from_recipe,
     border::rounded,
     padding::left,
     theme,
-    widget::{Column, Container, Row, container, image, stack},
+    widget::{Column, Container, Row, container, stack},
     window::Id,
 };
 use notify_rust::Notification;
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tracing_subscriber::{
     EnvFilter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
 };
@@ -28,8 +32,10 @@ use crate::{
     dbus_proxy::PlayerProxy,
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
-    module::Modules,
-    services::{mpris::MprisEvent, niri::NiriEvent},
+    module::{ModuleAction, Modules},
+    services::{
+        cava::CavaSubscriptionRecipe, mpris::MprisService, niri::NiriService,
+    },
     utils::{
         CommandSpec, init_tracing, open_dummy_window, open_tooltip_window,
         open_window,
@@ -125,31 +131,14 @@ pub enum Message {
     MediaControl(MediaControl, String),
     FileWatcherEvent(CheckResult),
 
-    CavaColorUpdate(Option<Vec<Color>>),
-    PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
-
-    MouseEntered(MouseEvent),
-    MouseExited(MouseEvent),
-
     Command(CommandSpec),
-    ErrorMessage(String),
     NoOp,
 
     OpenTooltip(container::Id),
     TooltipPositionMeasured(TooltipId),
     CloseTooltip(container::Id),
 
-    Msg(ModuleMessage),
-}
-
-#[derive(Debug, Clone)]
-pub enum ModuleMessage {
-    Tick(DateTime<Local>),
-    UpdateBattery(()),
-    Niri(NiriEvent),
-    CavaUpdate(Option<String>),
-    Mpris(MprisEvent),
-    SynchronizeAll,
+    Module(module::Message),
 }
 
 pub struct Bar {
@@ -203,7 +192,21 @@ impl Bar {
 
         subscriptions.push(iced::event::listen().map(Message::IcedEvent));
         subscriptions.push(watch_config(self.path.clone()));
-        subscriptions.extend(self.modules.subscriptions());
+
+        subscriptions.push(
+            iced::time::every(Duration::from_secs(1))
+                .map(|_| Message::Module(module::Message::Tick(Local::now()))),
+        );
+
+        subscriptions.push(
+            from_recipe(CavaSubscriptionRecipe {})
+                .map(|f| Message::Module(module::Message::CavaUpdate(f))),
+        );
+
+        subscriptions.push(MprisService::subscription());
+        subscriptions.push(NiriService::subscription());
+
+        // subscriptions.extend(self.modules.subscriptions());
 
         Subscription::batch(subscriptions)
     }
@@ -231,15 +234,17 @@ impl Bar {
                 // if let Event::Window(iced::window::Event::Closed) = event {
                 //     debug!("window closed");
                 // }
-                Task::none()
             }
-            Message::OpenTooltip(id) => container::visible_bounds(id.clone())
-                .map(move |bounds| {
-                    Message::TooltipPositionMeasured(TooltipId {
-                        id: id.clone(),
-                        bounds,
-                    })
-                }),
+            Message::OpenTooltip(id) => {
+                return container::visible_bounds(id.clone()).map(
+                    move |bounds| {
+                        Message::TooltipPositionMeasured(TooltipId {
+                            id: id.clone(),
+                            bounds,
+                        })
+                    },
+                );
+            }
             Message::TooltipPositionMeasured(tooltip_id) => {
                 let old_id = self.tooltip_window_id.take();
 
@@ -253,14 +258,11 @@ impl Bar {
                         self.tooltip_window_id.unwrap(),
                         old_id
                     );
-                    open_task.chain(iced::window::close(old_id))
-                } else {
-                    debug!(
-                        "opening tooltip {}",
-                        self.tooltip_window_id.unwrap()
-                    );
-                    open_task
+                    return open_task.chain(iced::window::close(old_id));
                 }
+
+                debug!("opening tooltip {}", self.tooltip_window_id.unwrap());
+                return open_task;
             }
             Message::CloseTooltip(id) => {
                 if self.active_tooltip_id.as_ref().is_some_and(|t| t.id == id)
@@ -270,7 +272,6 @@ impl Bar {
                     self.active_tooltip_id = None;
                     return iced::window::close(window_id);
                 }
-                Task::none()
             }
             Message::FileWatcherEvent(event) => {
                 match event.colors {
@@ -293,8 +294,8 @@ impl Bar {
                                                 == new_config.layout
                                             {
                                                 self.config = new_config;
-                                                return Task::done(Message::Msg(
-                                                    ModuleMessage::SynchronizeAll,
+                                                return Task::done(Message::Module(
+                                                    module::Message::SynchronizeAll,
                                                 ));
                                             } else if let Some(id) = self.id {
                                                 self.config = new_config;
@@ -306,7 +307,7 @@ impl Bar {
                                                 );
                                                 self.id = Some(id);
                                                 return Task::batch([
-                                                    close, open, Task::done(Message::Msg(ModuleMessage::SynchronizeAll))
+                                                    close, open, Task::done(Message::Module(module::Message::SynchronizeAll))
                                                 ]);
                                             }
                                         }
@@ -363,8 +364,8 @@ impl Bar {
 
                                 if self.config.layout == new_config.layout {
                                     self.config = new_config;
-                                    return Task::done(Message::Msg(
-                                        ModuleMessage::SynchronizeAll,
+                                    return Task::done(Message::Module(
+                                        module::Message::SynchronizeAll,
                                     ));
                                 } else if let Some(id) = self.id {
                                     self.config = new_config;
@@ -377,8 +378,8 @@ impl Bar {
                                     return Task::batch([
                                         close,
                                         open,
-                                        Task::done(Message::Msg(
-                                            ModuleMessage::SynchronizeAll,
+                                        Task::done(Message::Module(
+                                            module::Message::SynchronizeAll,
                                         )),
                                     ]);
                                 }
@@ -412,102 +413,99 @@ impl Bar {
                     }
                     CheckType::Unchanged => {}
                 }
-
-                Task::none()
             }
-            Message::Msg(module_msg) => self.modules.handle_event(module_msg),
-            Message::CavaColorUpdate(gradient) => {
-                self.modules.handle_cava_color_update(gradient)
+            Message::Module(module_msg) => {
+                match self.modules.update(module_msg) {
+                    ModuleAction::Task(task) => {
+                        return task.map(Message::Module);
+                    }
+                    ModuleAction::None => {}
+                }
             }
-            Message::PlayerArtUpdate(name, art) => {
-                self.modules.handle_async_mpris_art_update(&name, art)
-            }
-            Message::MouseEntered(event) => {
-                self.modules.handle_mouse_entered(event)
-            }
-            Message::MouseExited(event) => {
-                self.modules.handle_mouse_exited(event)
-            }
-            Message::ErrorMessage(msg) => {
-                error!("error message: {}", msg);
-                Task::none()
-            }
-            Message::MediaControl(control, player) => Task::perform(
-                async move {
-                    if let Ok(connection) = Connection::session().await
-                        && let Ok(player) =
-                            PlayerProxy::new(&connection, player).await
-                        && let Err(e) = match control {
-                            MediaControl::Play => player.play().await,
-                            MediaControl::Pause => player.pause().await,
-                            MediaControl::PlayPause => {
-                                player.play_pause().await
-                            }
-                            MediaControl::Stop => player.stop().await,
-                            MediaControl::Next => player.next().await,
-                            MediaControl::Previous => player.previous().await,
-                            MediaControl::Seek(amount) => {
-                                player.seek(amount).await
-                            }
-                            MediaControl::Volume(amount) => {
-                                match player.volume().await {
-                                    Ok(current) => {
-                                        player
-                                            .set_volume(
-                                                (current + amount).max(0.0),
-                                            )
-                                            .await
+            Message::MediaControl(control, player) => {
+                return Task::perform(
+                    async move {
+                        if let Ok(connection) = Connection::session().await
+                            && let Ok(player) =
+                                PlayerProxy::new(&connection, player).await
+                            && let Err(e) = match control {
+                                MediaControl::Play => player.play().await,
+                                MediaControl::Pause => player.pause().await,
+                                MediaControl::PlayPause => {
+                                    player.play_pause().await
+                                }
+                                MediaControl::Stop => player.stop().await,
+                                MediaControl::Next => player.next().await,
+                                MediaControl::Previous => {
+                                    player.previous().await
+                                }
+                                MediaControl::Seek(amount) => {
+                                    player.seek(amount).await
+                                }
+                                MediaControl::Volume(amount) => {
+                                    match player.volume().await {
+                                        Ok(current) => {
+                                            player
+                                                .set_volume(
+                                                    (current + amount).max(0.0),
+                                                )
+                                                .await
+                                        }
+                                        Err(e) => Err(e),
                                     }
-                                    Err(e) => Err(e),
+                                }
+
+                                MediaControl::SetVolume(amount) => {
+                                    player.set_volume(amount.max(0.0)).await
                                 }
                             }
+                        {
+                            error!("{e}");
+                        }
+                    },
+                    |()| Message::NoOp,
+                );
+            }
+            Message::Command(cmd) => {
+                return Task::future(async move {
+                    let mut command = TokioCommand::new(&cmd.command);
+                    if let Some(ref args) = cmd.args {
+                        command.args(args);
+                    }
 
-                            MediaControl::SetVolume(amount) => {
-                                player.set_volume(amount.max(0.0)).await
+                    match command.output().await {
+                        Ok(output) => {
+                            info!(target: "child_process", "spawned `{cmd}`");
+
+                            if !output.stdout.is_empty() {
+                                info!(target: "child_process",
+                                    "{}",
+                                    String::from_utf8_lossy(&output.stdout)
+                                );
+                            }
+
+                            if !output.stderr.is_empty() {
+                                error!(
+                                    target: "child_process",
+                                    "{cmd}: {}",
+                                    String::from_utf8_lossy(&output.stderr)
+                                );
                             }
                         }
-                    {
-                        error!("{e}");
-                    }
-                },
-                |()| Message::NoOp,
-            ),
-            Message::Command(cmd) => Task::future(async move {
-                let mut command = TokioCommand::new(&cmd.command);
-                if let Some(ref args) = cmd.args {
-                    command.args(args);
-                }
 
-                match command.output().await {
-                    Ok(output) => {
-                        info!(target: "child_process", "spawned `{cmd}`");
-
-                        if !output.stdout.is_empty() {
-                            info!(target: "child_process",
-                                "{}",
-                                String::from_utf8_lossy(&output.stdout)
-                            );
-                        }
-
-                        if !output.stderr.is_empty() {
-                            error!(
-                                target: "child_process",
-                                "{cmd}: {}",
-                                String::from_utf8_lossy(&output.stderr)
-                            );
+                        Err(e) => {
+                            error!(target: "child_process", "failed to spawn `{cmd}`: {e}");
                         }
                     }
 
-                    Err(e) => {
-                        error!(target: "child_process", "failed to spawn `{cmd}`: {e}");
-                    }
-                }
+                    Message::NoOp
+                });
+            }
 
-                Message::NoOp
-            }),
-
-            Message::NoOp => Task::none(),
+            Message::NoOp => {}
         }
+
+        Task::none()
     }
 
     #[inline(always)]

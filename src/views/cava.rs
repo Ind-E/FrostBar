@@ -4,8 +4,12 @@ use iced::{
 };
 
 use crate::{
-    Message, config, services::cava::CavaService, style::container_style,
-    utils::mouse_binds, views::BarPosition,
+    Message, config,
+    module::Modules,
+    services::cava::CavaService,
+    style::container_style,
+    utils::mouse_binds,
+    views::{BarPosition, ViewTrait},
 };
 
 const MAX_BAR_HEIGHT: u32 = 12;
@@ -22,19 +26,20 @@ impl CavaView {
 }
 
 #[profiling::all_functions]
-impl<'a> CavaView {
-    pub fn view(
+impl ViewTrait<Modules> for CavaView {
+    fn view<'a>(
         &'a self,
-        service: &'a CavaService,
+        modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
+        let cava = &modules.cava;
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
-            Canvas::new(CavaCanvas::new(service, &self.config, vertical))
+            Canvas::new(CavaCanvas::new(cava, &self.config, vertical))
                 .width(Length::Fill)
                 .height(130)
         } else {
-            Canvas::new(CavaCanvas::new(service, &self.config, vertical))
+            Canvas::new(CavaCanvas::new(cava, &self.config, vertical))
                 .width(130)
                 .height(Length::Fill)
         };
@@ -43,6 +48,10 @@ impl<'a> CavaView {
             container_style(Container::new(canvas), &self.config.style, layout);
 
         mouse_binds(container, &self.config.binds, None)
+    }
+
+    fn position(&self) -> BarPosition {
+        self.position
     }
 }
 

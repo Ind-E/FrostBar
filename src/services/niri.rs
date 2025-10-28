@@ -15,9 +15,9 @@ use std::{
 use tracing::error;
 
 use crate::{
-    Message, ModuleMessage,
+    Message,
     icon_cache::{Icon, IconCache},
-    services::Service,
+    module::{self, ModuleAction},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -116,8 +116,18 @@ pub struct NiriService {
 }
 
 #[profiling::all_functions]
-impl Service for NiriService {
-    fn subscription() -> Subscription<Message> {
+impl NiriService {
+    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
+        Self {
+            workspaces: FxHashMap::default(),
+            windows: FxHashMap::default(),
+            hovered_workspace_id: None,
+            icon_cache,
+            sender: None,
+        }
+    }
+
+    pub fn subscription() -> Subscription<Message> {
         Subscription::run(|| {
             let (yield_tx, yield_rx) = mpsc::unbounded_channel();
 
@@ -171,59 +181,46 @@ impl Service for NiriService {
 
             UnboundedReceiverStream::new(yield_rx)
         })
-        .map(|f| Message::Msg(ModuleMessage::Niri(f)))
+        .map(|f| Message::Module(module::Message::Niri(f)))
     }
 
-    type Event = NiriEvent;
-    fn handle_event(&mut self, event: Self::Event) -> iced::Task<Message> {
+    pub fn handle_event(&mut self, event: NiriEvent) -> ModuleAction {
         match event {
             NiriEvent::Ready(sender) => {
                 self.sender = Some(sender);
-                iced::Task::none()
+                ModuleAction::None
             }
             NiriEvent::Event(event) => self.handle_ipc_event(event),
             NiriEvent::Action(action) => {
                 let Some(sender) = &self.sender else {
                     error!("Niri action triggered before sender was ready.");
-                    return iced::Task::none();
+                    return ModuleAction::None;
                 };
                 let request = Request::Action(action);
                 {
                     let sender = sender.clone();
-                    iced::Task::perform(
+                    ModuleAction::Task(iced::Task::perform(
                         async move { sender.try_send(request) },
                         |result| {
                             if let Err(e) = result {
                                 error!("{e}");
                             }
-                            Message::NoOp
+                            module::Message::NoOp
                         },
-                    )
+                    ))
                 }
             }
-        }
-    }
-}
-
-impl NiriService {
-    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
-        Self {
-            workspaces: FxHashMap::default(),
-            windows: FxHashMap::default(),
-            hovered_workspace_id: None,
-            icon_cache,
-            sender: None,
         }
     }
     fn handle_ipc_event(
         &mut self,
         event: Result<Event, String>,
-    ) -> iced::Task<Message> {
+    ) -> ModuleAction {
         let event = match event {
             Ok(event) => event,
             Err(e) => {
                 error!("{e}");
-                return iced::Task::none();
+                return ModuleAction::None;
             }
         };
         match event {
@@ -329,7 +326,7 @@ impl NiriService {
             | Event::OverviewOpenedOrClosed { .. }
             | Event::ConfigLoaded { .. } => {}
         }
-        iced::Task::none()
+        ModuleAction::None
     }
 }
 

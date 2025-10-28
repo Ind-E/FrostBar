@@ -5,8 +5,11 @@ use iced::{
 use tracing::warn;
 
 use crate::{
-    Message, config, services::battery::BatteryService, style::container_style,
-    utils::mouse_binds, views::BarPosition,
+    Message, config,
+    module::Modules,
+    style::container_style,
+    utils::mouse_binds,
+    views::{BarPosition, ViewTrait},
 };
 extern crate starship_battery as battery;
 
@@ -17,12 +20,13 @@ pub struct BatteryView {
 }
 
 #[profiling::all_functions]
-impl<'a> BatteryView {
-    pub fn view(
+impl ViewTrait<Modules> for BatteryView {
+    fn view<'a>(
         &'a self,
-        service: &BatteryService,
+        service: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
+        let service = &service.battery;
         if service.batteries.is_empty() {
             return Column::new().into();
         }
@@ -61,13 +65,22 @@ impl<'a> BatteryView {
         mouse_binds(icon_widget, &self.config.binds, Some(self.id.clone()))
     }
 
-    pub fn render_tooltip(
+    fn position(&self) -> BarPosition {
+        self.position
+    }
+
+    fn tooltip<'a>(
         &'a self,
-        service: &BatteryService,
+        modules: &'a Modules,
+        id: &container::Id,
     ) -> Option<Element<'a, Message>> {
+        if *id != self.id {
+            return None;
+        }
+        let battery = &modules.battery;
         Some(
             Text::new(
-                service
+                battery
                     .batteries
                     .iter()
                     .enumerate()

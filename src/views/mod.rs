@@ -1,3 +1,8 @@
+use downcast_rs::{Downcast, impl_downcast};
+use iced::{Element, widget::container};
+
+use crate::{Message, config};
+
 pub mod battery;
 pub mod cava;
 pub mod label;
@@ -17,3 +22,24 @@ pub enum BarAlignment {
     Middle,
     End,
 }
+
+pub trait ViewTrait<M>: Downcast {
+    fn view<'a>(
+        &'a self,
+        modules: &'a M,
+        layout: &'a config::Layout,
+    ) -> Element<'a, Message>;
+
+    fn position(&self) -> BarPosition;
+
+    fn tooltip<'a>(
+        &'a self,
+        _modules: &'a M,
+        _id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        None
+    }
+
+    fn synchronize(&mut self, _modules: &M) {}
+}
+impl_downcast!(ViewTrait<M>);

@@ -4,8 +4,11 @@ use iced::{
 };
 
 use crate::{
-    Message, config, style::container_style, utils::mouse_binds,
-    views::BarPosition,
+    Message, config,
+    module::Modules,
+    style::container_style,
+    utils::mouse_binds,
+    views::{BarPosition, ViewTrait},
 };
 
 pub struct LabelView {
@@ -15,8 +18,12 @@ pub struct LabelView {
 }
 
 #[profiling::all_functions]
-impl<'a> LabelView {
-    pub fn view(&'a self, layout: &'a config::Layout) -> Element<'a, Message> {
+impl ViewTrait<Modules> for LabelView {
+    fn view<'a>(
+        &'a self,
+        _modules: &'a Modules,
+        layout: &'a config::Layout,
+    ) -> Element<'a, Message> {
         let mut content = Container::new(
             text(self.config.text.clone()).size(self.config.size),
         );
@@ -34,7 +41,19 @@ impl<'a> LabelView {
         mouse_binds(content, &self.config.binds, tooltip_id)
     }
 
-    pub fn render_tooltip(&'a self) -> Option<Element<'a, Message>> {
+    fn position(&self) -> BarPosition {
+        self.position
+    }
+
+    fn tooltip<'a>(
+        &'a self,
+        _service: &'a Modules,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        if *id != self.id {
+            return None;
+        }
+
         self.config
             .tooltip
             .as_ref()

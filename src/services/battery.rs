@@ -1,7 +1,5 @@
-use iced::time::{self, Duration};
 use tracing::error;
 
-use crate::{Message, ModuleMessage, services::Service};
 extern crate starship_battery as battery;
 
 #[derive(Debug, Clone)]
@@ -15,19 +13,7 @@ pub struct BatteryService {
     pub batteries: Vec<BatteryInfo>,
 }
 
-impl Service for BatteryService {
-    type Event = ();
-    fn handle_event(&mut self, _event: Self::Event) -> iced::Task<Message> {
-        self.fetch_battery_info();
-        iced::Task::none()
-    }
-
-    fn subscription() -> iced::Subscription<Message> {
-        time::every(Duration::from_secs(1))
-            .map(|_| Message::Msg(ModuleMessage::UpdateBattery(())))
-    }
-}
-
+#[profiling::all_functions]
 impl BatteryService {
     pub fn new() -> Self {
         let manager = match battery::Manager::new() {
@@ -47,7 +33,6 @@ impl BatteryService {
         new
     }
 
-    #[profiling::function]
     pub fn fetch_battery_info(&mut self) {
         let Some(manager) = &self.manager else {
             return error!("No battery manager");

@@ -11,9 +11,10 @@ use rustc_hash::FxHashMap;
 use crate::{
     Message,
     config::{self},
-    services::mpris::{MprisPlayer, MprisService},
+    module::Modules,
+    services::mpris::MprisPlayer,
     style::container_style,
-    views::BarPosition,
+    views::{BarPosition, ViewTrait},
 };
 
 pub struct MprisView {
@@ -23,12 +24,13 @@ pub struct MprisView {
 }
 
 #[profiling::all_functions]
-impl<'a> MprisView {
-    pub fn view(
+impl ViewTrait<Modules> for MprisView {
+    fn view<'a>(
         &'a self,
-        service: &'a MprisService,
+        service: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
+        let service = &service.mpris;
         if layout.anchor.vertical() {
             service
                 .players
@@ -70,11 +72,16 @@ impl<'a> MprisView {
         }
     }
 
-    pub fn render_player_tooltip(
+    fn position(&self) -> BarPosition {
+        self.position
+    }
+
+    fn tooltip<'a>(
         &'a self,
-        service: &'a MprisService,
+        service: &'a Modules,
         id: &container::Id,
     ) -> Option<Element<'a, Message>> {
+        let service = &service.mpris;
         self.player_views.iter().find_map(|(name, view)| {
             if view.id == *id {
                 service
@@ -86,6 +93,18 @@ impl<'a> MprisView {
             }
         })
     }
+
+    fn synchronize(&mut self, modules: &Modules) {
+        let service = &modules.mpris;
+        self.player_views
+            .retain(|name, _| service.players.contains_key(name));
+
+        for name in service.players.keys() {
+            self.player_views
+                .entry(name.clone())
+                .or_insert_with(MprisPlayerView::new);
+        }
+    }
 }
 
 impl MprisView {
@@ -94,17 +113,6 @@ impl MprisView {
             config,
             position,
             player_views: FxHashMap::default(),
-        }
-    }
-
-    pub fn synchronize(&mut self, service: &MprisService) {
-        self.player_views
-            .retain(|name, _| service.players.contains_key(name));
-
-        for name in service.players.keys() {
-            self.player_views
-                .entry(name.clone())
-                .or_insert_with(MprisPlayerView::new);
         }
     }
 }

@@ -12,6 +12,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
 ] }
 color-thief = "0.2.2"
 directories = "6.0.0"
+downcast-rs = "2.0.2"
 freedesktop-desktop-entry = { version = "0.7.19", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntlet-0.13.1", features = [
