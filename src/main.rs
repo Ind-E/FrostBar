@@ -35,6 +35,7 @@ use crate::{
     module::{ModuleAction, Modules},
     services::{
         cava::CavaSubscriptionRecipe, mpris::MprisService, niri::NiriService,
+        systray::Systray,
     },
     utils::{
         CommandSpec, init_tracing, open_dummy_window, open_tooltip_window,
@@ -205,6 +206,8 @@ impl Bar {
 
         subscriptions.push(MprisService::subscription());
         subscriptions.push(NiriService::subscription());
+
+        subscriptions.push(Systray::subscription());
 
         // subscriptions.extend(self.modules.subscriptions());
 

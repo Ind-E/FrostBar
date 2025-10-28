@@ -1060,12 +1060,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
-name = "downcast-rs"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
-
-[[package]]
 name = "dpi"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1456,7 +1450,6 @@ dependencies = [
  "chrono",
  "color-thief",
  "directories",
- "downcast-rs 2.0.2",
  "freedesktop-desktop-entry",
  "freedesktop-icons",
  "iced",
@@ -1470,6 +1463,7 @@ dependencies = [
  "reqwest",
  "rustc-hash 2.1.1",
  "starship-battery",
+ "system-tray",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -4785,6 +4779,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-tray"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c2bb18406dcf33543cbedac3f55c206cb98d7a0140712c46e0c71431589585d"
+dependencies = [
+ "cfg-if",
+ "futures-lite",
+ "serde",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5605,7 +5614,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe770181423e5fc79d3e2a7f4410b7799d5aab1de4372853de3c6aa13ca24121"
 dependencies = [
  "cc",
- "downcast-rs 1.2.1",
+ "downcast-rs",
  "rustix 0.38.44",
  "scoped-tls",
  "smallvec",

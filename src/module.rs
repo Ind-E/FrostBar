@@ -13,12 +13,13 @@ use crate::{
         cava::CavaService,
         mpris::{MprisEvent, MprisService},
         niri::{NiriEvent, NiriService},
+        systray::{self, Systray},
         time::TimeService,
     },
     views::{
         BarAlignment, BarPosition, ViewTrait, battery::BatteryView,
         cava::CavaView, label::LabelView, mpris::MprisView, niri::NiriView,
-        time::TimeView,
+        systray::SystrayView, time::TimeView,
     },
 };
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,7 @@ pub enum Message {
     CavaColorUpdate(Option<Vec<Color>>),
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
+    Systray(systray::Event),
     SynchronizeAll,
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
@@ -45,6 +47,7 @@ pub struct Modules {
     pub mpris: MprisService,
     pub time: TimeService,
     pub niri: NiriService,
+    pub systray: Systray,
     pub views: Vec<View>,
 }
 
@@ -56,6 +59,7 @@ impl Modules {
             mpris: MprisService::new(),
             time: TimeService::new(),
             niri: NiriService::new(icon_cache),
+            systray: Systray::new(),
             views: Vec::new(),
         }
     }
@@ -101,6 +105,8 @@ impl Modules {
         process_section(&mut config.start.modules, BarAlignment::Start);
         process_section(&mut config.middle.modules, BarAlignment::Middle);
         process_section(&mut config.end.modules, BarAlignment::End);
+
+        self.views.push(Box::new(SystrayView {}));
     }
 
     pub fn render_views<'a>(
@@ -158,6 +164,9 @@ impl Modules {
                     player.colors.clone_from(&colors);
                     self.cava.update_gradient(colors);
                 }
+            }
+            Message::Systray(event) => {
+                self.systray.handle_event(event);
             }
             Message::SynchronizeAll => {
                 self.synchronize_views();

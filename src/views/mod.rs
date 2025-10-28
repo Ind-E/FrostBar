@@ -1,4 +1,3 @@
-use downcast_rs::{Downcast, impl_downcast};
 use iced::{Element, widget::container};
 
 use crate::{Message, config};
@@ -8,6 +7,7 @@ pub mod cava;
 pub mod label;
 pub mod mpris;
 pub mod niri;
+pub mod systray;
 pub mod time;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -23,7 +23,7 @@ pub enum BarAlignment {
     End,
 }
 
-pub trait ViewTrait<M>: Downcast {
+pub trait ViewTrait<M> {
     fn view<'a>(
         &'a self,
         modules: &'a M,
@@ -42,4 +42,3 @@ pub trait ViewTrait<M>: Downcast {
 
     fn synchronize(&mut self, _modules: &M) {}
 }
-impl_downcast!(ViewTrait<M>);

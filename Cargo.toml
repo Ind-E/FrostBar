@@ -12,7 +12,6 @@ chrono = { version = "0.4.41", default-features = false, features = [
 ] }
 color-thief = "0.2.2"
 directories = "6.0.0"
-downcast-rs = "2.0.2"
 freedesktop-desktop-entry = { version = "0.7.19", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntlet-0.13.1", features = [
@@ -37,6 +36,7 @@ profiling = { version = "1.0.17" }
 reqwest = { version = "0.12.23", features = ["blocking"] }
 rustc-hash = { version = "2.1.1" }
 starship-battery = { version = "0.10.2", default-features = false }
+system-tray = "0.8.4"
 tokio = { version = "1.47.1", features = ["macros"] }
 tokio-stream = "0.1.17"
 tracing = "0.1.41"
