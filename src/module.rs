@@ -58,8 +58,8 @@ impl Modules {
             cava: CavaService::new(),
             mpris: MprisService::new(),
             time: TimeService::new(),
-            niri: NiriService::new(icon_cache),
-            systray: Systray::new(),
+            niri: NiriService::new(icon_cache.clone()),
+            systray: Systray::new(icon_cache),
             views: Vec::new(),
         }
     }
