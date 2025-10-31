@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{
     Element, Length,
     widget::{Container, Text, container, text},
@@ -15,20 +17,19 @@ pub struct TimeView {
     pub id: container::Id,
     config: config::Time,
     pub position: BarPosition,
+    current_time: String,
+    current_tooltip: String,
 }
 
 #[profiling::all_functions]
 impl ViewTrait<Modules> for TimeView {
     fn view<'a>(
         &'a self,
-        modules: &'a Modules,
+        _modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
-        let service = &modules.time;
-        let time = service.time.format(&self.config.format).to_string();
-
-        let mut content =
-            Container::new(text(time).size(16)).id(self.id.clone());
+        let mut content = Container::new(text(&self.current_time).size(16))
+            .id(self.id.clone());
         content = container_style(content, &self.config.style, layout);
 
         if layout.anchor.vertical() {
@@ -46,19 +47,28 @@ impl ViewTrait<Modules> for TimeView {
 
     fn tooltip<'a>(
         &'a self,
-        service: &Modules,
+        _service: &Modules,
         id: &container::Id,
     ) -> Option<Element<'a, Message>> {
         if *id != self.id {
             return None;
         }
-        let service = &service.time;
-        Some(
-            Text::new(
-                service.time.format(&self.config.tooltip_format).to_string(),
-            )
-            .into(),
-        )
+        Some(Text::new(&self.current_tooltip).into())
+    }
+
+    fn synchronize(&mut self, modules: &Modules) {
+        self.current_time =
+            modules.time.time.format(&self.config.format).to_string();
+
+        self.current_tooltip = modules
+            .time
+            .time
+            .format(&self.config.tooltip_format)
+            .to_string();
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -68,6 +78,8 @@ impl TimeView {
             id: container::Id::unique(),
             config,
             position,
+            current_time: String::new(),
+            current_tooltip: String::new(),
         }
     }
 }

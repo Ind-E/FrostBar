@@ -15,10 +15,7 @@ use iced::{
     window::Id,
 };
 use notify_rust::Notification;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::time::Duration;
 use tracing_subscriber::{
     EnvFilter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
 };
@@ -158,7 +155,7 @@ pub struct Bar {
 #[profiling::all_functions]
 impl Bar {
     pub fn new(mut config: Config, path: ConfigPath) -> (Self, Task<Message>) {
-        let icon_cache = Arc::new(Mutex::new(IconCache::new()));
+        let icon_cache = IconCache::new();
 
         let mut modules = Modules::new(icon_cache);
         modules.update_from_config(&mut config);

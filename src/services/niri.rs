@@ -8,10 +8,7 @@ use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
-use std::{
-    cmp::Ordering,
-    sync::{Arc, Mutex},
-};
+use std::cmp::Ordering;
 use tracing::error;
 
 use crate::{
@@ -75,11 +72,7 @@ pub struct Workspace {
 }
 
 #[profiling::function]
-fn map_window(
-    window: &niri_ipc::Window,
-    icon_cache: Arc<Mutex<IconCache>>,
-) -> Window {
-    let mut icon_cache = icon_cache.lock().unwrap();
+fn map_window(window: &niri_ipc::Window, icon_cache: IconCache) -> Window {
     Window {
         id: window.id,
         icon: window
@@ -111,13 +104,13 @@ pub struct NiriService {
     pub workspaces: FxHashMap<u64, Workspace>,
     pub windows: FxHashMap<u64, niri_ipc::Window>,
     pub hovered_workspace_id: Option<u64>,
-    pub icon_cache: Arc<Mutex<IconCache>>,
+    pub icon_cache: IconCache,
     pub sender: Option<mpsc::Sender<Request>>,
 }
 
 #[profiling::all_functions]
 impl NiriService {
-    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
+    pub fn new(icon_cache: IconCache) -> Self {
         Self {
             workspaces: FxHashMap::default(),
             windows: FxHashMap::default(),

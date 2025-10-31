@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::widget::{Column, Image, Svg};
 
 use crate::{
@@ -35,5 +37,9 @@ impl ViewTrait<Modules> for SystrayView {
             idx: 0,
             align: BarAlignment::End,
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

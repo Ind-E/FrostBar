@@ -48,16 +48,17 @@ pub fn handle_from_pixmaps(
                  height: h2,
                  ..
              }| {
+                (w1 * h1).cmp(&(w2 * h2))
                 // take smallest one bigger than requested size, otherwise take biggest
-                let a = size * size;
-                let a1 = w1 * h1;
-                let a2 = w2 * h2;
-                match (a1 >= a, a2 >= a) {
-                    (true, true) => a2.cmp(&a1),
-                    (true, false) => std::cmp::Ordering::Greater,
-                    (false, true) => std::cmp::Ordering::Less,
-                    (false, false) => a1.cmp(&a2),
-                }
+                // let a = size * size;
+                // let a1 = w1 * h1;
+                // let a2 = w2 * h2;
+                // match (a1 >= a, a2 >= a) {
+                //     (true, true) => a2.cmp(&a1),
+                //     (true, false) => std::cmp::Ordering::Greater,
+                //     (false, true) => std::cmp::Ordering::Less,
+                //     (false, false) => a1.cmp(&a2),
+                // }
             },
         )
         .and_then(|IconPixmap { pixels, .. }| {
@@ -68,11 +69,11 @@ pub fn handle_from_pixmaps(
 
 pub struct Systray {
     pub inner: FxHashMap<String, (TrayItem, Option<TrayMenu>)>,
-    icon_cache: Arc<Mutex<IconCache>>,
+    icon_cache: IconCache,
 }
 
 impl Systray {
-    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
+    pub fn new(icon_cache: IconCache) -> Self {
         Self {
             inner: FxHashMap::default(),
             icon_cache,
@@ -81,8 +82,7 @@ impl Systray {
 
     fn map_sni(&self, sni: StatusNotifierItem) -> TrayItem {
         let icon = if let Some(icon_name) = &sni.icon_name
-            && let Some(icon) =
-                self.icon_cache.lock().unwrap().get_icon(icon_name)
+            && let Some(icon) = self.icon_cache.get_icon(icon_name)
         {
             Some(icon)
         } else if let Some(icon_pixmaps) = &sni.icon_pixmap {

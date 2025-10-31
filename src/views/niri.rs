@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{
     Alignment, Element, Length,
     mouse::Interaction,
@@ -307,5 +309,9 @@ impl ViewTrait<Modules> for NiriView {
                 .or_insert_with(WorkspaceView::new);
             ws_view.synchronize(workspace);
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{
     Element, Length, Point, Renderer, Size,
     widget::{Canvas, Container, canvas},
@@ -52,6 +54,10 @@ impl ViewTrait<Modules> for CavaView {
 
     fn position(&self) -> BarPosition {
         self.position
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

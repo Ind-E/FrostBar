@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{
     Element, Length,
     widget::{Column, Container, Text, container},
@@ -98,8 +100,13 @@ impl ViewTrait<Modules> for BatteryView {
             .into(),
         )
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
+#[profiling::all_functions]
 impl BatteryView {
     pub fn new(config: config::Battery, position: BarPosition) -> Self {
         Self {
@@ -110,6 +117,7 @@ impl BatteryView {
     }
 }
 
+#[profiling::function]
 fn get_battery_icon(percentage: f32) -> &'static str {
     match percentage {
         p if !(0.0..=1.0).contains(&p) => {

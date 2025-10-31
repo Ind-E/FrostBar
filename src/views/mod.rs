@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{Element, widget::container};
 
 use crate::{Message, config};
@@ -23,7 +25,7 @@ pub enum BarAlignment {
     End,
 }
 
-pub trait ViewTrait<M> {
+pub trait ViewTrait<M>: Any {
     fn view<'a>(
         &'a self,
         modules: &'a M,
@@ -41,4 +43,6 @@ pub trait ViewTrait<M> {
     }
 
     fn synchronize(&mut self, _modules: &M) {}
+
+    fn as_any(&self) -> &dyn Any;
 }

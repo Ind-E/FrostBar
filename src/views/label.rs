@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{
     Element, Length,
     widget::{Container, Text, container, text},
@@ -58,6 +60,10 @@ impl ViewTrait<Modules> for LabelView {
             .tooltip
             .as_ref()
             .map(|tooltip| Text::new(tooltip.clone()).into())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

@@ -1,7 +1,7 @@
+use dashmap::DashMap;
 use std::{
-    collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{Arc, LazyLock},
 };
 use tracing::{debug, warn};
 
@@ -86,9 +86,9 @@ fn icon_path_from_name(icon_path: &str) -> Option<PathBuf> {
     None
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IconCache {
-    inner: BTreeMap<String, Icon>,
+    inner: Arc<DashMap<String, Icon>>,
 }
 
 #[profiling::function]
@@ -112,11 +112,11 @@ fn load_icon_from_path(path: &Path) -> Option<Icon> {
 impl IconCache {
     pub fn new() -> Self {
         Self {
-            inner: BTreeMap::new(),
+            inner: Arc::new(DashMap::new()),
         }
     }
 
-    pub fn get_icon(&mut self, app_id: &str) -> Option<Icon> {
+    pub fn get_icon(&self, app_id: &str) -> Option<Icon> {
         if let Some(icon) = self.inner.get(app_id) {
             return Some(icon.clone());
         }

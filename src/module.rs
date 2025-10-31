@@ -22,7 +22,6 @@ use crate::{
         systray::SystrayView, time::TimeView,
     },
 };
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -51,8 +50,9 @@ pub struct Modules {
     pub views: Vec<View>,
 }
 
+#[profiling::all_functions]
 impl Modules {
-    pub fn new(icon_cache: Arc<Mutex<IconCache>>) -> Self {
+    pub fn new(icon_cache: IconCache) -> Self {
         Self {
             battery: BatteryService::new(),
             cava: CavaService::new(),
@@ -139,10 +139,15 @@ impl Modules {
             Message::Tick(time) => {
                 self.time.handle_event(time);
                 self.battery.fetch_battery_info();
+                self.synchronize_views_filtered(|view| {
+                    view.as_any().is::<TimeView>()
+                });
             }
             Message::Niri(event) => {
                 let task = self.niri.handle_event(event);
-                self.synchronize_views();
+                self.synchronize_views_filtered(|view| {
+                    view.as_any().is::<NiriView>()
+                });
                 return task;
             }
             Message::CavaUpdate(event) => {
@@ -153,7 +158,9 @@ impl Modules {
             }
             Message::Mpris(event) => {
                 let task = self.mpris.handle_event(event);
-                self.synchronize_views();
+                self.synchronize_views_filtered(|view| {
+                    view.as_any().is::<MprisView>()
+                });
                 return task;
             }
             Message::PlayerArtUpdate(name, art) => {
@@ -180,6 +187,15 @@ impl Modules {
         for i in 0..self.views.len() {
             let view = unsafe { &mut *(&raw mut self.views[i]) };
             view.synchronize(unsafe { &*(self as *const _) });
+        }
+    }
+
+    fn synchronize_views_filtered(&mut self, filter: fn(&View) -> bool) {
+        for i in 0..self.views.len() {
+            let view = unsafe { &mut *(&raw mut self.views[i]) };
+            if filter(view) {
+                view.synchronize(unsafe { &*(self as *const _) });
+            }
         }
     }
 }

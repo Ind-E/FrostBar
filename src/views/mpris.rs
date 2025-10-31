@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use iced::{
     Element, Length,
     mouse::{Interaction, ScrollDelta},
@@ -104,6 +106,10 @@ impl ViewTrait<Modules> for MprisView {
                 .entry(name.clone())
                 .or_insert_with(MprisPlayerView::new);
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
