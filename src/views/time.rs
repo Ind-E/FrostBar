@@ -15,7 +15,7 @@ use crate::{
 
 pub struct TimeView {
     pub id: container::Id,
-    config: config::Time,
+    config: config::HydratedTime,
     pub position: BarPosition,
     current_time: String,
     current_tooltip: String,
@@ -73,7 +73,7 @@ impl ViewTrait<Modules> for TimeView {
 }
 
 impl TimeView {
-    pub fn new(config: config::Time, position: BarPosition) -> Self {
+    pub fn new(config: config::HydratedTime, position: BarPosition) -> Self {
         Self {
             id: container::Id::unique(),
             config,

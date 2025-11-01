@@ -17,12 +17,12 @@ use crate::{
 const MAX_BAR_HEIGHT: u32 = 12;
 
 pub struct CavaView {
-    config: config::Cava,
+    config: config::HydratedCava,
     pub position: BarPosition,
 }
 
 impl CavaView {
-    pub fn new(config: config::Cava, position: BarPosition) -> Self {
+    pub fn new(config: config::HydratedCava, position: BarPosition) -> Self {
         Self { config, position }
     }
 }
@@ -63,7 +63,7 @@ impl ViewTrait<Modules> for CavaView {
 
 struct CavaCanvas<'a> {
     service: &'a CavaService,
-    config: &'a config::Cava,
+    config: &'a config::HydratedCava,
     cache: canvas::Cache,
     vertical: bool,
 }
@@ -71,7 +71,7 @@ struct CavaCanvas<'a> {
 impl<'a> CavaCanvas<'a> {
     pub fn new(
         service: &'a CavaService,
-        config: &'a config::Cava,
+        config: &'a config::HydratedCava,
         vertical: bool,
     ) -> Self {
         Self {
@@ -128,6 +128,7 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
 
                     let pos = i as f32 * bar_thickness_total + spacing / 2.0;
 
+                    let fallback_color = &self.config.color;
                     let bar_color = if self.config.dynamic_color {
                         self.service.gradient.as_ref().and_then(|gradient| {
                             gradient.get(i * gradient.len() / bars_per_channel)
@@ -135,7 +136,7 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                     } else {
                         None
                     }
-                    .unwrap_or(&self.config.color);
+                    .unwrap_or(fallback_color);
 
                     if left_val > 0 {
                         let (top_left, bar_size) = if self.vertical {

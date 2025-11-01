@@ -9,7 +9,7 @@ use iced::{
     Settings, Size, Subscription, Task, Theme,
     advanced::subscription::from_recipe,
     border::rounded,
-    padding::{bottom, left, top},
+    padding::{left, top},
     theme,
     widget::{Column, Container, Row, container, stack},
     window::Id,
@@ -24,7 +24,7 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{COLORS, Colors, Config, MediaControl},
+    config::{ColorVars, Config, HydratedConfig, MediaControl},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
@@ -85,14 +85,14 @@ pub fn main() -> iced::Result {
                 .with(file_layer)
                 .init();
 
-            let (config, config_path, config_dir) = Config::init();
+            let (config, color_vars, config_path, config_dir) = Config::init();
 
             let logfile_path = init_tracing(&config_dir, &handle);
 
             info!("starting version {}", env!("CARGO_PKG_VERSION"));
             info!("saving logs to {:?}", logfile_path);
 
-            Bar::new(config, config_path)
+            Bar::new(config, color_vars, config_path)
         },
         Bar::update,
         Bar::view,
@@ -143,7 +143,8 @@ pub struct Bar {
     id: Option<Id>,
     dummy_id: Id,
     monitor_size: Option<Size>,
-    config: Config,
+    config: HydratedConfig,
+    color_vars: ColorVars,
     path: ConfigPath,
 
     modules: Modules,
@@ -154,7 +155,11 @@ pub struct Bar {
 
 #[profiling::all_functions]
 impl Bar {
-    pub fn new(mut config: Config, path: ConfigPath) -> (Self, Task<Message>) {
+    pub fn new(
+        mut config: HydratedConfig,
+        color_vars: ColorVars,
+        path: ConfigPath,
+    ) -> (Self, Task<Message>) {
         let icon_cache = IconCache::new();
 
         let mut modules = Modules::new(icon_cache);
@@ -168,6 +173,7 @@ impl Bar {
             dummy_id,
             modules,
             config,
+            color_vars,
             path,
             tooltip_window_id: None,
             active_tooltip_id: None,
@@ -209,6 +215,50 @@ impl Bar {
         // subscriptions.extend(self.modules.subscriptions());
 
         Subscription::batch(subscriptions)
+    }
+
+    fn reload_config(&mut self) -> Task<Message> {
+        match Config::load(&self.path.config) {
+            Ok(new_config) => {
+                let mut new_config = new_config.hydrate(&self.color_vars);
+                self.modules.update_from_config(&mut new_config);
+
+                if self.config.layout == new_config.layout {
+                    self.config = new_config;
+                    return Task::done(Message::Module(
+                        module::Message::SynchronizeAll,
+                    ));
+                } else if let Some(id) = self.id {
+                    self.config = new_config;
+                    let close = iced::window::close(id);
+                    let (id, open) = open_window(
+                        &self.config.layout,
+                        self.monitor_size.unwrap(),
+                    );
+                    self.id = Some(id);
+                    return Task::batch([
+                        close,
+                        open,
+                        Task::done(Message::Module(
+                            module::Message::SynchronizeAll,
+                        )),
+                    ]);
+                }
+            }
+            Err(e) => {
+                error!("{:?}", e);
+                if let Err(e) = Notification::new()
+                    .summary(BAR_NAMESPACE)
+                    .body("Failed to parse config file")
+                    .show()
+                {
+                    warn!(
+                        "Failed to send config parse error notification: {e:?}"
+                    );
+                }
+            }
+        }
+        Task::none()
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -276,55 +326,10 @@ impl Bar {
             Message::FileWatcherEvent(event) => {
                 match event.colors {
                     CheckType::Changed => {
-                        match Colors::load(&self.path.colors) {
-                            Ok(new_colors) => {
-                                if let Some(Ok(mut rwlock)) =
-                                    COLORS.get().map(|rwlock| rwlock.write())
-                                {
-                                    *rwlock = new_colors;
-                                    std::mem::drop(rwlock);
-
-                                    match Config::load(&self.path.config) {
-                                        Ok(mut new_config) => {
-                                            self.modules.update_from_config(
-                                                &mut new_config,
-                                            );
-
-                                            if self.config.layout
-                                                == new_config.layout
-                                            {
-                                                self.config = new_config;
-                                                return Task::done(Message::Module(
-                                                    module::Message::SynchronizeAll,
-                                                ));
-                                            } else if let Some(id) = self.id {
-                                                self.config = new_config;
-                                                let close =
-                                                    iced::window::close(id);
-                                                let (id, open) = open_window(
-                                                    &self.config.layout,
-                                                    self.monitor_size.unwrap(),
-                                                );
-                                                self.id = Some(id);
-                                                return Task::batch([
-                                                    close, open, Task::done(Message::Module(module::Message::SynchronizeAll))
-                                                ]);
-                                            }
-                                        }
-                                        Err(e) => {
-                                            error!("{:?}", e);
-                                            if let Err(e) = Notification::new()
-                                    .summary(BAR_NAMESPACE)
-                                    .body("Failed to parse config file")
-                                    .show()
-                                {
-                                    warn!(
-                                        "Failed to send config parse error notification: {e:?}"
-                                    );
-                                }
-                                        }
-                                    }
-                                }
+                        match ColorVars::load(&self.path.colors) {
+                            Ok(new_color_vars) => {
+                                self.color_vars = new_color_vars;
+                                return self.reload_config();
                             }
                             Err(e) => {
                                 error!("{:?}", e);
@@ -355,48 +360,10 @@ impl Bar {
                     }
                     CheckType::Unchanged => {}
                 }
+
                 match event.config {
                     CheckType::Changed => {
-                        match Config::load(&self.path.config) {
-                            Ok(mut new_config) => {
-                                self.modules
-                                    .update_from_config(&mut new_config);
-
-                                if self.config.layout == new_config.layout {
-                                    self.config = new_config;
-                                    return Task::done(Message::Module(
-                                        module::Message::SynchronizeAll,
-                                    ));
-                                } else if let Some(id) = self.id {
-                                    self.config = new_config;
-                                    let close = iced::window::close(id);
-                                    let (id, open) = open_window(
-                                        &self.config.layout,
-                                        self.monitor_size.unwrap(),
-                                    );
-                                    self.id = Some(id);
-                                    return Task::batch([
-                                        close,
-                                        open,
-                                        Task::done(Message::Module(
-                                            module::Message::SynchronizeAll,
-                                        )),
-                                    ]);
-                                }
-                            }
-                            Err(e) => {
-                                error!("{:?}", e);
-                                if let Err(e) = Notification::new()
-                                    .summary(BAR_NAMESPACE)
-                                    .body("Failed to parse config file")
-                                    .show()
-                                {
-                                    warn!(
-                                        "Failed to send config parse error notification: {e:?}"
-                                    );
-                                }
-                            }
-                        }
+                        return self.reload_config();
                     }
                     CheckType::Missing => {
                         if let Err(e) = Notification::new()
@@ -622,7 +589,7 @@ impl Bar {
         };
 
         bar.style(|_theme| container::Style {
-            background: Some(Background::Color(*self.config.style.background)),
+            background: Some(Background::Color(self.config.style.background)),
             border: rounded(self.config.style.border_radius),
             ..Default::default()
         })
@@ -641,7 +608,7 @@ impl Bar {
             Container::new(content).padding(5).style(|_theme: &Theme| {
                 container::Style {
                     background: Some(Background::Color(
-                        *self.config.style.background,
+                        self.config.style.background,
                     )),
                     border: rounded(self.config.style.border_radius),
                     ..Default::default()

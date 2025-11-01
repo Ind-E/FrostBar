@@ -2,7 +2,6 @@ use std::any::Any;
 
 use iced::{
     Alignment,
-    padding::bottom,
     widget::{Column, Image, Svg},
 };
 

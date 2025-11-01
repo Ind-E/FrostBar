@@ -4,19 +4,26 @@ use std::{
     io::Write,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    sync::{OnceLock, RwLock},
 };
 
 use directories::ProjectDirs;
-use iced::{Color, color};
-use knus::{DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError};
+use iced::{Background, Color, border, color, widget::container};
+
+use knus::{
+    Decode, DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError,
+};
 use miette::{Context, IntoDiagnostic};
 use notify_rust::Notification;
+use rustc_hash::FxHashMap;
 use tracing::{debug, error, info};
 
-use crate::{constants::BAR_NAMESPACE, file_watcher::ConfigPath};
-
-pub static COLORS: OnceLock<RwLock<Colors>> = OnceLock::new();
+use crate::{
+    Message,
+    constants::BAR_NAMESPACE,
+    file_watcher::ConfigPath,
+    utils::CommandSpec,
+    views::{BarAlignment, BarPosition},
+};
 
 #[derive(knus::Decode, Default, Debug)]
 pub struct Config {
@@ -30,6 +37,65 @@ pub struct Config {
     pub middle: Middle,
     #[knus(child, default)]
     pub end: End,
+}
+
+pub struct HydratedConfig {
+    pub layout: Layout,
+    pub style: HydratedStyle,
+    pub modules: HydratedConfigModules,
+}
+
+impl Config {
+    pub fn hydrate(self, colors: &ColorVars) -> HydratedConfig {
+        HydratedConfig {
+            layout: self.layout,
+            style: self.style.hydrate(colors),
+            modules: hydrate_modules(
+                (self.start, self.middle, self.end),
+                colors,
+            ),
+        }
+    }
+}
+
+fn hydrate_modules(
+    value: (Start, Middle, End),
+    colors: &ColorVars,
+) -> HydratedConfigModules {
+    let mut modules = Vec::new();
+
+    let mut process_section =
+        |mut module_configs: Vec<ConfigModule>, align: BarAlignment| {
+            for (idx, module_config) in module_configs.drain(..).enumerate() {
+                let position = BarPosition { idx, align };
+                match module_config {
+                    ConfigModule::Battery(c) => {
+                        modules.push((c.hydrate(colors), position))
+                    }
+                    ConfigModule::Cava(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                    ConfigModule::Mpris(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                    ConfigModule::Time(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                    ConfigModule::Label(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                    ConfigModule::Niri(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                }
+            }
+        };
+
+    process_section(value.0.modules, BarAlignment::Start);
+    process_section(value.1.modules, BarAlignment::Middle);
+    process_section(value.2.modules, BarAlignment::End);
+
+    HydratedConfigModules { inner: modules }
 }
 
 #[derive(knus::Decode, Debug, Default)]
@@ -101,8 +167,8 @@ impl Default for Layout {
 
 #[derive(knus::Decode, Debug, Clone)]
 pub struct Style {
-    #[knus(child, unwrap(argument), default = Self::default().border_radius)]
-    pub border_radius: u16,
+    #[knus(child, default = Self::default().border_radius)]
+    pub border_radius: ConfigRadius,
     #[knus(child, unwrap(argument), default = Self::default().background)]
     pub background: ConfigColor,
 }
@@ -110,16 +176,24 @@ pub struct Style {
 impl Default for Style {
     fn default() -> Self {
         Self {
-            border_radius: 0,
+            border_radius: ConfigRadius::All(0.0),
             background: Color::from_rgb(0.0, 0.0, 0.0).into(),
         }
     }
 }
 
-#[derive(knus::Decode, Debug, Default)]
-pub struct Colors {
-    #[knus(children, default)]
-    vars: Vec<ColorVariable>,
+pub struct HydratedStyle {
+    pub border_radius: border::Radius,
+    pub background: Color,
+}
+
+impl Style {
+    fn hydrate(self, colors: &ColorVars) -> HydratedStyle {
+        HydratedStyle {
+            border_radius: self.border_radius.into(),
+            background: self.background.resolve(colors),
+        }
+    }
 }
 
 #[derive(knus::Decode, Debug)]
@@ -130,6 +204,29 @@ struct ColorVariable {
     pub color: ConfigColor,
 }
 
+#[derive(Debug, Default)]
+pub struct ColorVars {
+    vars: FxHashMap<String, Color>,
+}
+
+impl<S> knus::DecodeChildren<S> for ColorVars
+where
+    S: knus::traits::ErrorSpan,
+{
+    fn decode_children(
+        nodes: &[knus::ast::SpannedNode<S>],
+        ctx: &mut knus::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        let mut vars = FxHashMap::default();
+        for node in nodes {
+            let var = ColorVariable::decode_node(node, ctx)?;
+            vars.insert(var.name, var.color.parse());
+        }
+
+        Ok(Self { vars })
+    }
+}
+
 #[derive(knus::Decode, Debug)]
 pub enum ConfigModule {
     Cava(Cava),
@@ -138,6 +235,33 @@ pub enum ConfigModule {
     Mpris(Mpris),
     Niri(Niri),
     Label(Label),
+}
+
+pub enum HydratedConfigModule {
+    Cava(HydratedCava),
+    Battery(HydratedBattery),
+    Time(HydratedTime),
+    Mpris(HydratedMpris),
+    Niri(HydratedNiri),
+    Label(HydratedLabel),
+}
+
+pub struct HydratedConfigModules {
+    inner: Vec<(HydratedConfigModule, BarPosition)>,
+}
+
+impl std::ops::Deref for HydratedConfigModules {
+    type Target = Vec<(HydratedConfigModule, BarPosition)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl std::ops::DerefMut for HydratedConfigModules {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 #[derive(knus::Decode, Debug)]
@@ -170,6 +294,27 @@ impl Default for Cava {
     }
 }
 
+impl Cava {
+    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+        let cava = HydratedCava {
+            spacing: self.spacing,
+            color: self.color.resolve(colors),
+            dynamic_color: self.dynamic_color,
+            binds: self.binds.hydrate(),
+            style: self.style.hydrate(colors),
+        };
+        HydratedConfigModule::Cava(cava)
+    }
+}
+
+pub struct HydratedCava {
+    pub spacing: f32,
+    pub color: Color,
+    pub dynamic_color: bool,
+    pub binds: HydratedMouseBinds,
+    pub style: HydratedContainerStyle,
+}
+
 #[derive(knus::Decode, Debug)]
 pub struct Battery {
     #[knus(child, unwrap(argument), default = Self::default().icon_size)]
@@ -196,6 +341,26 @@ impl Default for Battery {
     }
 }
 
+impl Battery {
+    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+        let battery = HydratedBattery {
+            icon_size: self.icon_size,
+            charging_color: self.charging_color.resolve(colors),
+            style: self.style.hydrate(colors),
+            binds: self.binds.hydrate(),
+        };
+
+        HydratedConfigModule::Battery(battery)
+    }
+}
+
+pub struct HydratedBattery {
+    pub icon_size: u32,
+    pub charging_color: Color,
+    pub style: HydratedContainerStyle,
+    pub binds: HydratedMouseBinds,
+}
+
 #[derive(knus::Decode, Debug)]
 pub struct Time {
     #[knus(child, unwrap(argument), default = "%I\n%M".to_string())]
@@ -211,6 +376,26 @@ pub struct Time {
     pub style: ContainerStyle,
 }
 
+impl Time {
+    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+        let time = HydratedTime {
+            format: self.format,
+            tooltip_format: self.tooltip_format,
+            binds: self.binds.hydrate(),
+            style: self.style.hydrate(colors),
+        };
+
+        HydratedConfigModule::Time(time)
+    }
+}
+
+pub struct HydratedTime {
+    pub format: String,
+    pub tooltip_format: String,
+    pub binds: HydratedMouseBinds,
+    pub style: HydratedContainerStyle,
+}
+
 #[derive(knus::Decode, Debug, Clone)]
 pub struct Mpris {
     #[knus(child, unwrap(argument), default = "󰝚".to_string())]
@@ -221,6 +406,24 @@ pub struct Mpris {
 
     #[knus(child, default)]
     pub placeholder_style: ContainerStyle,
+}
+
+impl Mpris {
+    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+        let mpris = HydratedMpris {
+            placeholder: self.placeholder,
+            binds: self.binds,
+            placeholder_style: self.placeholder_style.hydrate(colors),
+        };
+
+        HydratedConfigModule::Mpris(mpris)
+    }
+}
+
+pub struct HydratedMpris {
+    pub placeholder: String,
+    pub binds: MouseBindsForMpris,
+    pub placeholder_style: HydratedContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone)]
@@ -250,6 +453,115 @@ pub struct Niri {
     pub workspace_style: ContainerStyle,
 }
 
+impl Niri {
+    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+        let default_style = self.workspace_style.hydrate(colors);
+
+        let mut hovered_style = default_style.clone();
+        if let Some(text_color) = &self
+            .workspace_hovered_style
+            .text_color
+            .map(|c| c.resolve(colors))
+        {
+            hovered_style.text_color = Some(*text_color);
+        }
+        if let Some(background) = &self
+            .workspace_hovered_style
+            .background
+            .map(|c| c.resolve(colors))
+        {
+            hovered_style.background = Some(Background::Color(*background))
+        }
+        if let Some(border) = &self.workspace_hovered_style.border {
+            let mut hovered_border = iced::Border::default();
+            if let Some(color) =
+                border.color.as_ref().map(|c| c.resolve(colors))
+            {
+                hovered_border.color = color;
+            }
+            if let Some(width) = border.width {
+                hovered_border.width = width;
+            }
+            if let Some(radius) = &border.radius {
+                hovered_border.radius = radius.clone().into();
+            }
+            hovered_style.border = hovered_border;
+        }
+
+        let mut active_style = default_style.clone();
+        let mut active_hovered_style = hovered_style.clone();
+        if let Some(text_color) = &self
+            .workspace_active_style
+            .text_color
+            .map(|c| c.resolve(colors))
+        {
+            active_style.text_color = Some(*text_color);
+            active_hovered_style.text_color = Some(*text_color);
+        }
+        if let Some(background) = &self
+            .workspace_active_style
+            .background
+            .map(|c| c.resolve(colors))
+        {
+            active_style.background = Some(Background::Color(*background));
+            active_hovered_style.background =
+                Some(Background::Color(*background));
+        }
+
+        if let Some(border) = &self.workspace_active_style.border {
+            let mut active_border = iced::Border::default();
+            let mut active_hovered_border = iced::Border::default();
+            if let Some(color) =
+                border.color.as_ref().map(|c| c.resolve(colors))
+            {
+                active_border.color = color;
+                active_hovered_border.color = color;
+            }
+            if let Some(width) = border.width {
+                active_border.width = width;
+                active_hovered_border.width = width;
+            }
+            if let Some(radius) = &border.radius {
+                active_border.radius = radius.clone().into();
+                active_hovered_border.radius = radius.clone().into();
+            }
+            active_style.border = active_border;
+            active_hovered_style.border = active_hovered_border;
+        }
+
+        let workspace_active_hovered_style_merged = active_hovered_style;
+        let workspace_active_style_merged = active_style;
+        let workspace_hovered_style_merged = hovered_style;
+        let window_focused_style_merged = HydratedContainerStyle::default();
+
+        let niri = HydratedNiri {
+            spacing: self.spacing,
+            workspace_offset: self.workspace_offset,
+            style: self.style.hydrate(colors),
+            workspace_active_hovered_style_merged,
+            workspace_active_style_merged,
+            workspace_hovered_style_merged,
+            workspace_default_style: default_style,
+            window_focused_style_merged,
+            window_default_style: self.window_style.hydrate(colors),
+        };
+
+        HydratedConfigModule::Niri(niri)
+    }
+}
+
+pub struct HydratedNiri {
+    pub spacing: u32,
+    pub workspace_offset: i8,
+    pub style: HydratedContainerStyle,
+    pub workspace_active_hovered_style_merged: HydratedContainerStyle,
+    pub workspace_active_style_merged: HydratedContainerStyle,
+    pub workspace_hovered_style_merged: HydratedContainerStyle,
+    pub workspace_default_style: HydratedContainerStyle,
+    pub window_focused_style_merged: HydratedContainerStyle,
+    pub window_default_style: HydratedContainerStyle,
+}
+
 #[derive(knus::Decode, Debug)]
 pub struct Label {
     #[knus(child, unwrap(argument), default = String::new())]
@@ -266,6 +578,28 @@ pub struct Label {
 
     #[knus(child, default)]
     pub style: ContainerStyle,
+}
+
+impl Label {
+    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+        let label = HydratedLabel {
+            text: self.text,
+            size: self.size,
+            tooltip: self.tooltip,
+            binds: self.binds.hydrate(),
+            style: self.style.hydrate(colors),
+        };
+
+        HydratedConfigModule::Label(label)
+    }
+}
+
+pub struct HydratedLabel {
+    pub text: String,
+    pub size: u32,
+    pub tooltip: Option<String>,
+    pub binds: HydratedMouseBinds,
+    pub style: HydratedContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]
@@ -295,6 +629,67 @@ pub struct MouseBinds {
     pub scroll_left: Option<Command>,
 }
 
+impl MouseBinds {
+    fn hydrate(self) -> HydratedMouseBinds {
+        fn process_command(cmd: Option<Command>) -> Option<Message> {
+            let Some(cmd) = cmd else {
+                return None;
+            };
+            if cmd.args.is_empty() {
+                None
+            } else if let Some(sh) = cmd.sh
+                && sh
+            {
+                Some(Message::Command(CommandSpec {
+                    command: String::from("sh"),
+                    args: Some(vec![String::from("-c"), cmd.args[0].clone()]),
+                }))
+            } else {
+                Some(Message::Command(CommandSpec {
+                    command: cmd.args[0].clone(),
+                    args: cmd.args.get(1..).map(<[String]>::to_vec),
+                }))
+            }
+        }
+
+        HydratedMouseBinds {
+            mouse_left: process_command(self.mouse_left),
+            double_click: process_command(self.double_click),
+            mouse_right: process_command(self.mouse_right),
+            mouse_middle: process_command(self.mouse_middle),
+            scroll: if self.scroll_up.is_some()
+                || self.scroll_down.is_some()
+                || self.scroll_left.is_some()
+                || self.scroll_right.is_some()
+            {
+                Some(Scroll {
+                    up: process_command(self.scroll_up),
+                    down: process_command(self.scroll_down),
+                    right: process_command(self.scroll_right),
+                    left: process_command(self.scroll_left),
+                })
+            } else {
+                None
+            },
+        }
+    }
+}
+
+pub struct HydratedMouseBinds {
+    pub mouse_left: Option<Message>,
+    pub double_click: Option<Message>,
+    pub mouse_right: Option<Message>,
+    pub mouse_middle: Option<Message>,
+    pub scroll: Option<Scroll>,
+}
+
+pub struct Scroll {
+    pub up: Option<Message>,
+    pub down: Option<Message>,
+    pub right: Option<Message>,
+    pub left: Option<Message>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MediaControl {
     Play,
@@ -316,6 +711,14 @@ where
         node: &knus::ast::SpannedNode<S>,
         ctx: &mut knus::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
+        if let Some(type_name) = &node.type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+
         for name in node.properties.keys() {
             ctx.emit_error(DecodeError::unexpected(
                 name,
@@ -323,6 +726,7 @@ where
                 format!("unexpected property `{0}`", name.escape_default()),
             ));
         }
+
         if let Some(children) = &node.children {
             for child in children.iter() {
                 ctx.emit_error(DecodeError::unexpected(
@@ -490,6 +894,51 @@ pub struct ContainerStyle {
     pub padding: Option<f32>,
 }
 
+impl ContainerStyle {
+    fn hydrate(self, color_vars: &ColorVars) -> HydratedContainerStyle {
+        HydratedContainerStyle {
+            style: container::Style {
+                text_color: self.text_color.map(|c| c.resolve(color_vars)),
+                background: {
+                    if let Some(bg_color) =
+                        self.background.map(|c| c.resolve(color_vars))
+                    {
+                        Some(Background::Color(bg_color))
+                    } else {
+                        None
+                    }
+                },
+                border: self
+                    .border
+                    .map(|b| to_iced_border(b, color_vars))
+                    .unwrap_or(iced::Border::default()),
+                ..Default::default()
+            },
+            padding: self.padding,
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct HydratedContainerStyle {
+    pub style: container::Style,
+    pub padding: Option<f32>,
+}
+
+impl Deref for HydratedContainerStyle {
+    type Target = container::Style;
+
+    fn deref(&self) -> &Self::Target {
+        &self.style
+    }
+}
+
+impl DerefMut for HydratedContainerStyle {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.style
+    }
+}
+
 #[derive(knus::Decode, Debug, Clone, Default)]
 pub struct ConfigBorder {
     #[knus(child, unwrap(argument))]
@@ -500,28 +949,32 @@ pub struct ConfigBorder {
     pub radius: Option<ConfigRadius>,
 }
 
-impl From<ConfigBorder> for iced::Border {
-    fn from(border: ConfigBorder) -> Self {
-        let default_border = iced::Border::default();
-        iced::Border {
-            color: (*border.color.unwrap_or(default_border.color.into())),
-            width: border.width.unwrap_or(default_border.width),
-            radius: match border.radius {
-                Some(ConfigRadius::All(r)) => iced::border::radius(r),
-                Some(ConfigRadius::PerCorner(PerCorner {
-                    top_left,
-                    top_right,
-                    bottom_left,
-                    bottom_right,
-                })) => iced::border::Radius {
-                    top_left,
-                    top_right,
-                    bottom_right,
-                    bottom_left,
-                },
-                None => default_border.radius,
+fn to_iced_border(
+    border: ConfigBorder,
+    color_vars: &ColorVars,
+) -> iced::Border {
+    let default_border = iced::Border::default();
+    iced::Border {
+        color: border
+            .color
+            .unwrap_or(default_border.color.into())
+            .resolve(&color_vars),
+        width: border.width.unwrap_or(default_border.width),
+        radius: match border.radius {
+            Some(ConfigRadius::All(r)) => iced::border::radius(r),
+            Some(ConfigRadius::PerCorner(PerCorner {
+                top_left,
+                top_right,
+                bottom_left,
+                bottom_right,
+            })) => iced::border::Radius {
+                top_left,
+                top_right,
+                bottom_right,
+                bottom_left,
             },
-        }
+            None => default_border.radius,
+        },
     }
 }
 
@@ -680,7 +1133,7 @@ where
     }
 }
 
-impl Colors {
+impl ColorVars {
     pub fn load(path: &Path) -> miette::Result<Self> {
         let contents = fs::read_to_string(path)
             .into_diagnostic()
@@ -697,18 +1150,12 @@ impl Colors {
     }
 
     pub fn get(&self, name: &str) -> Option<Color> {
-        let name = name.strip_prefix('$');
-        self.vars.iter().find_map(|c| {
-            if Some(c.name.as_str()) == name {
-                Some(*c.color)
-            } else {
-                None
-            }
-        })
+        let name = name.strip_prefix('$').unwrap_or(name);
+        self.vars.get(name).cloned()
     }
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
-        match knus::parse::<Colors>(filename, text) {
+        match knus::parse::<ColorVars>(filename, text) {
             Ok(colors) => {
                 debug!("Successfully parsed colors");
                 Ok(colors)
@@ -790,7 +1237,7 @@ impl Config {
         Config::load(path)
     }
 
-    pub fn init() -> (Config, ConfigPath, PathBuf) {
+    pub fn init() -> (HydratedConfig, ColorVars, ConfigPath, PathBuf) {
         let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
             std::process::exit(1);
         };
@@ -799,7 +1246,7 @@ impl Config {
 
         let colors_path = config_dir.join("colors.kdl");
         let colors = {
-            match Colors::load(&colors_path) {
+            match ColorVars::load(&colors_path) {
                 Err(e) => {
                     if let Err(e) = Notification::new()
                         .summary(BAR_NAMESPACE)
@@ -810,15 +1257,11 @@ impl Config {
                     }
                     error!("Failed to parse colors file ",);
                     error!("{e:?}");
-                    None
+                    ColorVars::default()
                 }
-                Ok(colors) => Some(colors),
+                Ok(colors) => colors,
             }
         };
-
-        if let Err(e) = COLORS.set(RwLock::new(colors.unwrap_or_default())) {
-            error!("colors already initialized: {e:?}");
-        }
 
         let config_path = config_dir.join("config.kdl");
         let config = {
@@ -841,44 +1284,62 @@ impl Config {
             }
         };
 
+        let hydrated_config = config.hydrate(&colors);
+
         let path = ConfigPath {
             config: config_path,
             colors: colors_path,
         };
 
-        (config, path, config_dir)
+        (hydrated_config, colors, path, config_dir)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ConfigColor {
-    inner: Color,
+pub enum ConfigColor {
+    Literal(Color),
+    Variable(String),
 }
 
-impl Default for ConfigColor {
-    fn default() -> Self {
-        Self {
-            inner: Color::from_rgb(1.0, 0.0, 0.0),
+impl ConfigColor {
+    pub fn resolve(&self, colors: &ColorVars) -> Color {
+        match self {
+            ConfigColor::Literal(c) => *c,
+            ConfigColor::Variable(name) => {
+                colors.get(name).unwrap_or_else(|| {
+                    error!(
+                        "Color variable '{}' not found, using red as default",
+                        name
+                    );
+                    Color::from_rgb(1.0, 0.0, 0.0)
+                })
+            }
+        }
+    }
+
+    pub fn parse(&self) -> Color {
+        match self {
+            ConfigColor::Literal(c) => *c,
+            ConfigColor::Variable(name) => {
+                error!(
+                    "Color variable '{}' not found, using red as default",
+                    name
+                );
+                Color::from_rgb(1.0, 0.0, 0.0)
+            }
         }
     }
 }
 
-impl Deref for ConfigColor {
-    type Target = Color;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for ConfigColor {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+impl Default for ConfigColor {
+    fn default() -> Self {
+        Self::Literal(Color::from_rgb(1.0, 0.0, 0.0))
     }
 }
 
 impl From<Color> for ConfigColor {
-    fn from(inner: Color) -> Self {
-        Self { inner }
+    fn from(color: Color) -> Self {
+        Self::Literal(color)
     }
 }
 
@@ -903,29 +1364,18 @@ where
         value: &knus::span::Spanned<Literal, S>,
         _ctx: &mut knus::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
-        let color = match **value {
+        match **value {
             knus::ast::Literal::String(ref s) => {
-                if s.starts_with('$')
-                    && let Some(Ok(colors)) =
-                        COLORS.get().map(|rwlock| rwlock.read())
-                {
-                    if let Some(color) = colors.get(s) {
-                        Ok(color)
-                    } else {
-                        Err(DecodeError::conversion(
-                            value,
-                            "custom color not found",
-                        ))
-                    }
+                if s.starts_with('$') {
+                    Ok(ConfigColor::Variable(s.to_string()))
                 } else {
-                    Color::parse(s).ok_or_else(|| {
+                    let color = Color::parse(s).ok_or_else(|| {
                         DecodeError::conversion(value, "invalid hex literal")
-                    })
+                    })?;
+                    Ok(ConfigColor::Literal(color))
                 }
             }
             _ => Err(DecodeError::conversion(value, "invalid hex literal")),
-        }?;
-
-        Ok(color.into())
+        }
     }
 }

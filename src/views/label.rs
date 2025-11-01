@@ -15,7 +15,7 @@ use crate::{
 
 pub struct LabelView {
     pub id: container::Id,
-    config: config::Label,
+    config: config::HydratedLabel,
     pub position: BarPosition,
 }
 
@@ -68,7 +68,7 @@ impl ViewTrait<Modules> for LabelView {
 }
 
 impl LabelView {
-    pub fn new(config: config::Label, position: BarPosition) -> Self {
+    pub fn new(config: config::HydratedLabel, position: BarPosition) -> Self {
         Self {
             id: container::Id::unique(),
             config,

@@ -6,7 +6,7 @@ use iced::{
 
 use crate::{
     Message as CrateMessage, MouseEvent,
-    config::{self, Config, ConfigModule},
+    config::{self, HydratedConfig, HydratedConfigModule},
     icon_cache::IconCache,
     services::{
         battery::BatteryService,
@@ -17,8 +17,8 @@ use crate::{
         time::TimeService,
     },
     views::{
-        BarAlignment, BarPosition, ViewTrait, battery::BatteryView,
-        cava::CavaView, label::LabelView, mpris::MprisView, niri::NiriView,
+        BarPosition, ViewTrait, battery::BatteryView, cava::CavaView,
+        label::LabelView, mpris::MprisView, niri::NiriView,
         systray::SystrayView, time::TimeView,
     },
 };
@@ -64,47 +64,31 @@ impl Modules {
         }
     }
 
-    pub fn update_from_config(&mut self, config: &mut Config) {
+    pub fn update_from_config(&mut self, config: &mut HydratedConfig) {
         self.views.clear();
 
-        let mut process_section =
-            |module_configs: &mut Vec<ConfigModule>, align: BarAlignment| {
-                for (idx, module_config) in module_configs.drain(..).enumerate()
-                {
-                    let position = BarPosition { idx, align };
-
-                    match module_config {
-                        ConfigModule::Battery(c) => {
-                            self.views
-                                .push(Box::new(BatteryView::new(c, position)));
-                        }
-                        ConfigModule::Cava(c) => {
-                            self.views
-                                .push(Box::new(CavaView::new(c, position)));
-                        }
-                        ConfigModule::Mpris(c) => {
-                            self.views
-                                .push(Box::new(MprisView::new(c, position)));
-                        }
-                        ConfigModule::Time(c) => {
-                            self.views
-                                .push(Box::new(TimeView::new(c, position)));
-                        }
-                        ConfigModule::Label(c) => {
-                            self.views
-                                .push(Box::new(LabelView::new(c, position)));
-                        }
-                        ConfigModule::Niri(c) => {
-                            self.views
-                                .push(Box::new(NiriView::new(c, position)));
-                        }
-                    }
+        for (module, position) in config.modules.drain(..) {
+            match module {
+                HydratedConfigModule::Battery(c) => {
+                    self.views.push(Box::new(BatteryView::new(c, position)))
                 }
-            };
-
-        process_section(&mut config.start.modules, BarAlignment::Start);
-        process_section(&mut config.middle.modules, BarAlignment::Middle);
-        process_section(&mut config.end.modules, BarAlignment::End);
+                HydratedConfigModule::Cava(c) => {
+                    self.views.push(Box::new(CavaView::new(c, position)))
+                }
+                HydratedConfigModule::Time(c) => {
+                    self.views.push(Box::new(TimeView::new(c, position)))
+                }
+                HydratedConfigModule::Mpris(c) => {
+                    self.views.push(Box::new(MprisView::new(c, position)))
+                }
+                HydratedConfigModule::Niri(c) => {
+                    self.views.push(Box::new(NiriView::new(c, position)))
+                }
+                HydratedConfigModule::Label(c) => {
+                    self.views.push(Box::new(LabelView::new(c, position)))
+                }
+            }
+        }
 
         self.views.push(Box::new(SystrayView {}));
     }

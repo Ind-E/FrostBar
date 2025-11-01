@@ -17,7 +17,7 @@ extern crate starship_battery as battery;
 
 pub struct BatteryView {
     pub id: container::Id,
-    config: config::Battery,
+    config: config::HydratedBattery,
     pub position: BarPosition,
 }
 
@@ -49,7 +49,7 @@ impl ViewTrait<Modules> for BatteryView {
         let icon_text = if is_charging {
             Text::new(icon)
                 .size(self.config.icon_size)
-                .color(*self.config.charging_color)
+                .color(self.config.charging_color)
         } else {
             Text::new(icon).size(self.config.icon_size)
         };
@@ -108,7 +108,7 @@ impl ViewTrait<Modules> for BatteryView {
 
 #[profiling::all_functions]
 impl BatteryView {
-    pub fn new(config: config::Battery, position: BarPosition) -> Self {
+    pub fn new(config: config::HydratedBattery, position: BarPosition) -> Self {
         Self {
             id: container::Id::unique(),
             config,

@@ -123,9 +123,10 @@ impl WorkspaceView {
         &self,
         workspace: &'a Workspace,
         hovered: bool,
-        active_style: &config::ContainerStyle,
-        hovered_style: &config::ContainerStyle,
-        base_style: &config::ContainerStyle,
+        active_hovered_style: &'a config::HydratedContainerStyle,
+        active_style: &'a config::HydratedContainerStyle,
+        hovered_style: &'a config::HydratedContainerStyle,
+        base_style: &'a config::HydratedContainerStyle,
         offset: i8,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
@@ -173,6 +174,7 @@ impl WorkspaceView {
         let windows = windows.style(workspace_style(
             workspace.is_active,
             hovered,
+            active_hovered_style,
             active_style,
             hovered_style,
             base_style,
@@ -196,14 +198,14 @@ impl WorkspaceView {
 }
 
 pub struct NiriView {
-    config: config::Niri,
+    config: config::HydratedNiri,
     pub position: BarPosition,
     workspace_views: FxHashMap<u64, WorkspaceView>,
 }
 
 #[profiling::all_functions]
 impl NiriView {
-    pub fn new(config: config::Niri, position: BarPosition) -> Self {
+    pub fn new(config: config::HydratedNiri, position: BarPosition) -> Self {
         Self {
             config,
             position,
@@ -230,9 +232,12 @@ impl ViewTrait<Modules> for NiriView {
                                 ws,
                                 niri.hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
-                                &self.config.workspace_active_style,
-                                &self.config.workspace_hovered_style,
-                                &self.config.workspace_style,
+                                &self
+                                    .config
+                                    .workspace_active_hovered_style_merged,
+                                &self.config.workspace_active_style_merged,
+                                &self.config.workspace_hovered_style_merged,
+                                &self.config.workspace_default_style,
                                 self.config.workspace_offset,
                                 layout,
                             ),
@@ -255,9 +260,12 @@ impl ViewTrait<Modules> for NiriView {
                                 ws,
                                 niri.hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
-                                &self.config.workspace_active_style,
-                                &self.config.workspace_hovered_style,
-                                &self.config.workspace_style,
+                                &self
+                                    .config
+                                    .workspace_active_hovered_style_merged,
+                                &self.config.workspace_active_style_merged,
+                                &self.config.workspace_hovered_style_merged,
+                                &self.config.workspace_default_style,
                                 self.config.workspace_offset,
                                 layout,
                             ),

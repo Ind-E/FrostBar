@@ -1,6 +1,6 @@
 use crate::{
     Message,
-    config::{self, MouseBinds},
+    config::{self, HydratedMouseBinds},
     constants::BAR_NAMESPACE,
 };
 use iced::{
@@ -218,7 +218,7 @@ pub fn open_tooltip_window() -> (iced::window::Id, iced::Task<Message>) {
 #[profiling::function]
 pub fn mouse_binds<'a>(
     element: impl Into<Element<'a, Message>>,
-    binds: &'a MouseBinds,
+    binds: &'a HydratedMouseBinds,
     tooltip_id: Option<container::Id>,
 ) -> Element<'a, Message> {
     let mut mouse_area = MouseArea::new(element);
@@ -230,22 +230,22 @@ pub fn mouse_binds<'a>(
     }
 
     if let Some(left) = &binds.mouse_left {
-        mouse_area = mouse_area.on_release(process_command(left));
+        mouse_area = mouse_area.on_release(left.clone());
     }
 
     if let Some(double) = &binds.double_click {
-        mouse_area = mouse_area.on_double_click(process_command(double));
+        mouse_area = mouse_area.on_double_click(double.clone());
     }
 
     if let Some(right) = &binds.mouse_right {
-        mouse_area = mouse_area.on_right_release(process_command(right));
+        mouse_area = mouse_area.on_right_release(right.clone());
     }
 
     if let Some(middle) = &binds.mouse_middle {
-        mouse_area = mouse_area.on_middle_release(process_command(middle));
+        mouse_area = mouse_area.on_middle_release(middle.clone());
     }
 
-    if binds.scroll_up.is_some() || binds.scroll_down.is_some() {
+    if let Some(ref scroll) = binds.scroll {
         mouse_area = mouse_area.on_scroll(|delta| {
             let (x, y) = match delta {
                 ScrollDelta::Lines { x, y } | ScrollDelta::Pixels { x, y } => {
@@ -254,21 +254,21 @@ pub fn mouse_binds<'a>(
             };
 
             if y > 0.0
-                && let Some(scroll_up) = &binds.scroll_up
+                && let Some(up) = scroll.up.clone()
             {
-                process_command(scroll_up)
+                up
             } else if y < 0.0
-                && let Some(scroll_down) = &binds.scroll_down
+                && let Some(down) = scroll.down.clone()
             {
-                process_command(scroll_down)
+                down
             } else if x < 0.0
-                && let Some(scroll_right) = &binds.scroll_right
+                && let Some(right) = scroll.right.clone()
             {
-                process_command(scroll_right)
+                right
             } else if x > 0.0
-                && let Some(scroll_left) = &binds.scroll_left
+                && let Some(left) = scroll.left.clone()
             {
-                process_command(scroll_left)
+                left
             } else {
                 Message::NoOp
             }
