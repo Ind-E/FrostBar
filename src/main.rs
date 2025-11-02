@@ -9,7 +9,7 @@ use iced::{
     Settings, Size, Subscription, Task, Theme,
     advanced::subscription::from_recipe,
     border::rounded,
-    padding::left,
+    padding::{bottom, left, top},
     theme,
     widget::{Column, Container, Row, container, stack},
     window::Id,
@@ -550,7 +550,9 @@ impl Bar {
 
         let start_section = if vertical {
             Container::new(
-                Column::with_children(start_views).align_x(Alignment::Center),
+                Column::with_children(start_views)
+                    .align_x(Alignment::Center)
+                    .padding(top(5).bottom(5)),
             )
             .align_x(Alignment::Center)
             .align_y(Alignment::Start)
@@ -588,7 +590,9 @@ impl Bar {
 
         let end_section = if vertical {
             Container::new(
-                Column::with_children(end_views).align_x(Alignment::Center),
+                Column::with_children(end_views)
+                    .align_x(Alignment::Center)
+                    .padding(top(5).bottom(5)),
             )
             .align_x(Alignment::Center)
             .align_y(Alignment::End)
