@@ -14,6 +14,7 @@ use crate::{
 
 pub struct SystrayView;
 
+#[profiling::all_functions]
 impl ViewTrait<Modules> for SystrayView {
     fn view<'a>(
         &'a self,

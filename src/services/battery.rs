@@ -11,6 +11,9 @@ pub struct BatteryInfo {
 pub struct BatteryService {
     pub manager: Option<battery::Manager>,
     pub batteries: Vec<BatteryInfo>,
+    pub avg_percentage: f32,
+    pub is_charging: bool,
+    pub is_empty: bool,
 }
 
 #[profiling::all_functions]
@@ -26,6 +29,9 @@ impl BatteryService {
         let mut new = Self {
             manager,
             batteries: Vec::new(),
+            avg_percentage: 0.0,
+            is_charging: false,
+            is_empty: true,
         };
 
         new.fetch_battery_info();
@@ -61,5 +67,18 @@ impl BatteryService {
         }
 
         self.batteries = info;
+
+        let total_percentage: f32 =
+            self.batteries.iter().map(|b| b.percentage).sum();
+        self.avg_percentage = total_percentage / self.batteries.len() as f32;
+
+        self.is_charging = self.batteries.iter().all(|b| {
+            !matches!(
+                b.state,
+                battery::State::Discharging | battery::State::Empty
+            )
+        });
+
+        self.is_empty = self.batteries.is_empty();
     }
 }

@@ -29,24 +29,13 @@ impl ViewTrait<Modules> for BatteryView {
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         let service = &service.battery;
-        if service.batteries.is_empty() {
+        if service.is_empty {
             return Column::new().into();
         }
 
-        let total_percentage: f32 =
-            service.batteries.iter().map(|b| b.percentage).sum();
-        let avg_percentage = total_percentage / service.batteries.len() as f32;
+        let icon = get_battery_icon(service.avg_percentage);
 
-        let icon = get_battery_icon(avg_percentage);
-
-        let is_charging = service.batteries.iter().all(|b| {
-            !matches!(
-                b.state,
-                battery::State::Discharging | battery::State::Empty
-            )
-        });
-
-        let icon_text = if is_charging {
+        let icon_text = if service.is_charging {
             Text::new(icon)
                 .size(self.config.icon_size)
                 .color(self.config.charging_color)

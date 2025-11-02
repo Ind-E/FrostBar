@@ -214,6 +214,7 @@ impl NiriView {
     }
 }
 
+#[profiling::all_functions]
 impl ViewTrait<Modules> for NiriView {
     fn view<'a>(
         &'a self,
