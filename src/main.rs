@@ -24,7 +24,7 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{ColorVars, Config, HydratedConfig, MediaControl},
+    config::{ColorVars, RawConfig, Config, MediaControl},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
@@ -85,7 +85,7 @@ pub fn main() -> iced::Result {
                 .with(file_layer)
                 .init();
 
-            let (config, color_vars, config_path, config_dir) = Config::init();
+            let (config, color_vars, config_path, config_dir) = RawConfig::init();
 
             let logfile_path = init_tracing(&config_dir, &handle);
 
@@ -143,7 +143,7 @@ pub struct Bar {
     id: Option<Id>,
     dummy_id: Id,
     monitor_size: Option<Size>,
-    config: HydratedConfig,
+    config: Config,
     color_vars: ColorVars,
     path: ConfigPath,
 
@@ -156,7 +156,7 @@ pub struct Bar {
 #[profiling::all_functions]
 impl Bar {
     pub fn new(
-        mut config: HydratedConfig,
+        mut config: Config,
         color_vars: ColorVars,
         path: ConfigPath,
     ) -> (Self, Task<Message>) {
@@ -218,7 +218,7 @@ impl Bar {
     }
 
     fn reload_config(&mut self) -> Task<Message> {
-        match Config::load(&self.path.config) {
+        match RawConfig::load(&self.path.config) {
             Ok(new_config) => {
                 let mut new_config = new_config.hydrate(&self.color_vars);
                 self.modules.update_from_config(&mut new_config);

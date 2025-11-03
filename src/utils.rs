@@ -1,6 +1,6 @@
 use crate::{
     Message,
-    config::{self, HydratedMouseBinds},
+    config::{self, MouseBinds},
     constants::BAR_NAMESPACE,
 };
 use iced::{
@@ -218,7 +218,7 @@ pub fn open_tooltip_window() -> (iced::window::Id, iced::Task<Message>) {
 #[profiling::function]
 pub fn mouse_binds<'a>(
     element: impl Into<Element<'a, Message>>,
-    binds: &'a HydratedMouseBinds,
+    binds: &'a MouseBinds,
     tooltip_id: Option<container::Id>,
 ) -> Element<'a, Message> {
     let mut mouse_area = MouseArea::new(element);

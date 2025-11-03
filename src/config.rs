@@ -26,11 +26,11 @@ use crate::{
 };
 
 #[derive(knus::Decode, Default, Debug)]
-pub struct Config {
+pub struct RawConfig {
     #[knus(child, default)]
-    pub layout: Layout,
+    layout: Layout,
     #[knus(child, default)]
-    pub style: Style,
+    pub style: RawTopLevelStyle,
     #[knus(child, default)]
     pub start: Start,
     #[knus(child, default)]
@@ -39,15 +39,15 @@ pub struct Config {
     pub end: End,
 }
 
-pub struct HydratedConfig {
+pub struct Config {
     pub layout: Layout,
-    pub style: HydratedStyle,
-    pub modules: HydratedConfigModules,
+    pub style: TopLevelStyle,
+    pub modules: ConfigModules,
 }
 
-impl Config {
-    pub fn hydrate(self, colors: &ColorVars) -> HydratedConfig {
-        HydratedConfig {
+impl RawConfig {
+    pub fn hydrate(self, colors: &ColorVars) -> Config {
+        Config {
             layout: self.layout,
             style: self.style.hydrate(colors),
             modules: hydrate_modules(
@@ -61,30 +61,33 @@ impl Config {
 fn hydrate_modules(
     value: (Start, Middle, End),
     colors: &ColorVars,
-) -> HydratedConfigModules {
+) -> ConfigModules {
     let mut modules = Vec::new();
 
     let mut process_section =
-        |mut module_configs: Vec<ConfigModule>, align: BarAlignment| {
+        |mut module_configs: Vec<RawConfigModule>, align: BarAlignment| {
             for (idx, module_config) in module_configs.drain(..).enumerate() {
                 let position = BarPosition { idx, align };
                 match module_config {
-                    ConfigModule::Battery(c) => {
-                        modules.push((c.hydrate(colors), position))
-                    }
-                    ConfigModule::Cava(c) => {
+                    RawConfigModule::Battery(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
-                    ConfigModule::Mpris(c) => {
+                    RawConfigModule::Cava(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
-                    ConfigModule::Time(c) => {
+                    RawConfigModule::Mpris(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
-                    ConfigModule::Label(c) => {
+                    RawConfigModule::Time(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
-                    ConfigModule::Niri(c) => {
+                    RawConfigModule::Label(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                    RawConfigModule::Niri(c) => {
+                        modules.push((c.hydrate(colors), position));
+                    }
+                    RawConfigModule::SystemTray(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
                 }
@@ -95,25 +98,25 @@ fn hydrate_modules(
     process_section(value.1.modules, BarAlignment::Middle);
     process_section(value.2.modules, BarAlignment::End);
 
-    HydratedConfigModules { inner: modules }
+    ConfigModules { inner: modules }
 }
 
 #[derive(knus::Decode, Debug, Default)]
 pub struct Start {
     #[knus(children, default)]
-    pub modules: Vec<ConfigModule>,
+    pub modules: Vec<RawConfigModule>,
 }
 
 #[derive(knus::Decode, Debug, Default)]
 pub struct Middle {
     #[knus(children, default)]
-    pub modules: Vec<ConfigModule>,
+    pub modules: Vec<RawConfigModule>,
 }
 
 #[derive(knus::Decode, Debug, Default)]
 pub struct End {
     #[knus(children, default)]
-    pub modules: Vec<ConfigModule>,
+    pub modules: Vec<RawConfigModule>,
 }
 
 #[derive(knus::Decode, Debug, Clone, PartialEq)]
@@ -166,14 +169,14 @@ impl Default for Layout {
 }
 
 #[derive(knus::Decode, Debug, Clone)]
-pub struct Style {
+pub struct RawTopLevelStyle {
     #[knus(child, default = Self::default().border_radius)]
     pub border_radius: ConfigRadius,
     #[knus(child, unwrap(argument), default = Self::default().background)]
     pub background: ConfigColor,
 }
 
-impl Default for Style {
+impl Default for RawTopLevelStyle {
     fn default() -> Self {
         Self {
             border_radius: ConfigRadius::All(0.0),
@@ -182,14 +185,14 @@ impl Default for Style {
     }
 }
 
-pub struct HydratedStyle {
+pub struct TopLevelStyle {
     pub border_radius: border::Radius,
     pub background: Color,
 }
 
-impl Style {
-    fn hydrate(self, colors: &ColorVars) -> HydratedStyle {
-        HydratedStyle {
+impl RawTopLevelStyle {
+    fn hydrate(self, colors: &ColorVars) -> TopLevelStyle {
+        TopLevelStyle {
             border_radius: self.border_radius.into(),
             background: self.background.resolve(colors),
         }
@@ -228,44 +231,46 @@ where
 }
 
 #[derive(knus::Decode, Debug)]
+pub enum RawConfigModule {
+    Cava(RawCava),
+    Battery(RawBattery),
+    Time(RawTime),
+    Mpris(RawMpris),
+    Niri(RawNiri),
+    Label(RawLabel),
+    SystemTray(RawSystemTray),
+}
+
 pub enum ConfigModule {
     Cava(Cava),
     Battery(Battery),
     Time(Time),
     Mpris(Mpris),
-    Niri(Niri),
+    Niri(Box<Niri>),
     Label(Label),
+    SystemTray(SystemTray),
 }
 
-pub enum HydratedConfigModule {
-    Cava(HydratedCava),
-    Battery(HydratedBattery),
-    Time(HydratedTime),
-    Mpris(HydratedMpris),
-    Niri(HydratedNiri),
-    Label(HydratedLabel),
+pub struct ConfigModules {
+    inner: Vec<(ConfigModule, BarPosition)>,
 }
 
-pub struct HydratedConfigModules {
-    inner: Vec<(HydratedConfigModule, BarPosition)>,
-}
-
-impl std::ops::Deref for HydratedConfigModules {
-    type Target = Vec<(HydratedConfigModule, BarPosition)>;
+impl std::ops::Deref for ConfigModules {
+    type Target = Vec<(ConfigModule, BarPosition)>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl std::ops::DerefMut for HydratedConfigModules {
+impl std::ops::DerefMut for ConfigModules {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
 #[derive(knus::Decode, Debug)]
-pub struct Cava {
+pub struct RawCava {
     #[knus(child, unwrap(argument), default = Self::default().spacing)]
     pub spacing: f32,
 
@@ -276,47 +281,47 @@ pub struct Cava {
     pub dynamic_color: bool,
 
     #[knus(flatten(child), default)]
-    pub binds: MouseBinds,
+    pub binds: RawMouseBinds,
 
     #[knus(child, default)]
-    pub style: ContainerStyle,
+    pub style: RawContainerStyle,
 }
 
-impl Default for Cava {
+impl Default for RawCava {
     fn default() -> Self {
         Self {
             spacing: 0.1,
             dynamic_color: true,
             color: Color::WHITE.into(),
-            binds: MouseBinds::default(),
-            style: ContainerStyle::default(),
+            binds: RawMouseBinds::default(),
+            style: RawContainerStyle::default(),
         }
     }
 }
 
-impl Cava {
-    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
-        let cava = HydratedCava {
+impl RawCava {
+    fn hydrate(self, colors: &ColorVars) -> ConfigModule {
+        let cava = Cava {
             spacing: self.spacing,
             color: self.color.resolve(colors),
             dynamic_color: self.dynamic_color,
             binds: self.binds.hydrate(),
             style: self.style.hydrate(colors),
         };
-        HydratedConfigModule::Cava(cava)
+        ConfigModule::Cava(cava)
     }
 }
 
-pub struct HydratedCava {
+pub struct Cava {
     pub spacing: f32,
     pub color: Color,
     pub dynamic_color: bool,
-    pub binds: HydratedMouseBinds,
-    pub style: HydratedContainerStyle,
+    pub binds: MouseBinds,
+    pub style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug)]
-pub struct Battery {
+pub struct RawBattery {
     #[knus(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
 
@@ -324,45 +329,45 @@ pub struct Battery {
     pub charging_color: ConfigColor,
 
     #[knus(child, default)]
-    pub style: ContainerStyle,
+    pub style: RawContainerStyle,
 
     #[knus(flatten(child), default)]
-    pub binds: MouseBinds,
+    pub binds: RawMouseBinds,
 }
 
-impl Default for Battery {
+impl Default for RawBattery {
     fn default() -> Self {
         Self {
             icon_size: 22,
             charging_color: color!(0x73F5AB).into(),
-            style: ContainerStyle::default(),
-            binds: MouseBinds::default(),
+            style: RawContainerStyle::default(),
+            binds: RawMouseBinds::default(),
         }
     }
 }
 
-impl Battery {
-    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
-        let battery = HydratedBattery {
+impl RawBattery {
+    fn hydrate(self, colors: &ColorVars) -> ConfigModule {
+        let battery = Battery {
             icon_size: self.icon_size,
             charging_color: self.charging_color.resolve(colors),
             style: self.style.hydrate(colors),
             binds: self.binds.hydrate(),
         };
 
-        HydratedConfigModule::Battery(battery)
+        ConfigModule::Battery(battery)
     }
 }
 
-pub struct HydratedBattery {
+pub struct Battery {
     pub icon_size: u32,
     pub charging_color: Color,
-    pub style: HydratedContainerStyle,
-    pub binds: HydratedMouseBinds,
+    pub style: ContainerStyle,
+    pub binds: MouseBinds,
 }
 
 #[derive(knus::Decode, Debug)]
-pub struct Time {
+pub struct RawTime {
     #[knus(child, unwrap(argument), default = "%I\n%M".to_string())]
     pub format: String,
 
@@ -370,34 +375,34 @@ pub struct Time {
     pub tooltip_format: String,
 
     #[knus(flatten(child), default)]
-    pub binds: MouseBinds,
+    pub binds: RawMouseBinds,
 
     #[knus(child, default)]
-    pub style: ContainerStyle,
+    pub style: RawContainerStyle,
 }
 
-impl Time {
-    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
-        let time = HydratedTime {
+impl RawTime {
+    fn hydrate(self, colors: &ColorVars) -> ConfigModule {
+        let time = Time {
             format: self.format,
             tooltip_format: self.tooltip_format,
             binds: self.binds.hydrate(),
             style: self.style.hydrate(colors),
         };
 
-        HydratedConfigModule::Time(time)
+        ConfigModule::Time(time)
     }
 }
 
-pub struct HydratedTime {
+pub struct Time {
     pub format: String,
     pub tooltip_format: String,
-    pub binds: HydratedMouseBinds,
-    pub style: HydratedContainerStyle,
+    pub binds: MouseBinds,
+    pub style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone)]
-pub struct Mpris {
+pub struct RawMpris {
     #[knus(child, unwrap(argument), default = "󰝚".to_string())]
     pub placeholder: String,
 
@@ -405,56 +410,56 @@ pub struct Mpris {
     pub binds: MouseBindsForMpris,
 
     #[knus(child, default)]
-    pub placeholder_style: ContainerStyle,
+    pub placeholder_style: RawContainerStyle,
 }
 
-impl Mpris {
-    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
-        let mpris = HydratedMpris {
+impl RawMpris {
+    fn hydrate(self, colors: &ColorVars) -> ConfigModule {
+        let mpris = Mpris {
             placeholder: self.placeholder,
             binds: self.binds,
             placeholder_style: self.placeholder_style.hydrate(colors),
         };
 
-        HydratedConfigModule::Mpris(mpris)
+        ConfigModule::Mpris(mpris)
     }
 }
 
-pub struct HydratedMpris {
+pub struct Mpris {
     pub placeholder: String,
     pub binds: MouseBindsForMpris,
-    pub placeholder_style: HydratedContainerStyle,
+    pub placeholder_style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug, Clone)]
-pub struct Niri {
+pub struct RawNiri {
     #[knus(child, unwrap(argument), default = 10)]
-    pub spacing: u32,
+    spacing: u32,
 
     #[knus(child, unwrap(argument), default = 0)]
-    pub workspace_offset: i8,
+    workspace_offset: i8,
 
     #[knus(child, default)]
-    pub style: ContainerStyle,
+    style: RawContainerStyle,
 
     #[knus(child, default)]
-    pub window_focused_style: ContainerStyle,
+    window_focused_style: RawContainerStyle,
 
     #[knus(child, default)]
-    pub window_style: ContainerStyle,
+    window_style: RawContainerStyle,
 
     #[knus(child, default)]
-    pub workspace_active_style: ContainerStyle,
+    workspace_active_style: RawContainerStyle,
 
     #[knus(child, default)]
-    pub workspace_hovered_style: ContainerStyle,
+    workspace_hovered_style: RawContainerStyle,
 
     #[knus(child, default)]
-    pub workspace_style: ContainerStyle,
+    workspace_style: RawContainerStyle,
 }
 
-impl Niri {
-    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
+impl RawNiri {
+    fn hydrate(self, colors: &ColorVars) -> ConfigModule {
         let default_style = self.workspace_style.hydrate(colors);
 
         let mut hovered_style = default_style.clone();
@@ -470,7 +475,7 @@ impl Niri {
             .background
             .map(|c| c.resolve(colors))
         {
-            hovered_style.background = Some(Background::Color(*background))
+            hovered_style.background = Some(Background::Color(*background));
         }
         if let Some(border) = &self.workspace_hovered_style.border {
             let mut hovered_border = iced::Border::default();
@@ -532,9 +537,9 @@ impl Niri {
         let workspace_active_hovered_style_merged = active_hovered_style;
         let workspace_active_style_merged = active_style;
         let workspace_hovered_style_merged = hovered_style;
-        let window_focused_style_merged = HydratedContainerStyle::default();
+        let window_focused_style_merged = ContainerStyle::default();
 
-        let niri = HydratedNiri {
+        let niri = Niri {
             spacing: self.spacing,
             workspace_offset: self.workspace_offset,
             style: self.style.hydrate(colors),
@@ -546,24 +551,24 @@ impl Niri {
             window_default_style: self.window_style.hydrate(colors),
         };
 
-        HydratedConfigModule::Niri(niri)
+        ConfigModule::Niri(Box::new(niri))
     }
 }
 
-pub struct HydratedNiri {
+pub struct Niri {
     pub spacing: u32,
     pub workspace_offset: i8,
-    pub style: HydratedContainerStyle,
-    pub workspace_active_hovered_style_merged: HydratedContainerStyle,
-    pub workspace_active_style_merged: HydratedContainerStyle,
-    pub workspace_hovered_style_merged: HydratedContainerStyle,
-    pub workspace_default_style: HydratedContainerStyle,
-    pub window_focused_style_merged: HydratedContainerStyle,
-    pub window_default_style: HydratedContainerStyle,
+    pub style: ContainerStyle,
+    pub workspace_active_hovered_style_merged: ContainerStyle,
+    pub workspace_active_style_merged: ContainerStyle,
+    pub workspace_hovered_style_merged: ContainerStyle,
+    pub workspace_default_style: ContainerStyle,
+    pub window_focused_style_merged: ContainerStyle,
+    pub window_default_style: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug)]
-pub struct Label {
+pub struct RawLabel {
     #[knus(child, unwrap(argument), default = String::new())]
     pub text: String,
 
@@ -574,15 +579,15 @@ pub struct Label {
     pub tooltip: Option<String>,
 
     #[knus(flatten(child), default)]
-    pub binds: MouseBinds,
+    pub binds: RawMouseBinds,
 
     #[knus(child, default)]
-    pub style: ContainerStyle,
+    pub style: RawContainerStyle,
 }
 
-impl Label {
-    fn hydrate(self, colors: &ColorVars) -> HydratedConfigModule {
-        let label = HydratedLabel {
+impl RawLabel {
+    fn hydrate(self, colors: &ColorVars) -> ConfigModule {
+        let label = Label {
             text: self.text,
             size: self.size,
             tooltip: self.tooltip,
@@ -590,20 +595,31 @@ impl Label {
             style: self.style.hydrate(colors),
         };
 
-        HydratedConfigModule::Label(label)
+        ConfigModule::Label(label)
     }
 }
 
-pub struct HydratedLabel {
+pub struct Label {
     pub text: String,
     pub size: u32,
     pub tooltip: Option<String>,
-    pub binds: HydratedMouseBinds,
-    pub style: HydratedContainerStyle,
+    pub binds: MouseBinds,
+    pub style: ContainerStyle,
 }
 
+#[derive(knus::Decode, Debug)]
+pub struct RawSystemTray {}
+
+impl RawSystemTray {
+    fn hydrate(self, _colors: &ColorVars) -> ConfigModule {
+        ConfigModule::SystemTray(SystemTray {})
+    }
+}
+
+pub struct SystemTray {}
+
 #[derive(knus::Decode, Debug, Clone, Default)]
-pub struct MouseBinds {
+pub struct RawMouseBinds {
     #[knus(child)]
     pub mouse_left: Option<Command>,
 
@@ -629,12 +645,10 @@ pub struct MouseBinds {
     pub scroll_left: Option<Command>,
 }
 
-impl MouseBinds {
-    fn hydrate(self) -> HydratedMouseBinds {
+impl RawMouseBinds {
+    fn hydrate(self) -> MouseBinds {
         fn process_command(cmd: Option<Command>) -> Option<Message> {
-            let Some(cmd) = cmd else {
-                return None;
-            };
+            let cmd = cmd?;
             if cmd.args.is_empty() {
                 None
             } else if let Some(sh) = cmd.sh
@@ -652,7 +666,7 @@ impl MouseBinds {
             }
         }
 
-        HydratedMouseBinds {
+        MouseBinds {
             mouse_left: process_command(self.mouse_left),
             double_click: process_command(self.double_click),
             mouse_right: process_command(self.mouse_right),
@@ -662,7 +676,7 @@ impl MouseBinds {
                 || self.scroll_left.is_some()
                 || self.scroll_right.is_some()
             {
-                Some(Scroll {
+                Some(ScrollBinds {
                     up: process_command(self.scroll_up),
                     down: process_command(self.scroll_down),
                     right: process_command(self.scroll_right),
@@ -675,15 +689,15 @@ impl MouseBinds {
     }
 }
 
-pub struct HydratedMouseBinds {
+pub struct MouseBinds {
     pub mouse_left: Option<Message>,
     pub double_click: Option<Message>,
     pub mouse_right: Option<Message>,
     pub mouse_middle: Option<Message>,
-    pub scroll: Option<Scroll>,
+    pub scroll: Option<ScrollBinds>,
 }
 
-pub struct Scroll {
+pub struct ScrollBinds {
     pub up: Option<Message>,
     pub down: Option<Message>,
     pub right: Option<Message>,
@@ -883,7 +897,7 @@ pub struct Command {
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]
-pub struct ContainerStyle {
+pub struct RawContainerStyle {
     #[knus(child, unwrap(argument))]
     pub text_color: Option<ConfigColor>,
     #[knus(child, unwrap(argument))]
@@ -894,24 +908,18 @@ pub struct ContainerStyle {
     pub padding: Option<f32>,
 }
 
-impl ContainerStyle {
-    fn hydrate(self, color_vars: &ColorVars) -> HydratedContainerStyle {
-        HydratedContainerStyle {
-            style: container::Style {
+impl RawContainerStyle {
+    fn hydrate(self, color_vars: &ColorVars) -> ContainerStyle {
+        ContainerStyle {
+            inner: container::Style {
                 text_color: self.text_color.map(|c| c.resolve(color_vars)),
-                background: {
-                    if let Some(bg_color) =
-                        self.background.map(|c| c.resolve(color_vars))
-                    {
-                        Some(Background::Color(bg_color))
-                    } else {
-                        None
-                    }
-                },
-                border: self
-                    .border
-                    .map(|b| to_iced_border(b, color_vars))
-                    .unwrap_or(iced::Border::default()),
+                background: self
+                    .background
+                    .map(|c| c.resolve(color_vars))
+                    .map(Background::Color),
+                border: self.border.map_or(iced::Border::default(), |b| {
+                    to_iced_border(b, color_vars)
+                }),
                 ..Default::default()
             },
             padding: self.padding,
@@ -920,22 +928,22 @@ impl ContainerStyle {
 }
 
 #[derive(Default, Clone)]
-pub struct HydratedContainerStyle {
-    pub style: container::Style,
+pub struct ContainerStyle {
+    pub inner: container::Style,
     pub padding: Option<f32>,
 }
 
-impl Deref for HydratedContainerStyle {
+impl Deref for ContainerStyle {
     type Target = container::Style;
 
     fn deref(&self) -> &Self::Target {
-        &self.style
+        &self.inner
     }
 }
 
-impl DerefMut for HydratedContainerStyle {
+impl DerefMut for ContainerStyle {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.style
+        &mut self.inner
     }
 }
 
@@ -958,7 +966,7 @@ fn to_iced_border(
         color: border
             .color
             .unwrap_or(default_border.color.into())
-            .resolve(&color_vars),
+            .resolve(color_vars),
         width: border.width.unwrap_or(default_border.width),
         radius: match border.radius {
             Some(ConfigRadius::All(r)) => iced::border::radius(r),
@@ -1151,7 +1159,7 @@ impl ColorVars {
 
     pub fn get(&self, name: &str) -> Option<Color> {
         let name = name.strip_prefix('$').unwrap_or(name);
-        self.vars.get(name).cloned()
+        self.vars.get(name).copied()
     }
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
@@ -1166,7 +1174,7 @@ impl ColorVars {
 }
 
 #[profiling::all_functions]
-impl Config {
+impl RawConfig {
     pub fn load(path: &Path) -> miette::Result<Self> {
         let contents = fs::read_to_string(path)
             .into_diagnostic()
@@ -1183,7 +1191,7 @@ impl Config {
     }
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
-        match knus::parse::<Config>(filename, text) {
+        match knus::parse::<RawConfig>(filename, text) {
             Ok(config) => {
                 info!("Successfully parsed config");
                 Ok(config)
@@ -1233,11 +1241,11 @@ impl Config {
     }
 
     pub fn load_or_create(path: &Path) -> miette::Result<Self> {
-        Config::create(path)?;
-        Config::load(path)
+        RawConfig::create(path)?;
+        RawConfig::load(path)
     }
 
-    pub fn init() -> (HydratedConfig, ColorVars, ConfigPath, PathBuf) {
+    pub fn init() -> (Config, ColorVars, ConfigPath, PathBuf) {
         let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
             std::process::exit(1);
         };
@@ -1264,8 +1272,8 @@ impl Config {
         };
 
         let config_path = config_dir.join("config.kdl");
-        let config = {
-            match Config::load_or_create(&config_path) {
+        let raw_config = {
+            match RawConfig::load_or_create(&config_path) {
                 Err(e) => {
                     if let Err(e) = Notification::new()
                         .summary(BAR_NAMESPACE)
@@ -1278,20 +1286,20 @@ impl Config {
                     }
                     error!("Failed to parse config file, using default config");
                     error!("{e:?}");
-                    Config::default()
+                    RawConfig::default()
                 }
                 Ok(config) => config,
             }
         };
 
-        let hydrated_config = config.hydrate(&colors);
+        let config = raw_config.hydrate(&colors);
 
         let path = ConfigPath {
             config: config_path,
             colors: colors_path,
         };
 
-        (hydrated_config, colors, path, config_dir)
+        (config, colors, path, config_dir)
     }
 }
 

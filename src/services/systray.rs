@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use iced::{Subscription, widget::image};
+use iced::Subscription;
 use rustc_hash::FxHashMap;
 use system_tray::{
     client::{self, Client, UpdateEvent},
     data::{BaseMap, apply_menu_diffs},
-    item::{IconPixmap, StatusNotifierItem},
+    item::StatusNotifierItem,
     menu::TrayMenu,
 };
 use tokio::sync::mpsc;
@@ -19,52 +19,14 @@ use crate::{
 };
 
 pub struct TrayItem {
-    pub id: String,
+    pub _id: String,
     pub title: Option<String>,
-    icon_name: Option<String>,
-    icon_pixmaps: Option<Vec<IconPixmap>>,
+    // icon_name: Option<String>,
+    // icon_pixmaps: Option<Vec<IconPixmap>>,
     pub icon: Option<Icon>,
-    pub dbus_menu: Option<String>,
-    // overlay_icon_name: Option<String>,
-    // overlay_icon_pixmap: Option<Vec<Pixmap>>,
-    // attention_icon_name: Option<String>,
-    // attention_icon_pixmap: Option<Vec<Pixmap>>,
-}
-
-pub fn handle_from_pixmaps(
-    pixmaps: Vec<IconPixmap>,
-    size: i32,
-) -> Option<Icon> {
-    pixmaps
-        .into_iter()
-        .max_by(
-            |IconPixmap {
-                 width: w1,
-                 height: h1,
-                 ..
-             },
-             IconPixmap {
-                 width: w2,
-                 height: h2,
-                 ..
-             }| {
-                (w1 * h1).cmp(&(w2 * h2))
-                // take smallest one bigger than requested size, otherwise take biggest
-                // let a = size * size;
-                // let a1 = w1 * h1;
-                // let a2 = w2 * h2;
-                // match (a1 >= a, a2 >= a) {
-                //     (true, true) => a2.cmp(&a1),
-                //     (true, false) => std::cmp::Ordering::Greater,
-                //     (false, true) => std::cmp::Ordering::Less,
-                //     (false, false) => a1.cmp(&a2),
-                // }
-            },
-        )
-        .and_then(|IconPixmap { pixels, .. }| {
-            let handle = image::Handle::from_bytes(pixels);
-            Some(Icon::Raster(handle))
-        })
+    pub overlay_icon: Option<Icon>,
+    pub attention_icon: Option<Icon>,
+    pub _dbus_menu: Option<String>,
 }
 
 pub struct Systray {
@@ -81,22 +43,20 @@ impl Systray {
     }
 
     fn map_sni(&self, sni: StatusNotifierItem) -> TrayItem {
-        let icon = if let Some(icon_name) = &sni.icon_name
-            && let Some(icon) = self.icon_cache.get_icon(icon_name)
-        {
-            Some(icon)
-        } else if let Some(icon_pixmaps) = &sni.icon_pixmap {
-            handle_from_pixmaps(icon_pixmaps.clone(), 32)
-        } else {
-            None
-        };
         TrayItem {
-            id: sni.id,
+            _id: sni.id,
             title: sni.title,
-            icon,
-            icon_name: sni.icon_name,
-            icon_pixmaps: sni.icon_pixmap,
-            dbus_menu: sni.menu,
+            icon: self
+                .icon_cache
+                .get_tray_icon(sni.icon_name, sni.icon_pixmap),
+            overlay_icon: self
+                .icon_cache
+                .get_tray_icon(sni.overlay_icon_name, sni.overlay_icon_pixmap),
+            attention_icon: self.icon_cache.get_tray_icon(
+                sni.attention_icon_name,
+                sni.attention_icon_pixmap,
+            ),
+            _dbus_menu: sni.menu,
         }
     }
 
@@ -145,32 +105,37 @@ impl Systray {
                     );
                 }
                 client::Event::Update(name, update_event) => {
-                    self.inner.get_mut(&name).map(|(sni, menu)| {
+                    if let Some((sni, menu)) = self.inner.get_mut(&name) {
                         match update_event {
                             UpdateEvent::Icon {
                                 icon_name,
                                 icon_pixmap,
                             } => {
-                                sni.icon_name = icon_name;
-                                sni.icon_pixmaps = icon_pixmap;
+                                sni.icon = self
+                                    .icon_cache
+                                    .get_tray_icon(icon_name, icon_pixmap);
                             }
                             UpdateEvent::OverlayIcon(icon_name) => {
-                                // sni.overlay_icon_name = icon_name;
+                                sni.overlay_icon = self
+                                    .icon_cache
+                                    .get_tray_icon(icon_name, None);
                             }
                             UpdateEvent::AttentionIcon(icon_name) => {
-                                // sni.attention_icon_name = icon_name;
+                                sni.attention_icon = self
+                                    .icon_cache
+                                    .get_tray_icon(icon_name, None);
                             }
-                            UpdateEvent::Status(status) => {
+                            UpdateEvent::Status(_status) => {
                                 // sni.status = status;
                             }
                             UpdateEvent::Title(title) => {
                                 sni.title = title;
                             }
-                            UpdateEvent::Tooltip(tooltip) => {
+                            UpdateEvent::Tooltip(_tooltip) => {
                                 // sni.tool_tip = tooltip
                             }
                             UpdateEvent::Menu(tray_menu) => {
-                                *menu = Some(tray_menu)
+                                *menu = Some(tray_menu);
                             }
                             UpdateEvent::MenuDiff(diffs) => {
                                 if let Some(menu) = menu {
@@ -179,7 +144,7 @@ impl Systray {
                             }
                             UpdateEvent::MenuConnect(_) => {}
                         }
-                    });
+                    }
                 }
                 client::Event::Remove(name) => {
                     self.inner.remove(&name);

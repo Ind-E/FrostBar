@@ -123,10 +123,10 @@ impl WorkspaceView {
         &self,
         workspace: &'a Workspace,
         hovered: bool,
-        active_hovered_style: &'a config::HydratedContainerStyle,
-        active_style: &'a config::HydratedContainerStyle,
-        hovered_style: &'a config::HydratedContainerStyle,
-        base_style: &'a config::HydratedContainerStyle,
+        active_hovered_style: &'a config::ContainerStyle,
+        active_style: &'a config::ContainerStyle,
+        hovered_style: &'a config::ContainerStyle,
+        base_style: &'a config::ContainerStyle,
         offset: i8,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
@@ -198,14 +198,14 @@ impl WorkspaceView {
 }
 
 pub struct NiriView {
-    config: config::HydratedNiri,
+    config: config::Niri,
     pub position: BarPosition,
     workspace_views: FxHashMap<u64, WorkspaceView>,
 }
 
 #[profiling::all_functions]
 impl NiriView {
-    pub fn new(config: config::HydratedNiri, position: BarPosition) -> Self {
+    pub fn new(config: config::Niri, position: BarPosition) -> Self {
         Self {
             config,
             position,

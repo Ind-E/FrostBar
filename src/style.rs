@@ -18,10 +18,10 @@ pub fn _bg(_theme: &Theme) -> container::Style {
 pub fn workspace_style<'a>(
     active: bool,
     hovered: bool,
-    active_hovered_style: &'a config::HydratedContainerStyle,
-    active_style: &'a config::HydratedContainerStyle,
-    hovered_style: &'a config::HydratedContainerStyle,
-    base_style: &'a config::HydratedContainerStyle,
+    active_hovered_style: &'a config::ContainerStyle,
+    active_style: &'a config::ContainerStyle,
+    hovered_style: &'a config::ContainerStyle,
+    base_style: &'a config::ContainerStyle,
 ) -> container::StyleFn<'a, Theme> {
     let style = if active && hovered {
         active_hovered_style
@@ -32,15 +32,15 @@ pub fn workspace_style<'a>(
     } else {
         base_style
     };
-    Box::new(move |_| style.style)
+    Box::new(move |_| style.inner)
 }
 
 pub fn container_style<'a>(
     container: Container<'a, Message>,
-    style: &'a config::HydratedContainerStyle,
+    style: &'a config::ContainerStyle,
     layout: &'a config::Layout,
 ) -> Container<'a, Message> {
-    let retval = container.style(move |_| style.style);
+    let retval = container.style(move |_| style.inner);
     let padding = style.padding.unwrap_or(0f32);
     if layout.anchor.vertical() {
         retval.padding(top(padding).bottom(padding))

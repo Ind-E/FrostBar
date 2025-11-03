@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub struct MprisView {
-    config: config::HydratedMpris,
+    config: config::Mpris,
     pub position: BarPosition,
     player_views: FxHashMap<String, MprisPlayerView>,
 }
@@ -114,7 +114,7 @@ impl ViewTrait<Modules> for MprisView {
 }
 
 impl MprisView {
-    pub fn new(config: config::HydratedMpris, position: BarPosition) -> Self {
+    pub fn new(config: config::Mpris, position: BarPosition) -> Self {
         Self {
             config,
             position,
@@ -141,7 +141,7 @@ impl<'a> MprisPlayerView {
     fn view(
         &self,
         player: &'a MprisPlayer,
-        config: &'a config::HydratedMpris,
+        config: &'a config::Mpris,
         layout: &'a config::Layout,
     ) -> Element<'a, Message> {
         let content: Element<'a, Message> = if let Some(art) = &player.art {

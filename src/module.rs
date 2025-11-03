@@ -6,7 +6,7 @@ use iced::{
 
 use crate::{
     Message as CrateMessage, MouseEvent,
-    config::{self, HydratedConfig, HydratedConfigModule},
+    config::{self, Config, ConfigModule},
     icon_cache::IconCache,
     services::{
         battery::BatteryService,
@@ -64,33 +64,34 @@ impl Modules {
         }
     }
 
-    pub fn update_from_config(&mut self, config: &mut HydratedConfig) {
+    pub fn update_from_config(&mut self, config: &mut Config) {
         self.views.clear();
 
         for (module, position) in config.modules.drain(..) {
             match module {
-                HydratedConfigModule::Battery(c) => {
-                    self.views.push(Box::new(BatteryView::new(c, position)))
+                ConfigModule::Battery(c) => {
+                    self.views.push(Box::new(BatteryView::new(c, position)));
                 }
-                HydratedConfigModule::Cava(c) => {
-                    self.views.push(Box::new(CavaView::new(c, position)))
+                ConfigModule::Cava(c) => {
+                    self.views.push(Box::new(CavaView::new(c, position)));
                 }
-                HydratedConfigModule::Time(c) => {
-                    self.views.push(Box::new(TimeView::new(c, position)))
+                ConfigModule::Time(c) => {
+                    self.views.push(Box::new(TimeView::new(c, position)));
                 }
-                HydratedConfigModule::Mpris(c) => {
-                    self.views.push(Box::new(MprisView::new(c, position)))
+                ConfigModule::Mpris(c) => {
+                    self.views.push(Box::new(MprisView::new(c, position)));
                 }
-                HydratedConfigModule::Niri(c) => {
-                    self.views.push(Box::new(NiriView::new(c, position)))
+                ConfigModule::Niri(c) => {
+                    self.views.push(Box::new(NiriView::new(*c, position)));
                 }
-                HydratedConfigModule::Label(c) => {
-                    self.views.push(Box::new(LabelView::new(c, position)))
+                ConfigModule::Label(c) => {
+                    self.views.push(Box::new(LabelView::new(c, position)));
+                }
+                ConfigModule::SystemTray(_c) => {
+                    self.views.push(Box::new(SystrayView::new(position)));
                 }
             }
         }
-
-        self.views.push(Box::new(SystrayView {}));
     }
 
     pub fn render_views<'a>(

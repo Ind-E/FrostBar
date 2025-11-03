@@ -17,12 +17,12 @@ use crate::{
 const MAX_BAR_HEIGHT: u32 = 12;
 
 pub struct CavaView {
-    config: config::HydratedCava,
+    config: config::Cava,
     pub position: BarPosition,
 }
 
 impl CavaView {
-    pub fn new(config: config::HydratedCava, position: BarPosition) -> Self {
+    pub fn new(config: config::Cava, position: BarPosition) -> Self {
         Self { config, position }
     }
 }
@@ -63,7 +63,7 @@ impl ViewTrait<Modules> for CavaView {
 
 struct CavaCanvas<'a> {
     service: &'a CavaService,
-    config: &'a config::HydratedCava,
+    config: &'a config::Cava,
     cache: canvas::Cache,
     vertical: bool,
 }
@@ -71,7 +71,7 @@ struct CavaCanvas<'a> {
 impl<'a> CavaCanvas<'a> {
     pub fn new(
         service: &'a CavaService,
-        config: &'a config::HydratedCava,
+        config: &'a config::Cava,
         vertical: bool,
     ) -> Self {
         Self {

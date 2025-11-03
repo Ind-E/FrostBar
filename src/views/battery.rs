@@ -17,7 +17,7 @@ extern crate starship_battery as battery;
 
 pub struct BatteryView {
     pub id: container::Id,
-    config: config::HydratedBattery,
+    config: config::Battery,
     pub position: BarPosition,
 }
 
@@ -97,7 +97,7 @@ impl ViewTrait<Modules> for BatteryView {
 
 #[profiling::all_functions]
 impl BatteryView {
-    pub fn new(config: config::HydratedBattery, position: BarPosition) -> Self {
+    pub fn new(config: config::Battery, position: BarPosition) -> Self {
         Self {
             id: container::Id::unique(),
             config,
