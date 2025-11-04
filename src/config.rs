@@ -236,7 +236,7 @@ pub enum RawConfigModule {
     Battery(RawBattery),
     Time(RawTime),
     Mpris(RawMpris),
-    Niri(RawNiri),
+    Niri(Box<RawNiri>),
     Label(RawLabel),
     SystemTray(RawSystemTray),
 }
@@ -689,6 +689,7 @@ impl RawMouseBinds {
     }
 }
 
+#[derive(Default)]
 pub struct MouseBinds {
     pub mouse_left: Option<Message>,
     pub double_click: Option<Message>,

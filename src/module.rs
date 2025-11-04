@@ -13,13 +13,13 @@ use crate::{
         cava::CavaService,
         mpris::{MprisEvent, MprisService},
         niri::{NiriEvent, NiriService},
-        systray::{self, Systray},
+        system_tray::{self, Systray},
         time::TimeService,
     },
     views::{
         BarPosition, ViewTrait, battery::BatteryView, cava::CavaView,
         label::LabelView, mpris::MprisView, niri::NiriView,
-        systray::SystrayView, time::TimeView,
+        systray::SystemTrayView, time::TimeView,
     },
 };
 
@@ -31,7 +31,7 @@ pub enum Message {
     CavaColorUpdate(Option<Vec<Color>>),
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
-    Systray(systray::Event),
+    Systray(system_tray::Event),
     SynchronizeAll,
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
@@ -87,8 +87,8 @@ impl Modules {
                 ConfigModule::Label(c) => {
                     self.views.push(Box::new(LabelView::new(c, position)));
                 }
-                ConfigModule::SystemTray(_c) => {
-                    self.views.push(Box::new(SystrayView::new(position)));
+                ConfigModule::SystemTray(c) => {
+                    self.views.push(Box::new(SystemTrayView::new(c, position)));
                 }
             }
         }
@@ -159,6 +159,9 @@ impl Modules {
             }
             Message::Systray(event) => {
                 self.systray.handle_event(event);
+                self.synchronize_views_filtered(|view| {
+                    view.as_any().is::<SystemTrayView>()
+                });
             }
             Message::SynchronizeAll => {
                 self.synchronize_views();

@@ -7,6 +7,7 @@ use iced::{
     widget::{
         Column, Container, Image, MouseArea, Row, Svg, Text,
         container::{self},
+        text::Shaping,
     },
 };
 
@@ -23,80 +24,131 @@ use crate::{
     views::{BarPosition, ViewTrait},
 };
 
-#[derive(Debug, Eq, PartialEq)]
-struct WindowView {
-    id: container::Id,
+pub struct NiriView {
+    config: config::Niri,
+    position: BarPosition,
+    workspace_views: FxHashMap<u64, WorkspaceView>,
 }
 
 #[profiling::all_functions]
-impl WindowView {
-    fn new() -> Self {
+impl NiriView {
+    pub fn new(config: config::Niri, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            config,
+            position,
+            workspace_views: FxHashMap::default(),
         }
     }
+}
 
-    fn render_tooltip<'a>(
-        &self,
-        window: &'a Window,
-    ) -> Option<Element<'a, Message>> {
-        use iced::widget::text::Shaping;
-        Some(
-            Text::new(window.title.clone())
-                .shaping(Shaping::Advanced)
-                .into(),
-        )
-    }
-
+#[profiling::all_functions]
+impl ViewTrait<Modules> for NiriView {
     fn view<'a>(
-        &self,
-        window: &'a Window,
+        &'a self,
+        modules: &'a Modules,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
-        let icon_size = layout.width as f32 * 0.7;
-        let placehdoler_text_size = icon_size * 0.6;
-        let icon: Element<'a, Message> = match &window.icon {
-            Some(Icon::Svg(handle)) => Svg::new(handle.clone())
-                .height(icon_size)
-                .width(icon_size)
-                .into(),
-            Some(Icon::Raster(handle)) => Image::new(handle.clone())
-                .height(icon_size)
-                .width(icon_size)
-                .into(),
-            _ => {
-                let container = Container::new(
-                    Text::new(window.title.chars().take(2).collect::<String>())
-                        .size(placehdoler_text_size)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center(),
-                );
-                if layout.anchor.vertical() {
-                    container.center_x(Length::Fill).height(icon_size).into()
-                } else {
-                    container.center_y(Length::Fill).width(icon_size).into()
+        let niri = &modules.niri;
+        if layout.anchor.vertical() {
+            niri.workspaces
+                .iter()
+                .sorted_unstable_by_key(|(_, ws)| ws.idx)
+                .fold(Column::new(), |col, (_, ws)| {
+                    if let Some(ws_view) = self.workspace_views.get(&ws.id) {
+                        col.push(
+                            ws_view.view(
+                                ws,
+                                niri.hovered_workspace_id
+                                    .is_some_and(|id| id == ws.id),
+                                &self
+                                    .config
+                                    .workspace_active_hovered_style_merged,
+                                &self.config.workspace_active_style_merged,
+                                &self.config.workspace_hovered_style_merged,
+                                &self.config.workspace_default_style,
+                                self.config.workspace_offset,
+                                layout,
+                            ),
+                        )
+                    } else {
+                        col
+                    }
+                })
+                .align_x(Alignment::Center)
+                .spacing(self.config.spacing)
+                .into()
+        } else {
+            niri.workspaces
+                .iter()
+                .sorted_unstable_by_key(|(_, ws)| ws.idx)
+                .fold(Row::new(), |row, (_, ws)| {
+                    if let Some(ws_view) = self.workspace_views.get(&ws.id) {
+                        row.push(
+                            ws_view.view(
+                                ws,
+                                niri.hovered_workspace_id
+                                    .is_some_and(|id| id == ws.id),
+                                &self
+                                    .config
+                                    .workspace_active_hovered_style_merged,
+                                &self.config.workspace_active_style_merged,
+                                &self.config.workspace_hovered_style_merged,
+                                &self.config.workspace_default_style,
+                                self.config.workspace_offset,
+                                layout,
+                            ),
+                        )
+                    } else {
+                        row
+                    }
+                })
+                .align_y(Alignment::Center)
+                .spacing(self.config.spacing)
+                .into()
+        }
+    }
+
+    fn position(&self) -> BarPosition {
+        self.position
+    }
+
+    fn tooltip<'a>(
+        &'a self,
+        service: &'a Modules,
+        id: &container::Id,
+    ) -> Option<Element<'a, Message>> {
+        let service = &service.niri;
+        for (ws_id, ws_view) in &self.workspace_views {
+            for (win_id, win_view) in &ws_view.window_views {
+                if win_view.id == *id
+                    && let Some(window) = service
+                        .workspaces
+                        .get(ws_id)
+                        .and_then(|ws| ws.windows.get(win_id))
+                {
+                    return win_view.render_tooltip(window);
                 }
             }
-        };
-
-        let mut content = Container::new(MouseArea::new(icon).on_right_press(
-            Message::Module(module::Message::Niri(NiriEvent::Action(
-                Action::FocusWindow { id: window.id },
-            ))),
-        ))
-        .id(self.id.clone());
-
-        if layout.anchor.vertical() {
-            content = content.center_x(Length::Fill);
-        } else {
-            content = content.center_y(Length::Fill);
         }
+        None
+    }
 
-        MouseArea::new(content)
-            .on_enter(Message::OpenTooltip(self.id.clone()))
-            .on_exit(Message::CloseTooltip(self.id.clone()))
-            .into()
+    fn synchronize(&mut self, modules: &Modules) {
+        let service = &modules.niri;
+        self.workspace_views
+            .retain(|id, _| service.workspaces.contains_key(id));
+
+        for (id, workspace) in &service.workspaces {
+            let ws_view = self
+                .workspace_views
+                .entry(*id)
+                .or_insert_with(WorkspaceView::new);
+            ws_view.synchronize(workspace);
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -197,130 +249,74 @@ impl WorkspaceView {
     }
 }
 
-pub struct NiriView {
-    config: config::Niri,
-    pub position: BarPosition,
-    workspace_views: FxHashMap<u64, WorkspaceView>,
+#[derive(Debug, Eq, PartialEq)]
+struct WindowView {
+    id: container::Id,
 }
 
 #[profiling::all_functions]
-impl NiriView {
-    pub fn new(config: config::Niri, position: BarPosition) -> Self {
+impl WindowView {
+    fn new() -> Self {
         Self {
-            config,
-            position,
-            workspace_views: FxHashMap::default(),
+            id: container::Id::unique(),
         }
     }
-}
 
-#[profiling::all_functions]
-impl ViewTrait<Modules> for NiriView {
+    fn render_tooltip<'a>(
+        &self,
+        window: &'a Window,
+    ) -> Option<Element<'a, Message>> {
+        Some(Text::new(&window.title).shaping(Shaping::Advanced).into())
+    }
+
     fn view<'a>(
-        &'a self,
-        modules: &'a Modules,
+        &self,
+        window: &'a Window,
         layout: &config::Layout,
     ) -> Element<'a, Message> {
-        let niri = &modules.niri;
-        if layout.anchor.vertical() {
-            niri.workspaces
-                .iter()
-                .sorted_by_key(|(_, ws)| ws.idx)
-                .fold(Column::new(), |col, (_, ws)| {
-                    if let Some(ws_view) = self.workspace_views.get(&ws.id) {
-                        col.push(
-                            ws_view.view(
-                                ws,
-                                niri.hovered_workspace_id
-                                    .is_some_and(|id| id == ws.id),
-                                &self
-                                    .config
-                                    .workspace_active_hovered_style_merged,
-                                &self.config.workspace_active_style_merged,
-                                &self.config.workspace_hovered_style_merged,
-                                &self.config.workspace_default_style,
-                                self.config.workspace_offset,
-                                layout,
-                            ),
-                        )
-                    } else {
-                        col
-                    }
-                })
-                .align_x(Alignment::Center)
-                .spacing(self.config.spacing)
-                .into()
-        } else {
-            niri.workspaces
-                .iter()
-                .sorted_by_key(|(_, ws)| ws.idx)
-                .fold(Row::new(), |row, (_, ws)| {
-                    if let Some(ws_view) = self.workspace_views.get(&ws.id) {
-                        row.push(
-                            ws_view.view(
-                                ws,
-                                niri.hovered_workspace_id
-                                    .is_some_and(|id| id == ws.id),
-                                &self
-                                    .config
-                                    .workspace_active_hovered_style_merged,
-                                &self.config.workspace_active_style_merged,
-                                &self.config.workspace_hovered_style_merged,
-                                &self.config.workspace_default_style,
-                                self.config.workspace_offset,
-                                layout,
-                            ),
-                        )
-                    } else {
-                        row
-                    }
-                })
-                .align_y(Alignment::Center)
-                .spacing(self.config.spacing)
-                .into()
-        }
-    }
-
-    fn position(&self) -> BarPosition {
-        self.position
-    }
-
-    fn tooltip<'a>(
-        &'a self,
-        service: &'a Modules,
-        id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
-        let service = &service.niri;
-        for (ws_id, ws_view) in &self.workspace_views {
-            for (win_id, win_view) in &ws_view.window_views {
-                if win_view.id == *id
-                    && let Some(window) = service
-                        .workspaces
-                        .get(ws_id)
-                        .and_then(|ws| ws.windows.get(win_id))
-                {
-                    return win_view.render_tooltip(window);
+        let icon_size = layout.width as f32 * 0.7;
+        let placehdoler_text_size = icon_size * 0.6;
+        let icon: Element<'a, Message> = match &window.icon {
+            Some(Icon::Svg(handle)) => Svg::new(handle.clone())
+                .height(icon_size)
+                .width(icon_size)
+                .into(),
+            Some(Icon::Raster(handle)) => Image::new(handle.clone())
+                .height(icon_size)
+                .width(icon_size)
+                .into(),
+            _ => {
+                let container = Container::new(
+                    Text::new(window.title.chars().take(2).collect::<String>())
+                        .size(placehdoler_text_size)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center(),
+                );
+                if layout.anchor.vertical() {
+                    container.center_x(Length::Fill).height(icon_size).into()
+                } else {
+                    container.center_y(Length::Fill).width(icon_size).into()
                 }
             }
+        };
+
+        let mut content = Container::new(MouseArea::new(icon).on_right_press(
+            Message::Module(module::Message::Niri(NiriEvent::Action(
+                Action::FocusWindow { id: window.id },
+            ))),
+        ))
+        .id(self.id.clone());
+
+        if layout.anchor.vertical() {
+            content = content.center_x(Length::Fill);
+        } else {
+            content = content.center_y(Length::Fill);
         }
-        None
-    }
 
-    fn synchronize(&mut self, modules: &Modules) {
-        let service = &modules.niri;
-        self.workspace_views
-            .retain(|id, _| service.workspaces.contains_key(id));
-
-        for (id, workspace) in &service.workspaces {
-            let ws_view = self
-                .workspace_views
-                .entry(*id)
-                .or_insert_with(WorkspaceView::new);
-            ws_view.synchronize(workspace);
-        }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
+        MouseArea::new(content)
+            .on_enter(Message::OpenTooltip(self.id.clone()))
+            .on_exit(Message::CloseTooltip(self.id.clone()))
+            .into()
     }
 }

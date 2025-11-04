@@ -19,7 +19,7 @@ use crate::{
 };
 
 pub struct TrayItem {
-    pub _id: String,
+    pub id: String,
     pub title: Option<String>,
     // icon_name: Option<String>,
     // icon_pixmaps: Option<Vec<IconPixmap>>,
@@ -30,21 +30,21 @@ pub struct TrayItem {
 }
 
 pub struct Systray {
-    pub inner: FxHashMap<String, (TrayItem, Option<TrayMenu>)>,
+    pub items: FxHashMap<String, (TrayItem, Option<TrayMenu>)>,
     icon_cache: IconCache,
 }
 
 impl Systray {
     pub fn new(icon_cache: IconCache) -> Self {
         Self {
-            inner: FxHashMap::default(),
+            items: FxHashMap::default(),
             icon_cache,
         }
     }
 
     fn map_sni(&self, sni: StatusNotifierItem) -> TrayItem {
         TrayItem {
-            _id: sni.id,
+            id: sni.id,
             title: sni.title,
             icon: self
                 .icon_cache
@@ -91,7 +91,7 @@ impl Systray {
         match event {
             Event::InitialItems(mutex) => {
                 for (k, (sni, menu)) in mutex.lock().unwrap().iter() {
-                    self.inner.insert(
+                    self.items.insert(
                         k.to_string(),
                         (self.map_sni(sni.clone()), menu.clone()),
                     );
@@ -99,13 +99,13 @@ impl Systray {
             }
             Event::Event(event) => match event {
                 client::Event::Add(name, status_notifier_item) => {
-                    self.inner.insert(
+                    self.items.insert(
                         name,
                         (self.map_sni(*status_notifier_item), None),
                     );
                 }
                 client::Event::Update(name, update_event) => {
-                    if let Some((sni, menu)) = self.inner.get_mut(&name) {
+                    if let Some((sni, menu)) = self.items.get_mut(&name) {
                         match update_event {
                             UpdateEvent::Icon {
                                 icon_name,
@@ -147,7 +147,7 @@ impl Systray {
                     }
                 }
                 client::Event::Remove(name) => {
-                    self.inner.remove(&name);
+                    self.items.remove(&name);
                 }
             },
         }

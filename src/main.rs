@@ -24,7 +24,7 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{ColorVars, RawConfig, Config, MediaControl},
+    config::{ColorVars, Config, MediaControl, RawConfig},
     constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
@@ -32,7 +32,7 @@ use crate::{
     module::{ModuleAction, Modules},
     services::{
         cava::CavaSubscriptionRecipe, mpris::MprisService, niri::NiriService,
-        systray::Systray,
+        system_tray::Systray,
     },
     utils::{
         CommandSpec, init_tracing, open_dummy_window, open_tooltip_window,
@@ -85,7 +85,8 @@ pub fn main() -> iced::Result {
                 .with(file_layer)
                 .init();
 
-            let (config, color_vars, config_path, config_dir) = RawConfig::init();
+            let (config, color_vars, config_path, config_dir) =
+                RawConfig::init();
 
             let logfile_path = init_tracing(&config_dir, &handle);
 
@@ -497,19 +498,19 @@ impl Bar {
 
         let start_views: Vec<Element<Message>> = start_views
             .into_iter()
-            .sorted_by_key(|(_, idx)| *idx)
+            .sorted_unstable_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
             .collect();
 
         let middle_views: Vec<Element<Message>> = middle_views
             .into_iter()
-            .sorted_by_key(|(_, idx)| *idx)
+            .sorted_unstable_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
             .collect();
 
         let end_views: Vec<Element<Message>> = end_views
             .into_iter()
-            .sorted_by_key(|(_, idx)| *idx)
+            .sorted_unstable_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
             .collect();
 

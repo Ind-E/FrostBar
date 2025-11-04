@@ -317,7 +317,8 @@ impl NiriService {
             | Event::KeyboardLayoutsChanged { .. }
             | Event::KeyboardLayoutSwitched { .. }
             | Event::OverviewOpenedOrClosed { .. }
-            | Event::ConfigLoaded { .. } => {}
+            | Event::ConfigLoaded { .. }
+            | Event::ScreenshotCaptured { .. } => {}
         }
         ModuleAction::None
     }
