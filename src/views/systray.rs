@@ -4,8 +4,8 @@ use iced::{
     Alignment, Element,
     mouse::Interaction,
     widget::{
-        Column, Container, Image, MouseArea, Stack, Svg, Text, container,
-        text::Shaping,
+        Column, Container, Image, MouseArea, Stack, Svg, Text, column,
+        container, row, text::Shaping,
     },
 };
 use itertools::Itertools;
@@ -188,9 +188,39 @@ impl TrayItemView {
 
     pub fn render_tooltip<'a>(
         &self,
-        tray_item: &'a (TrayItem, Option<TrayMenu>),
+        (item, _menu): &'a (TrayItem, Option<TrayMenu>),
     ) -> Element<'a, Message> {
-        let (item, _menu) = tray_item;
+        if let Some(tooltip) = &item.tooltip {
+            let mut items = vec![];
+            if !tooltip.title.is_empty() {
+                items.push(
+                    Text::new(&tooltip.title).shaping(Shaping::Advanced).into(),
+                );
+            }
+
+            if !tooltip.description.is_empty() {
+                items.push(
+                    Text::new(&tooltip.description)
+                        .shaping(Shaping::Advanced)
+                        .into(),
+                );
+            }
+
+            if items.len() > 0 {
+                let col = Column::from_iter(items);
+                if let Some(icon) = &tooltip.icon {
+                    let icon: Element<'a, Message> = match icon {
+                        Icon::Svg(handle) => Svg::new(handle.clone()).into(),
+                        Icon::Raster(handle) => Image::new(handle).into(),
+                    };
+
+                    return row!(icon, col).into();
+                }
+
+                return col.into();
+            }
+        }
+
         Text::new({
             if let Some(title) = &item.title
                 && !title.is_empty()

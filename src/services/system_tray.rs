@@ -21,6 +21,7 @@ use crate::{
 pub struct TrayItem {
     pub id: String,
     pub title: Option<String>,
+    pub tooltip: Option<TrayItemTooltip>,
     // icon_name: Option<String>,
     // icon_pixmaps: Option<Vec<IconPixmap>>,
     pub icon: Option<Icon>,
@@ -29,9 +30,27 @@ pub struct TrayItem {
     pub _dbus_menu: Option<String>,
 }
 
+pub struct TrayItemTooltip {
+    pub title: String,
+    pub description: String,
+    pub icon: Option<Icon>,
+}
+
 pub struct Systray {
     pub items: FxHashMap<String, (TrayItem, Option<TrayMenu>)>,
     icon_cache: IconCache,
+}
+
+fn map_tooltip(
+    icon_cache: &IconCache,
+    tooltip: system_tray::item::Tooltip,
+) -> TrayItemTooltip {
+    TrayItemTooltip {
+        title: tooltip.title,
+        description: tooltip.description,
+        icon: icon_cache
+            .get_tray_icon(Some(tooltip.icon_name), Some(tooltip.icon_data)),
+    }
 }
 
 impl Systray {
@@ -46,6 +65,7 @@ impl Systray {
         TrayItem {
             id: sni.id,
             title: sni.title,
+            tooltip: sni.tool_tip.map(|t| map_tooltip(&self.icon_cache, t)),
             icon: self
                 .icon_cache
                 .get_tray_icon(sni.icon_name, sni.icon_pixmap),
@@ -131,8 +151,9 @@ impl Systray {
                             UpdateEvent::Title(title) => {
                                 sni.title = title;
                             }
-                            UpdateEvent::Tooltip(_tooltip) => {
-                                // sni.tool_tip = tooltip
+                            UpdateEvent::Tooltip(tooltip) => {
+                                sni.tooltip = tooltip
+                                    .map(|t| map_tooltip(&self.icon_cache, t))
                             }
                             UpdateEvent::Menu(tray_menu) => {
                                 *menu = Some(tray_menu);
