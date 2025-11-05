@@ -58,7 +58,6 @@ static GLOBAL: tracy_client::ProfiledAllocator<std::alloc::System> =
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-
 pub fn main() -> iced::Result {
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();

@@ -1,12 +1,12 @@
 use std::any::Any;
 
 use iced::{
-    Element, Length,
+    Length,
     widget::{Container, Text, container, text},
 };
 
 use crate::{
-    Message,
+    Element,
     modules::{BarPosition, Modules, ViewTrait},
     other::config,
     utils::style::container_style,
@@ -26,7 +26,7 @@ impl ViewTrait<Modules> for LabelView {
         &'a self,
         _modules: &'a Modules,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let mut content = Container::new(
             text(self.config.text.clone()).size(self.config.size),
         );
@@ -52,7 +52,7 @@ impl ViewTrait<Modules> for LabelView {
         &'a self,
         _service: &'a Modules,
         id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         if *id != self.id {
             return None;
         }
