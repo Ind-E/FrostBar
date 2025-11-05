@@ -1,6 +1,6 @@
 [package]
 name = "frostbar"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 
 [dependencies]
@@ -33,9 +33,12 @@ linicon = "2.3.0"
 miette = { version = "7.6.0", features = ["fancy-no-backtrace"] }
 niri-ipc = { git = "https://github.com/YaLTeR/niri/", branch = "main" }
 notify-rust = "4.11.7"
+pipewire = "0.9.2"
 profiling = { version = "1.0.17" }
 reqwest = { version = "0.12.23", features = ["blocking"] }
 rustc-hash = { version = "2.1.1" }
+rustfft = "6.4.1"
+spa = "0.5.1"
 starship-battery = { version = "0.10.2", default-features = false }
 system-tray = "0.8.4"
 tikv-jemallocator = "0.6.1"
@@ -59,6 +62,9 @@ tracy-ondemand = [
     "tracy-client/manual-lifetime",
 ]
 tracy-allocations = ["tracy"]
+
+[profile.dev]
+opt-level = 3
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

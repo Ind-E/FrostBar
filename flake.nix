@@ -25,6 +25,45 @@
         "aarch64-darwin"
       ];
       eachSystem = lib.genAttrs systems;
+
+      rustToolchain = pkgs: pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+
+      packageNativeBuildInputs =
+        pkgs: with pkgs; [
+          lld
+          pkg-config
+          rustPlatform.bindgenHook
+        ];
+
+      packageBuildInputs =
+        pkgs: with pkgs; [
+          openssl
+          alsa-lib
+          pipewire
+          xorg.libX11
+          xorg.libXcursor
+          xorg.libXi
+          xorg.libXrandr
+          vulkan-loader
+          libxkbcommon
+          fontconfig
+          wayland
+          rust-jemalloc-sys
+          expat
+          freetype
+          freetype.dev
+          libGL
+        ];
+
+      devOnlyInputs =
+        pkgs: with pkgs; [
+          lldb
+          rust-bin.nightly.latest.rust-analyzer
+          python313Packages.mkdocs-material
+          # for tracy
+          stdenv.cc.cc
+        ];
+
       pkgsFor = eachSystem (
         system:
         import nixpkgs {
@@ -39,9 +78,9 @@
     {
       packages = eachSystem (system: {
         inherit (pkgsFor.${system}) frostbar;
-
         default = self.packages.${system}.frostbar;
       });
+
       checks = lib.mapAttrs (system: pkgs: {
         inherit (self.packages.${system}) frostbar;
       }) pkgsFor;
@@ -53,45 +92,20 @@
             platformRustFlagsEnv = lib.optionalString pkgs.stdenv.isLinux "-Clink-arg=-Wl,--no-rosegment -Clink-arg=-lwayland-client";
           in
           pkgs.mkShell rec {
-            inputsFrom = [ self.checks.${system}.frostbar ];
-            nativeBuildInputs = with pkgs; [
-              lld
-              lldb
-              rust-bin.nightly.latest.rust-analyzer
-              rust-jemalloc-sys
-
-              pkg-config
-              openssl
-
-              alsa-lib
-              pipewire
-              expat
-              fontconfig
-              freetype
-              freetype.dev
-              libGL
-              libxkbcommon
-
-              stdenv.cc.cc.lib
-
-              wayland
-              xorg.libX11
-              xorg.libXcursor
-              xorg.libXi
-              xorg.libXrandr
-              vulkan-loader
-
-              python313Packages.mkdocs-material
-            ];
+            nativeBuildInputs = [
+              (rustToolchain pkgs)
+            ]
+            ++ (packageNativeBuildInputs pkgs)
+            ++ (devOnlyInputs pkgs);
+            buildInputs = packageBuildInputs pkgs;
 
             shellHook = ''
               export RUST_BACKTRACE="1"
               export RUSTFLAGS="''${RUSTFLAGS:-""} ${commonRustFlagsEnv} ${platformRustFlagsEnv}"
             '';
 
-            LD_LIBRARY_PATH = "${lib.makeLibraryPath nativeBuildInputs}";
+            LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
             RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
-
           };
       }) pkgsFor;
 
@@ -99,9 +113,7 @@
         frostbar = final: prev: {
           frostbar =
             let
-              toolchain = (final.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml).override {
-                extensions = [ "rust-src" ];
-              };
+              toolchain = rustToolchain final;
               rustPlatform = final.makeRustPlatform {
                 cargo = toolchain;
                 rustc = toolchain;
@@ -116,14 +128,15 @@
                 lockFile = ./Cargo.lock;
               };
 
+              nativeBuildInputs = packageNativeBuildInputs final;
+              buildInputs = packageBuildInputs final;
+
               buildType = "release";
               strictDeps = true;
               doCheck = false;
             };
         };
-
         default = self.overlays.frostbar;
       };
-
     };
 }

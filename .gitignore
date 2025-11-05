@@ -1,4 +1,6 @@
 /target
+/result
+/traces
 
 gh-pages
 gh-pages.pub
