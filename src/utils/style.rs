@@ -4,7 +4,7 @@ use iced::{
     widget::{Container, container},
 };
 
-use crate::{Message, config};
+use crate::{Message, other::config};
 
 pub fn _bg(_theme: &Theme) -> container::Style {
     container::Style {

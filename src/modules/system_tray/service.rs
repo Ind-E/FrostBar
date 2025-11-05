@@ -13,9 +13,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
 use crate::{
-    Message,
-    icon_cache::{Icon, IconCache},
-    module,
+    Message, modules,
+    other::icon_cache::{Icon, IconCache},
 };
 
 pub struct TrayItem {
@@ -104,7 +103,7 @@ impl Systray {
 
             ReceiverStream::new(yield_rx)
         })
-        .map(|f| Message::Module(module::Message::Systray(f)))
+        .map(|f| Message::Module(modules::ModuleMsg::Systray(f)))
     }
 
     pub fn handle_event(&mut self, event: Event) {
@@ -153,7 +152,7 @@ impl Systray {
                             }
                             UpdateEvent::Tooltip(tooltip) => {
                                 sni.tooltip = tooltip
-                                    .map(|t| map_tooltip(&self.icon_cache, t))
+                                    .map(|t| map_tooltip(&self.icon_cache, t));
                             }
                             UpdateEvent::Menu(tray_menu) => {
                                 *menu = Some(tray_menu);

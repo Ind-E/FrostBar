@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use iced::{
-    Alignment, Element, Length,
+    Alignment, Length,
     mouse::Interaction,
     padding::{left, top},
     widget::{
@@ -15,13 +15,12 @@ use itertools::Itertools;
 use niri_ipc::{Action, WorkspaceReferenceArg};
 use rustc_hash::FxHashMap;
 
+use super::service::{NiriEvent, Window, Workspace};
 use crate::{
-    Message, MouseEvent, config,
-    icon_cache::Icon,
-    module::{self, Modules},
-    services::niri::{NiriEvent, Window, Workspace},
-    style::workspace_style,
-    views::{BarPosition, ViewTrait},
+    Element, Message, MouseEvent,
+    modules::{BarPosition, ModuleMsg, Modules, ViewTrait},
+    other::{config, icon_cache::Icon},
+    utils::style::workspace_style,
 };
 
 pub struct NiriView {
@@ -47,7 +46,7 @@ impl ViewTrait<Modules> for NiriView {
         &'a self,
         modules: &'a Modules,
         layout: &config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let niri = &modules.niri;
         if layout.anchor.vertical() {
             niri.workspaces
@@ -116,7 +115,7 @@ impl ViewTrait<Modules> for NiriView {
         &'a self,
         service: &'a Modules,
         id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         let service = &service.niri;
         for (ws_id, ws_view) in &self.workspace_views {
             for (win_id, win_view) in &ws_view.window_views {
@@ -181,7 +180,7 @@ impl WorkspaceView {
         base_style: &'a config::ContainerStyle,
         offset: i8,
         layout: &config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let windows = if layout.anchor.vertical() {
             Container::new(
                 workspace.windows.values().sorted_unstable().fold(
@@ -233,15 +232,15 @@ impl WorkspaceView {
         ));
 
         MouseArea::new(windows)
-            .on_press(Message::Module(module::Message::Niri(
-                NiriEvent::Action(Action::FocusWorkspace {
+            .on_press(Message::Module(ModuleMsg::Niri(NiriEvent::Action(
+                Action::FocusWorkspace {
                     reference: WorkspaceReferenceArg::Id(workspace.id),
-                }),
-            )))
-            .on_enter(Message::Module(module::Message::MouseEntered(
+                },
+            ))))
+            .on_enter(Message::Module(ModuleMsg::MouseEntered(
                 MouseEvent::Workspace(workspace.id),
             )))
-            .on_exit(Message::Module(module::Message::MouseExited(
+            .on_exit(Message::Module(ModuleMsg::MouseExited(
                 MouseEvent::Workspace(workspace.id),
             )))
             .interaction(Interaction::Pointer)
@@ -262,10 +261,7 @@ impl WindowView {
         }
     }
 
-    fn render_tooltip<'a>(
-        &self,
-        window: &'a Window,
-    ) -> Option<Element<'a, Message>> {
+    fn render_tooltip<'a>(&self, window: &'a Window) -> Option<Element<'a>> {
         Some(Text::new(&window.title).shaping(Shaping::Advanced).into())
     }
 
@@ -273,10 +269,10 @@ impl WindowView {
         &self,
         window: &'a Window,
         layout: &config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let icon_size = layout.width as f32 * 0.7;
         let placehdoler_text_size = icon_size * 0.6;
-        let icon: Element<'a, Message> = match &window.icon {
+        let icon: Element<'a> = match &window.icon {
             Some(Icon::Svg(handle)) => Svg::new(handle.clone())
                 .height(icon_size)
                 .width(icon_size)
@@ -302,7 +298,7 @@ impl WindowView {
         };
 
         let mut content = Container::new(MouseArea::new(icon).on_right_press(
-            Message::Module(module::Message::Niri(NiriEvent::Action(
+            Message::Module(ModuleMsg::Niri(NiriEvent::Action(
                 Action::FocusWindow { id: window.id },
             ))),
         ))

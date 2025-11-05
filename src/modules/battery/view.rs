@@ -1,17 +1,16 @@
 use std::any::Any;
 
 use iced::{
-    Element, Length,
+    Length,
     widget::{Column, Container, Text, container},
 };
 use tracing::warn;
 
 use crate::{
-    Message, config,
-    module::Modules,
-    style::container_style,
-    utils::mouse_binds,
-    views::{BarPosition, ViewTrait},
+    Element,
+    modules::{BarPosition, Modules, ViewTrait, mouse_binds},
+    other::config,
+    utils::style::container_style,
 };
 extern crate starship_battery as battery;
 
@@ -27,7 +26,7 @@ impl ViewTrait<Modules> for BatteryView {
         &'a self,
         service: &'a Modules,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let service = &service.battery;
         if service.is_empty {
             return Column::new().into();
@@ -64,7 +63,7 @@ impl ViewTrait<Modules> for BatteryView {
         &'a self,
         modules: &'a Modules,
         id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         if *id != self.id {
             return None;
         }

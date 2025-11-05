@@ -1,16 +1,15 @@
 use std::any::Any;
 
 use iced::{
-    Element, Length,
+    Length,
     widget::{Container, Text, container, text},
 };
 
 use crate::{
-    Message, config,
-    module::Modules,
-    style::container_style,
-    utils::mouse_binds,
-    views::{BarPosition, ViewTrait},
+    Element,
+    modules::{BarPosition, Modules, ViewTrait, mouse_binds},
+    other::config,
+    utils::style::container_style,
 };
 
 pub struct TimeView {
@@ -27,7 +26,7 @@ impl ViewTrait<Modules> for TimeView {
         &'a self,
         _modules: &'a Modules,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let mut content = Container::new(text(&self.current_time).size(16))
             .id(self.id.clone());
         content = container_style(content, &self.config.style, layout);
@@ -49,7 +48,7 @@ impl ViewTrait<Modules> for TimeView {
         &'a self,
         _service: &Modules,
         id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         if *id != self.id {
             return None;
         }

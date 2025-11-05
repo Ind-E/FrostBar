@@ -2,7 +2,7 @@ use std::any::Any;
 
 use iced::{Element, widget::container};
 
-use crate::{Message, config};
+use crate::{Message, other::config};
 
 pub mod battery;
 pub mod cava;

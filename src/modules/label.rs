@@ -6,12 +6,13 @@ use iced::{
 };
 
 use crate::{
-    Message, config,
-    module::Modules,
-    style::container_style,
-    utils::mouse_binds,
-    views::{BarPosition, ViewTrait},
+    Message,
+    modules::{BarPosition, Modules, ViewTrait},
+    other::config,
+    utils::style::container_style,
 };
+
+use super::mouse_binds;
 
 pub struct LabelView {
     pub id: container::Id,

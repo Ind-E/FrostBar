@@ -1,17 +1,18 @@
 use std::any::Any;
 
 use iced::{
-    Element, Length, Point, Renderer, Size,
+    Length, Point, Renderer, Size,
     widget::{Canvas, Container, canvas},
 };
 
 use crate::{
-    Message, config,
-    module::Modules,
-    services::cava::CavaService,
-    style::container_style,
-    utils::mouse_binds,
-    views::{BarPosition, ViewTrait},
+    Element,
+    modules::{
+        BarPosition, Modules, ViewTrait, cava::service::CavaService,
+        mouse_binds,
+    },
+    other::config,
+    utils::style::container_style,
 };
 
 const MAX_BAR_HEIGHT: u32 = 12;
@@ -33,7 +34,7 @@ impl ViewTrait<Modules> for CavaView {
         &'a self,
         modules: &'a Modules,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let cava = &modules.cava;
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {

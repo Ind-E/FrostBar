@@ -18,7 +18,7 @@ use tracing::{debug, error};
 use crate::{
     Message,
     dbus_proxy::PlayerProxy,
-    module::{self, ModuleAction},
+    modules::{self, ModuleAction},
     utils::BoxStream,
 };
 
@@ -117,7 +117,7 @@ impl MprisService {
         UnboundedReceiverStream::new(yield_rx)
 
 
-        }).map(|f| Message::Module(module::Message::Mpris(f)))
+        }).map(|f| Message::Module(modules::ModuleMsg::Mpris(f)))
     }
 
     pub fn handle_event(&mut self, event: MprisEvent) -> ModuleAction {
@@ -147,7 +147,7 @@ impl MprisService {
                         let colors = player.colors.clone();
                         return ModuleAction::Task(Task::perform(
                             async move { colors },
-                            module::Message::CavaColorUpdate,
+                            modules::ModuleMsg::CavaColorUpdate,
                         ));
                     }
                     player.status = status;
@@ -162,12 +162,12 @@ impl MprisService {
                         let colors = player.colors.clone();
                         return ModuleAction::Task(iced::Task::perform(
                             async move { colors },
-                            module::Message::CavaColorUpdate,
+                            modules::ModuleMsg::CavaColorUpdate,
                         ));
                     }
                     return ModuleAction::Task(Task::perform(
                         async move { None },
-                        module::Message::CavaColorUpdate,
+                        modules::ModuleMsg::CavaColorUpdate,
                     ));
                 }
             }
@@ -243,7 +243,7 @@ impl MprisPlayer {
                             let captured_colors = colors;
                             return ModuleAction::Task(iced::Task::perform(
                                 async move { captured_colors },
-                                module::Message::CavaColorUpdate,
+                                modules::ModuleMsg::CavaColorUpdate,
                             ));
                         }
                     }
@@ -260,7 +260,7 @@ impl MprisPlayer {
         self.colors = None;
         ModuleAction::Task(Task::perform(
             async { None },
-            module::Message::CavaColorUpdate,
+            modules::ModuleMsg::CavaColorUpdate,
         ))
     }
 
@@ -314,7 +314,7 @@ impl MprisPlayer {
                     let handle = image::Handle::from_bytes(image_bytes);
                     Some((handle, gradient))
                 },
-                |art| module::Message::PlayerArtUpdate(name, art),
+                |art| modules::ModuleMsg::PlayerArtUpdate(name, art),
             );
 
             return PlayerArt::Async(task);
@@ -401,7 +401,7 @@ async fn create_player_stream(
 }
 
 enum PlayerArt {
-    Async(iced::Task<module::Message>),
+    Async(iced::Task<modules::ModuleMsg>),
     Sync(Option<(image::Handle, Option<Vec<Color>>)>),
     None,
 }

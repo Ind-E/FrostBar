@@ -5,8 +5,8 @@ use tracing::{debug, info, warn};
 use tokio::process::Command as TokioCommand;
 
 use iced::{
-    Alignment, Background, Color, Element, Event, Length, Pixels, Rectangle,
-    Settings, Size, Subscription, Task, Theme,
+    Alignment, Background, Color, Event, Length, Pixels, Rectangle, Settings,
+    Size, Subscription, Task, Theme,
     advanced::subscription::from_recipe,
     border::rounded,
     padding::{left, top},
@@ -24,33 +24,30 @@ use zbus::Connection;
 use tracing::error;
 
 use crate::{
-    config::{ColorVars, Config, MediaControl, RawConfig},
-    constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
     dbus_proxy::PlayerProxy,
-    file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
-    icon_cache::IconCache,
-    module::{ModuleAction, Modules},
-    services::{
-        cava::CavaSubscriptionRecipe, mpris::MprisService, niri::NiriService,
-        system_tray::Systray,
+    modules::{
+        BarAlignment, CommandSpec, ModuleAction, ModuleMsg, Modules,
+        cava::service::CavaSubscriptionRecipe, mpris::service::MprisService,
+        niri::service::NiriService, system_tray::service::Systray,
+    },
+    other::{
+        config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
+        constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
+        file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
+        icon_cache::IconCache,
     },
     utils::{
-        CommandSpec, init_tracing, open_dummy_window, open_tooltip_window,
-        open_window,
+        log::init_tracing,
+        window::{open_dummy_window, open_tooltip_window, open_window},
     },
-    views::BarAlignment,
 };
 
-mod config;
-mod constants;
 mod dbus_proxy;
-mod file_watcher;
-mod icon_cache;
-mod module;
-mod services;
-mod style;
+mod modules;
+mod other;
 mod utils;
-mod views;
+
+type Element<'a> = iced::Element<'a, Message>;
 
 #[cfg(feature = "tracy-allocations")]
 #[global_allocator]
@@ -137,7 +134,7 @@ pub enum Message {
     TooltipPositionMeasured(TooltipId),
     CloseTooltip(container::Id),
 
-    Module(module::Message),
+    Module(ModuleMsg),
 }
 
 pub struct Bar {
@@ -200,12 +197,12 @@ impl Bar {
 
         subscriptions.push(
             iced::time::every(Duration::from_secs(1))
-                .map(|_| Message::Module(module::Message::Tick(Local::now()))),
+                .map(|_| Message::Module(ModuleMsg::Tick(Local::now()))),
         );
 
         subscriptions.push(
             from_recipe(CavaSubscriptionRecipe {})
-                .map(|f| Message::Module(module::Message::CavaUpdate(f))),
+                .map(|f| Message::Module(ModuleMsg::CavaUpdate(f))),
         );
 
         subscriptions.push(MprisService::subscription());
@@ -227,7 +224,7 @@ impl Bar {
                 if self.config.layout == new_config.layout {
                     self.config = new_config;
                     return Task::done(Message::Module(
-                        module::Message::SynchronizeAll,
+                        ModuleMsg::SynchronizeAll,
                     ));
                 } else if let Some(id) = self.id {
                     self.config = new_config;
@@ -240,9 +237,7 @@ impl Bar {
                     return Task::batch([
                         close,
                         open,
-                        Task::done(Message::Module(
-                            module::Message::SynchronizeAll,
-                        )),
+                        Task::done(Message::Module(ModuleMsg::SynchronizeAll)),
                     ]);
                 }
             }
@@ -477,10 +472,10 @@ impl Bar {
     }
 
     #[inline(always)]
-    fn view_bar(&self) -> Element<'_, Message> {
-        let mut start_views: Vec<(Element<Message>, usize)> = vec![];
-        let mut middle_views: Vec<(Element<Message>, usize)> = vec![];
-        let mut end_views: Vec<(Element<Message>, usize)> = vec![];
+    fn view_bar(&self) -> Element<'_> {
+        let mut start_views: Vec<(Element, usize)> = vec![];
+        let mut middle_views: Vec<(Element, usize)> = vec![];
+        let mut end_views: Vec<(Element, usize)> = vec![];
 
         for (element, position) in
             self.modules.render_views(&self.config.layout)
@@ -496,19 +491,19 @@ impl Bar {
             }
         }
 
-        let start_views: Vec<Element<Message>> = start_views
+        let start_views: Vec<Element> = start_views
             .into_iter()
             .sorted_unstable_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
             .collect();
 
-        let middle_views: Vec<Element<Message>> = middle_views
+        let middle_views: Vec<Element> = middle_views
             .into_iter()
             .sorted_unstable_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
             .collect();
 
-        let end_views: Vec<Element<Message>> = end_views
+        let end_views: Vec<Element> = end_views
             .into_iter()
             .sorted_unstable_by_key(|(_, idx)| *idx)
             .map(|(v, _)| v)
@@ -598,7 +593,7 @@ impl Bar {
     }
 
     #[inline(always)]
-    fn view_tooltip(&self, tooltip_id: &TooltipId) -> Element<'_, Message> {
+    fn view_tooltip(&self, tooltip_id: &TooltipId) -> Element<'_> {
         let content = self
             .modules
             .render_tooltip_for_id(&tooltip_id.id)
@@ -616,14 +611,14 @@ impl Bar {
                 }
             });
         match self.config.layout.anchor {
-            config::Anchor::Right => {
+            Anchor::Right => {
                 container = Container::new(container).align_right(Length::Fill);
             }
-            config::Anchor::Bottom => {
+            Anchor::Bottom => {
                 container =
                     Container::new(container).align_bottom(Length::Fill);
             }
-            config::Anchor::Top | config::Anchor::Left => {}
+            Anchor::Top | Anchor::Left => {}
         }
 
         let pin = iced::widget::pin(container);
@@ -634,7 +629,7 @@ impl Bar {
         }
     }
 
-    pub fn view(&self, id: Id) -> Element<'_, Message> {
+    pub fn view(&self, id: Id) -> Element<'_> {
         if Some(id) == self.id {
             self.view_bar()
         } else if Some(id) == self.tooltip_window_id

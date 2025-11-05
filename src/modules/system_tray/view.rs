@@ -1,24 +1,22 @@
 use std::any::Any;
 
 use iced::{
-    Alignment, Element,
+    Alignment,
     mouse::Interaction,
     widget::{
-        Column, Container, Image, MouseArea, Stack, Svg, Text, column,
-        container, row, text::Shaping,
+        Column, Container, Image, MouseArea, Stack, Svg, Text, container, row,
+        text::Shaping,
     },
 };
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use system_tray::menu::TrayMenu;
 
+use super::service::TrayItem;
 use crate::{
-    Message,
-    config::{self},
-    icon_cache::Icon,
-    module::Modules,
-    services::system_tray::TrayItem,
-    views::{BarPosition, ViewTrait},
+    Element, Message,
+    modules::{BarPosition, Modules, ViewTrait},
+    other::{config, icon_cache::Icon},
 };
 
 pub struct SystemTrayView {
@@ -43,7 +41,7 @@ impl ViewTrait<Modules> for SystemTrayView {
         &'a self,
         modules: &'a Modules,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let tray = &modules.systray;
 
         if layout.anchor.vertical() {
@@ -77,7 +75,7 @@ impl ViewTrait<Modules> for SystemTrayView {
         &'a self,
         modules: &'a Modules,
         id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         let tray = &modules.systray;
         for (item_id, view) in &self.tray_item_views {
             if view.id == *id
@@ -121,7 +119,7 @@ impl TrayItemView {
         &self,
         item: &TrayItem,
         layout: &config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let icon_size = layout.width as f32 * 0.6;
         let overlay_size = icon_size * 0.35;
         let mut stack = Stack::new();
@@ -189,7 +187,7 @@ impl TrayItemView {
     pub fn render_tooltip<'a>(
         &self,
         (item, _menu): &'a (TrayItem, Option<TrayMenu>),
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         if let Some(tooltip) = &item.tooltip {
             let mut items = vec![];
             if !tooltip.title.is_empty() {
@@ -206,10 +204,10 @@ impl TrayItemView {
                 );
             }
 
-            if items.len() > 0 {
+            if !items.is_empty() {
                 let col = Column::from_iter(items);
                 if let Some(icon) = &tooltip.icon {
-                    let icon: Element<'a, Message> = match icon {
+                    let icon: Element<'a> = match icon {
                         Icon::Svg(handle) => Svg::new(handle.clone()).into(),
                         Icon::Raster(handle) => Image::new(handle).into(),
                     };

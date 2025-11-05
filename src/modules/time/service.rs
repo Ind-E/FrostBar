@@ -4,7 +4,7 @@ use iced::{
     time::{self, Duration},
 };
 
-use crate::{Message, module};
+use crate::{Message, modules};
 
 pub struct TimeService {
     pub time: DateTime<Local>,
@@ -18,7 +18,7 @@ impl TimeService {
 
     pub fn subscription() -> Subscription<Message> {
         time::every(Duration::from_secs(1))
-            .map(|_| Message::Module(module::Message::Tick(Local::now())))
+            .map(|_| Message::Module(modules::ModuleMsg::Tick(Local::now())))
     }
 
     pub fn handle_event(&mut self, event: DateTime<Local>) {

@@ -11,9 +11,9 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, warn};
 
-use crate::{Message, module, utils::BoxStream};
+use crate::{Message, modules, utils::BoxStream};
 
-const CAVA_CONFIG: &str = include_str!("../../assets/cava-config");
+const CAVA_CONFIG: &str = include_str!("../../../assets/cava-config");
 
 pub fn write_temp_cava_config() -> std::io::Result<std::path::PathBuf> {
     let tmp_path = temp_dir().join("my_cava_config");
@@ -88,7 +88,7 @@ impl CavaService {
 
     pub fn subscription() -> iced::Subscription<Message> {
         from_recipe(CavaSubscriptionRecipe {})
-            .map(|f| Message::Module(module::Message::CavaUpdate(f)))
+            .map(|f| Message::Module(modules::ModuleMsg::CavaUpdate(f)))
     }
 
     pub fn handle_event(&mut self, event: Option<String>) {

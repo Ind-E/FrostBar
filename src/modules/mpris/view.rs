@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use iced::{
-    Element, Length,
+    Length,
     mouse::{Interaction, ScrollDelta},
     widget::{
         Column, Container, Image, MouseArea, Row, Text, container,
@@ -11,12 +11,10 @@ use iced::{
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Message,
-    config::{self},
-    module::Modules,
-    services::mpris::MprisPlayer,
-    style::container_style,
-    views::{BarPosition, ViewTrait},
+    Element, Message,
+    modules::{BarPosition, Modules, ViewTrait, mpris::service::MprisPlayer},
+    other::config,
+    utils::style::container_style,
 };
 
 pub struct MprisView {
@@ -31,7 +29,7 @@ impl ViewTrait<Modules> for MprisView {
         &'a self,
         service: &'a Modules,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
+    ) -> Element<'a> {
         let service = &service.mpris;
         if layout.anchor.vertical() {
             service
@@ -82,7 +80,7 @@ impl ViewTrait<Modules> for MprisView {
         &'a self,
         service: &'a Modules,
         id: &container::Id,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         let service = &service.mpris;
         self.player_views.iter().find_map(|(name, view)| {
             if view.id == *id {
@@ -143,8 +141,8 @@ impl<'a> MprisPlayerView {
         player: &'a MprisPlayer,
         config: &'a config::Mpris,
         layout: &'a config::Layout,
-    ) -> Element<'a, Message> {
-        let content: Element<'a, Message> = if let Some(art) = &player.art {
+    ) -> Element<'a> {
+        let content: Element<'a> = if let Some(art) = &player.art {
             Container::new(Image::new(art)).into()
         } else {
             let container = Container::new(
@@ -248,7 +246,7 @@ impl<'a> MprisPlayerView {
     pub fn render_tooltip(
         &'a self,
         player: &'a MprisPlayer,
-    ) -> Option<Element<'a, Message>> {
+    ) -> Option<Element<'a>> {
         let raw_artists =
             player.artists.clone().unwrap_or_else(|| "[]".to_string());
         let raw_title =

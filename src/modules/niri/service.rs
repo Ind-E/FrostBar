@@ -13,8 +13,8 @@ use tracing::error;
 
 use crate::{
     Message,
-    icon_cache::{Icon, IconCache},
-    module::{self, ModuleAction},
+    modules::{self, ModuleAction},
+    other::icon_cache::{Icon, IconCache},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -174,7 +174,7 @@ impl NiriService {
 
             UnboundedReceiverStream::new(yield_rx)
         })
-        .map(|f| Message::Module(module::Message::Niri(f)))
+        .map(|f| Message::Module(modules::ModuleMsg::Niri(f)))
     }
 
     pub fn handle_event(&mut self, event: NiriEvent) -> ModuleAction {
@@ -198,7 +198,7 @@ impl NiriService {
                             if let Err(e) = result {
                                 error!("{e}");
                             }
-                            module::Message::NoOp
+                            modules::ModuleMsg::NoOp
                         },
                     ))
                 }

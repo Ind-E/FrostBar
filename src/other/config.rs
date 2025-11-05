@@ -18,11 +18,9 @@ use rustc_hash::FxHashMap;
 use tracing::{debug, error, info};
 
 use crate::{
-    Message,
-    constants::BAR_NAMESPACE,
-    file_watcher::ConfigPath,
-    utils::CommandSpec,
-    views::{BarAlignment, BarPosition},
+    CommandSpec, Message,
+    modules::{BarAlignment, BarPosition},
+    other::{constants::BAR_NAMESPACE, file_watcher::ConfigPath},
 };
 
 #[derive(knus::Decode, Default, Debug)]
@@ -1229,7 +1227,7 @@ impl RawConfig {
             format!("error opening config file at {}", path.display())
         })?;
 
-        let default_config = include_bytes!("../assets/default-config.kdl");
+        let default_config = include_bytes!("../../assets/default-config.kdl");
 
         new_file
             .write_all(default_config)
