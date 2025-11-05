@@ -38,6 +38,7 @@ reqwest = { version = "0.12.23", features = ["blocking"] }
 rustc-hash = { version = "2.1.1" }
 starship-battery = { version = "0.10.2", default-features = false }
 system-tray = "0.8.4"
+tikv-jemallocator = "0.6.1"
 tokio = { version = "1.47.1", features = ["macros"] }
 tokio-stream = "0.1.17"
 tracing = "0.1.41"

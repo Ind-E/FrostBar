@@ -58,6 +58,7 @@
               lld
               lldb
               rust-bin.nightly.latest.rust-analyzer
+              rust-jemalloc-sys
 
               pkg-config
               openssl
