@@ -19,14 +19,14 @@ note: FrostBar is currently a work in progress and under active development. The
 - niri workspaces
 - battery
 - time
-- cava audio visualization
+- spectrum audio visualization
 - mpris album art
 - hot reloaded config file
+- system tray icons
 
 
 ## Planned Features
 - workspaces for other compositors (hyprland, sway)
-- system tray icons
 - ipc
 - ability to load system fonts
 - animations

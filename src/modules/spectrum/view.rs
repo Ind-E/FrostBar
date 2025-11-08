@@ -1,8 +1,8 @@
 use crate::{
     Element, config,
     modules::{
-        BarPosition, Modules, ViewTrait, cava::service::CavaService,
-        mouse_binds,
+        BarPosition, Modules, ViewTrait, mouse_binds,
+        spectrum::service::SpectrumService,
     },
     utils::style::container_style,
 };
@@ -12,34 +12,32 @@ use iced::{
 };
 use std::any::Any;
 
-const MAX_BAR_HEIGHT: u32 = 12;
-
-pub struct CavaView {
-    config: config::Cava,
+pub struct AudioView {
+    config: config::Spectrum,
     pub position: BarPosition,
 }
 
-impl CavaView {
-    pub fn new(config: config::Cava, position: BarPosition) -> Self {
+impl AudioView {
+    pub fn new(config: config::Spectrum, position: BarPosition) -> Self {
         Self { config, position }
     }
 }
 
 #[profiling::all_functions]
-impl ViewTrait<Modules> for CavaView {
+impl ViewTrait<Modules> for AudioView {
     fn view<'a>(
         &'a self,
         modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a> {
-        let cava = &modules.cava;
+        let audio = &modules.audio;
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
-            Canvas::new(CavaCanvas::new(cava, &self.config, vertical))
+            Canvas::new(SpectrumCanvas::new(audio, &self.config, vertical))
                 .width(Length::Fill)
                 .height(130)
         } else {
-            Canvas::new(CavaCanvas::new(cava, &self.config, vertical))
+            Canvas::new(SpectrumCanvas::new(audio, &self.config, vertical))
                 .width(130)
                 .height(Length::Fill)
         };
@@ -59,17 +57,17 @@ impl ViewTrait<Modules> for CavaView {
     }
 }
 
-struct CavaCanvas<'a> {
-    service: &'a CavaService,
-    config: &'a config::Cava,
+struct SpectrumCanvas<'a> {
+    service: &'a SpectrumService,
+    config: &'a config::Spectrum,
     cache: canvas::Cache,
     vertical: bool,
 }
 
-impl<'a> CavaCanvas<'a> {
+impl<'a> SpectrumCanvas<'a> {
     pub fn new(
-        service: &'a CavaService,
-        config: &'a config::Cava,
+        service: &'a SpectrumService,
+        config: &'a config::Spectrum,
         vertical: bool,
     ) -> Self {
         Self {
@@ -81,7 +79,7 @@ impl<'a> CavaCanvas<'a> {
     }
 }
 
-impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
+impl<Message> canvas::Program<Message> for SpectrumCanvas<'_> {
     type State = ();
 
     fn draw(
@@ -98,7 +96,9 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
             |frame: &mut canvas::Frame| {
                 let center = frame.center();
 
-                let bars_per_channel = self.service.bars.len() / 2;
+                let bars = &self.service.bars;
+
+                let bars_per_channel = bars.len() / 2;
 
                 if bars_per_channel == 0 {
                     return;
@@ -109,20 +109,18 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                 } else {
                     frame.width() / bars_per_channel as f32
                 };
-                let spacing = bar_thickness_total * self.config.spacing;
+                let spacing = bar_thickness_total * self.config.spectrum;
                 let bar_thickness = bar_thickness_total - spacing;
 
                 for i in 0..bars_per_channel {
-                    let left_val = self.service.bars[i];
-                    let right_val =
-                        self.service.bars[2 * bars_per_channel - i - 1];
+                    let right_val = bars[bars_per_channel - i - 1] as f32;
+                    let left_val = bars[2 * bars_per_channel - i - 1] as f32;
 
                     let max_bar_width =
                         if self.vertical { center.x } else { center.y };
-                    let left_width = max_bar_width
-                        * (f32::from(left_val) / MAX_BAR_HEIGHT as f32);
-                    let right_width = max_bar_width
-                        * (f32::from(right_val) / MAX_BAR_HEIGHT as f32);
+
+                    let left_width = max_bar_width * left_val * 2.0;
+                    let right_width = max_bar_width * right_val * 2.0;
 
                     let pos = i as f32 * bar_thickness_total + spacing / 2.0;
 
@@ -136,7 +134,7 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                     }
                     .unwrap_or(fallback_color);
 
-                    if left_val > 0 {
+                    if left_val > 0.0 {
                         let (top_left, bar_size) = if self.vertical {
                             (
                                 Point {
@@ -157,7 +155,7 @@ impl<Message> canvas::Program<Message> for CavaCanvas<'_> {
                         frame.fill_rectangle(top_left, bar_size, *bar_color);
                     }
 
-                    if right_val > 0 {
+                    if right_val > 0.0 {
                         let (top_left, bar_size) = if self.vertical {
                             (
                                 Point {

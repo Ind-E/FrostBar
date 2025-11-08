@@ -28,7 +28,7 @@ start {
         format "%I\n%M"
     }
 
-    /-cava {
+    /-spectrum {
         // scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
         // scroll-down "wpctl" "set-volume" "@DEFAULT_SINK@" "3%-"
     }

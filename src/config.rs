@@ -67,7 +67,7 @@ fn hydrate_modules(
                     RawConfigModule::Battery(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
-                    RawConfigModule::Cava(c) => {
+                    RawConfigModule::Spectrum(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
                     RawConfigModule::Mpris(c) => {
@@ -227,7 +227,7 @@ where
 
 #[derive(knus::Decode, Debug)]
 pub enum RawConfigModule {
-    Cava(RawCava),
+    Spectrum(RawSpectrum),
     Battery(RawBattery),
     Time(RawTime),
     Mpris(RawMpris),
@@ -237,7 +237,7 @@ pub enum RawConfigModule {
 }
 
 pub enum ConfigModule {
-    Cava(Cava),
+    Spectrum(Spectrum),
     Battery(Battery),
     Time(Time),
     Mpris(Mpris),
@@ -265,7 +265,7 @@ impl std::ops::DerefMut for ConfigModules {
 }
 
 #[derive(knus::Decode, Debug)]
-pub struct RawCava {
+pub struct RawSpectrum {
     #[knus(child, unwrap(argument), default = Self::default().spacing)]
     pub spacing: f32,
 
@@ -282,7 +282,7 @@ pub struct RawCava {
     pub style: RawContainerStyle,
 }
 
-impl Default for RawCava {
+impl Default for RawSpectrum {
     fn default() -> Self {
         Self {
             spacing: 0.1,
@@ -294,22 +294,22 @@ impl Default for RawCava {
     }
 }
 
-impl RawCava {
+impl RawSpectrum {
     fn hydrate(self, colors: &ColorVars) -> ConfigModule {
-        let cava = Cava {
-            spacing: self.spacing,
+        let spectrum = Spectrum {
+            spectrum: self.spacing,
             color: self.color.resolve(colors),
             dynamic_color: self.dynamic_color,
             binds: self.binds.hydrate(),
             style: self.style.hydrate(colors),
         };
-        ConfigModule::Cava(cava)
+        ConfigModule::Spectrum(spectrum)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Cava {
-    pub spacing: f32,
+pub struct Spectrum {
+    pub spectrum: f32,
     pub color: Color,
     pub dynamic_color: bool,
     pub binds: MouseBinds,

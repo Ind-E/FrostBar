@@ -2,9 +2,9 @@ use crate::{
     Element, Message, MouseEvent,
     config::{self, Config, ConfigModule, MouseBinds},
     icon_cache::IconCache,
+    modules::spectrum::{service::SpectrumService, view::AudioView},
 };
 use battery::{service::BatteryService, view::BatteryView};
-use cava::{service::CavaService, view::CavaView};
 use chrono::{DateTime, Local};
 use iced::{
     Color, Task,
@@ -25,10 +25,10 @@ use system_tray::{service::Systray, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
 
 pub mod battery;
-pub mod cava;
 pub mod label;
 pub mod mpris;
 pub mod niri;
+pub mod spectrum;
 pub mod system_tray;
 pub mod time;
 
@@ -36,8 +36,8 @@ pub mod time;
 pub enum ModuleMsg {
     Tick(DateTime<Local>),
     Niri(NiriEvent),
-    CavaUpdate(Option<String>),
-    CavaColorUpdate(Option<Vec<Color>>),
+    AudioSample(Vec<f32>),
+    SpectrumColorUpdate(Option<Vec<Color>>),
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
     Systray(system_tray::service::Event),
@@ -51,7 +51,7 @@ pub type View = Box<dyn ViewTrait<Modules>>;
 
 pub struct Modules {
     pub battery: BatteryService,
-    pub cava: CavaService,
+    pub audio: SpectrumService,
     pub mpris: MprisService,
     pub time: TimeService,
     pub niri: NiriService,
@@ -64,7 +64,7 @@ impl Modules {
     pub fn new(icon_cache: IconCache) -> Self {
         Self {
             battery: BatteryService::new(),
-            cava: CavaService::new(),
+            audio: SpectrumService::new(),
             mpris: MprisService::new(),
             time: TimeService::new(),
             niri: NiriService::new(icon_cache.clone()),
@@ -81,8 +81,8 @@ impl Modules {
                 ConfigModule::Battery(c) => {
                     self.views.push(Box::new(BatteryView::new(c, position)));
                 }
-                ConfigModule::Cava(c) => {
-                    self.views.push(Box::new(CavaView::new(c, position)));
+                ConfigModule::Spectrum(c) => {
+                    self.views.push(Box::new(AudioView::new(c, position)));
                 }
                 ConfigModule::Time(c) => {
                     self.views.push(Box::new(TimeView::new(c, position)));
@@ -143,11 +143,11 @@ impl Modules {
                 });
                 return task;
             }
-            ModuleMsg::CavaUpdate(event) => {
-                self.cava.handle_event(event);
+            ModuleMsg::AudioSample(sample) => {
+                self.audio.update(sample);
             }
-            ModuleMsg::CavaColorUpdate(gradient) => {
-                self.cava.update_gradient(gradient);
+            ModuleMsg::SpectrumColorUpdate(gradient) => {
+                self.audio.update_gradient(gradient);
             }
             ModuleMsg::Mpris(event) => {
                 let task = self.mpris.handle_event(event);
@@ -158,11 +158,11 @@ impl Modules {
             }
             ModuleMsg::PlayerArtUpdate(name, art) => {
                 if let Some(player) = self.mpris.players.get_mut(&name)
-                    && let Some((art, colors)) = art
+                    && let Some((art, gradient)) = art
                 {
                     player.art = Some(art);
-                    player.colors.clone_from(&colors);
-                    self.cava.update_gradient(colors);
+                    player.colors.clone_from(&gradient);
+                    self.audio.update_gradient(gradient);
                 }
             }
             ModuleMsg::Systray(event) => {

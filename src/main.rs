@@ -4,7 +4,6 @@ use crate::{
     icon_cache::IconCache,
     modules::{
         BarAlignment, CommandSpec, ModuleAction, ModuleMsg, Modules,
-        cava::service::CavaSubscriptionRecipe,
         mpris::{mpris_player::PlayerProxy, service::MprisService},
         niri::service::NiriService,
         system_tray::service::Systray,
@@ -18,7 +17,6 @@ use chrono::Local;
 use iced::{
     Alignment, Background, Color, Event, Font, Length, Pixels, Rectangle,
     Settings, Size, Subscription, Task, Theme,
-    advanced::subscription::from_recipe,
     border::rounded,
     font::{Family, Weight},
     padding::{left, top},
@@ -212,15 +210,12 @@ impl Bar {
                 .map(|_| Message::Module(ModuleMsg::Tick(Local::now()))),
         );
 
-        subscriptions.push(
-            from_recipe(CavaSubscriptionRecipe {})
-                .map(|f| Message::Module(ModuleMsg::CavaUpdate(f))),
-        );
-
         subscriptions.push(MprisService::subscription());
         subscriptions.push(NiriService::subscription());
 
         subscriptions.push(Systray::subscription());
+
+        subscriptions.push(self.modules.audio.subscription());
 
         // subscriptions.extend(self.modules.subscriptions());
 

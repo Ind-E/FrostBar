@@ -9,7 +9,7 @@ Here is a list of all currently avaialable modules (as of 10/2/25):
 
 ```kdl
 battery
-cava
+spectrum
 label
 mpris
 niri
@@ -109,9 +109,9 @@ Affects the size of the battery icon.
 Affects the color of the battery while plugged in. Use `text-color` in the
 `style` section to affect the color while not plugged in.
 
-### Cava
+### Spectrum
 ```kdl
-cava {
+spectrum {
     spacing 0.1
     dynamic-color true
     color "#fff"
