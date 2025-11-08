@@ -1,7 +1,7 @@
 use crate::{
-    CommandSpec, Message,
+    BAR_NAMESPACE, CommandSpec, Message,
+    file_watcher::ConfigPath,
     modules::{BarAlignment, BarPosition},
-    other::{constants::BAR_NAMESPACE, file_watcher::ConfigPath},
 };
 use directories::ProjectDirs;
 use iced::{Background, Color, border, color, widget::container};
@@ -307,6 +307,7 @@ impl RawCava {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Cava {
     pub spacing: f32,
     pub color: Color,
@@ -684,7 +685,7 @@ impl RawMouseBinds {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MouseBinds {
     pub mouse_left: Option<Message>,
     pub double_click: Option<Message>,
@@ -693,6 +694,7 @@ pub struct MouseBinds {
     pub scroll: Option<ScrollBinds>,
 }
 
+#[derive(Debug, Clone)]
 pub struct ScrollBinds {
     pub up: Option<Message>,
     pub down: Option<Message>,
@@ -923,7 +925,7 @@ impl RawContainerStyle {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ContainerStyle {
     pub inner: container::Style,
     pub padding: Option<f32>,
@@ -1224,7 +1226,7 @@ impl RawConfig {
             format!("error opening config file at {}", path.display())
         })?;
 
-        let default_config = include_bytes!("../../assets/default-config.kdl");
+        let default_config = include_bytes!("../assets/default-config.kdl");
 
         new_file
             .write_all(default_config)

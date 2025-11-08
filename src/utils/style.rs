@@ -1,4 +1,4 @@
-use crate::{Message, other::config};
+use crate::{Message, config};
 use iced::{
     Background, Color, Theme,
     padding::{left, top},

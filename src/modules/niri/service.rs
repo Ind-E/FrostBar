@@ -1,7 +1,7 @@
 use crate::{
     Message,
+    icon_cache::{Icon, IconCache},
     modules::{self, ModuleAction},
-    other::icon_cache::{Icon, IconCache},
 };
 use iced::{
     Subscription,

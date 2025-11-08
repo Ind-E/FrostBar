@@ -1,9 +1,7 @@
 use crate::{
     Element, Message, MouseEvent,
-    other::{
-        config::{self, Config, ConfigModule, MouseBinds},
-        icon_cache::IconCache,
-    },
+    config::{self, Config, ConfigModule, MouseBinds},
+    icon_cache::IconCache,
 };
 use battery::{service::BatteryService, view::BatteryView};
 use cava::{service::CavaService, view::CavaView};

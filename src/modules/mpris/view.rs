@@ -1,7 +1,6 @@
 use crate::{
-    Element, Message,
+    Element, Message, config,
     modules::{BarPosition, Modules, ViewTrait, mpris::service::MprisPlayer},
-    other::config,
     utils::style::container_style,
 };
 use iced::{

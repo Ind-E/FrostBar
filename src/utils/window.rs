@@ -1,10 +1,4 @@
-use crate::{
-    Message,
-    other::{
-        config::{self},
-        constants::BAR_NAMESPACE,
-    },
-};
+use crate::{BAR_NAMESPACE, Message, config};
 use iced::{
     Size,
     window::settings::{

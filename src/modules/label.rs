@@ -1,8 +1,7 @@
 use super::mouse_binds;
 use crate::{
-    Element,
+    Element, config,
     modules::{BarPosition, Modules, ViewTrait},
-    other::config,
     utils::style::container_style,
 };
 use iced::{

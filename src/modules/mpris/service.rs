@@ -1,6 +1,6 @@
+use super::mpris_player::PlayerProxy;
 use crate::{
     Message,
-    dbus_proxy::PlayerProxy,
     modules::{self, ModuleAction},
     utils::BoxStream,
 };

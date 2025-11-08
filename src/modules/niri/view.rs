@@ -1,8 +1,8 @@
 use super::service::{NiriEvent, Window, Workspace};
 use crate::{
-    Element, Message, MouseEvent,
+    Element, Message, MouseEvent, config,
+    icon_cache::Icon,
     modules::{BarPosition, ModuleMsg, Modules, ViewTrait},
-    other::{config, icon_cache::Icon},
     utils::style::workspace_style,
 };
 use iced::{

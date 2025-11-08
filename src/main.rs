@@ -1,15 +1,13 @@
 use crate::{
-    dbus_proxy::PlayerProxy,
+    config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
+    file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
+    icon_cache::IconCache,
     modules::{
         BarAlignment, CommandSpec, ModuleAction, ModuleMsg, Modules,
-        cava::service::CavaSubscriptionRecipe, mpris::service::MprisService,
-        niri::service::NiriService, system_tray::service::Systray,
-    },
-    other::{
-        config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
-        constants::{BAR_NAMESPACE, FIRA_CODE, FIRA_CODE_BYTES},
-        file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
-        icon_cache::IconCache,
+        cava::service::CavaSubscriptionRecipe,
+        mpris::{mpris_player::PlayerProxy, service::MprisService},
+        niri::service::NiriService,
+        system_tray::service::Systray,
     },
     utils::{
         log::init_tracing,
@@ -18,10 +16,11 @@ use crate::{
 };
 use chrono::Local;
 use iced::{
-    Alignment, Background, Color, Event, Length, Pixels, Rectangle, Settings,
-    Size, Subscription, Task, Theme,
+    Alignment, Background, Color, Event, Font, Length, Pixels, Rectangle,
+    Settings, Size, Subscription, Task, Theme,
     advanced::subscription::from_recipe,
     border::rounded,
+    font::{Family, Weight},
     padding::{left, top},
     theme,
     widget::{Column, Container, Row, container, stack},
@@ -37,12 +36,24 @@ use tracing_subscriber::{
 };
 use zbus::Connection;
 
-mod dbus_proxy;
+mod config;
+mod constants;
+mod file_watcher;
+mod icon_cache;
 mod modules;
-mod other;
 mod utils;
 
 type Element<'a> = iced::Element<'a, Message>;
+
+pub const FIRA_CODE_BYTES: &[u8] =
+    include_bytes!("../assets/FiraCodeNerdFontMono-Medium.ttf");
+pub const FIRA_CODE: Font = Font {
+    family: Family::Name("FiraCode Nerd Font Mono"),
+    weight: Weight::Medium,
+    ..Font::DEFAULT
+};
+
+pub const BAR_NAMESPACE: &str = "FrostBar";
 
 #[cfg(feature = "tracy-allocations")]
 #[global_allocator]
@@ -70,8 +81,10 @@ pub fn main() -> iced::Result {
                     }
                 });
 
-            let stderr_layer =
-                fmt::layer().compact().with_writer(std::io::stderr);
+            let stderr_layer = fmt::layer()
+                .compact()
+                .with_writer(std::io::stderr)
+                .with_target(false);
 
             let (file_layer, handle) = reload::Layer::new(None);
 

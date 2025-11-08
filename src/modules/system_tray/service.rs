@@ -1,6 +1,7 @@
 use crate::{
-    Message, modules,
-    other::icon_cache::{Icon, IconCache},
+    Message,
+    icon_cache::{Icon, IconCache},
+    modules,
 };
 use iced::Subscription;
 use rustc_hash::FxHashMap;

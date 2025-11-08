@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use tracing::{Level, error};
 use tracing_subscriber::{
-    fmt::{self, writer::MakeWriterExt},
+    fmt::{
+        writer::MakeWriterExt,
+        {self},
+    },
     registry::LookupSpan,
     reload,
 };
@@ -58,8 +61,11 @@ pub fn init_tracing<S: tracing::Subscriber + for<'a> LookupSpan<'a>>(
     )
     .with_max_level(Level::INFO);
 
-    let logfile_layer =
-        fmt::layer().compact().with_writer(logfile).with_ansi(false);
+    let logfile_layer = fmt::layer()
+        .compact()
+        .with_writer(logfile)
+        .with_ansi(false)
+        .with_target(false);
 
     let boxed_layer: BoxedLayer<S> = Box::new(logfile_layer);
 

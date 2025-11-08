@@ -1,8 +1,8 @@
 use super::service::TrayItem;
 use crate::{
-    Element, Message,
+    Element, Message, config,
+    icon_cache::Icon,
     modules::{BarPosition, Modules, ViewTrait},
-    other::{config, icon_cache::Icon},
 };
 use iced::{
     Alignment,

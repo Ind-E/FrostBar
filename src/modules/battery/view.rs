@@ -1,7 +1,6 @@
 use crate::{
-    Element,
+    Element, config,
     modules::{BarPosition, Modules, ViewTrait, mouse_binds},
-    other::config,
     utils::style::container_style,
 };
 use iced::{
