@@ -297,7 +297,7 @@ impl Default for RawSpectrum {
 impl RawSpectrum {
     fn hydrate(self, colors: &ColorVars) -> ConfigModule {
         let spectrum = Spectrum {
-            spectrum: self.spacing,
+            spacing: self.spacing,
             color: self.color.resolve(colors),
             dynamic_color: self.dynamic_color,
             binds: self.binds.hydrate(),
@@ -309,7 +309,7 @@ impl RawSpectrum {
 
 #[derive(Debug, Clone)]
 pub struct Spectrum {
-    pub spectrum: f32,
+    pub spacing: f32,
     pub color: Color,
     pub dynamic_color: bool,
     pub binds: MouseBinds,
@@ -1163,7 +1163,7 @@ impl ColorVars {
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knus::parse::<ColorVars>(filename, text) {
             Ok(colors) => {
-                debug!("Successfully parsed colors");
+                debug!(target: "config", "Successfully parsed colors");
                 Ok(colors)
             }
             Err(e) => Err(miette::Report::new(e)),
@@ -1259,10 +1259,10 @@ impl RawConfig {
                         .body("Failed to parse colors file")
                         .show()
                     {
-                        error!("{e}");
+                        error!(target: "config", "{e}");
                     }
-                    error!("Failed to parse colors file ",);
-                    error!("{e:?}");
+                    error!(target: "config", "Failed to parse colors file ");
+                    error!(target: "config", "{e:?}");
                     ColorVars::default()
                 }
                 Ok(colors) => colors,
@@ -1280,10 +1280,10 @@ impl RawConfig {
                         )
                         .show()
                     {
-                        error!("{e}");
+                        error!(target: "config", "{e}");
                     }
-                    error!("Failed to parse config file, using default config");
-                    error!("{e:?}");
+                    error!(target: "config", "Failed to parse config file, using default config");
+                    error!(target: "config", "{e:?}");
                     RawConfig::default()
                 }
                 Ok(config) => config,
@@ -1314,6 +1314,7 @@ impl ConfigColor {
             ConfigColor::Variable(name) => {
                 colors.get(name).unwrap_or_else(|| {
                     error!(
+                        target: "config",
                         "Color variable '{}' not found, using red as default",
                         name
                     );
@@ -1328,6 +1329,7 @@ impl ConfigColor {
             ConfigColor::Literal(c) => *c,
             ConfigColor::Variable(name) => {
                 error!(
+                    target: "config",
                     "Color variable '{}' not found, using red as default",
                     name
                 );

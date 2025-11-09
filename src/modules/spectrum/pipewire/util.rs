@@ -49,6 +49,7 @@ pub fn convert_samples_to_f32(
     /// Helper macro to reduce duplication for integer format conversions.
     macro_rules! convert_int {
         ($ty:ty, $endian:ident, $divisor:expr, $unsigned_offset:expr) => {{
+            #[allow(clippy::cast_lossless)]
             for chunk in bytes.chunks_exact(std::mem::size_of::<$ty>()) {
                 let raw = <$ty>::$endian(chunk.try_into().unwrap());
                 let normalized = if $unsigned_offset != 0.0 {
@@ -84,24 +85,28 @@ pub fn convert_samples_to_f32(
                     .push(f64::from_be_bytes(chunk.try_into().unwrap()) as f32);
             }
         }
-        Fmt::S16LE => convert_int!(i16, from_le_bytes, i16::MAX as f32, 0.0),
-        Fmt::S16BE => convert_int!(i16, from_be_bytes, i16::MAX as f32, 0.0),
+        Fmt::S16LE => {
+            convert_int!(i16, from_le_bytes, f32::from(i16::MAX), 0.0);
+        }
+        Fmt::S16BE => {
+            convert_int!(i16, from_be_bytes, f32::from(i16::MAX), 0.0);
+        }
         Fmt::S32LE | Fmt::S24_32LE => {
-            convert_int!(i32, from_le_bytes, i32::MAX as f32, 0.0)
+            convert_int!(i32, from_le_bytes, i32::MAX as f32, 0.0);
         }
         Fmt::S32BE | Fmt::S24_32BE => {
-            convert_int!(i32, from_be_bytes, i32::MAX as f32, 0.0)
+            convert_int!(i32, from_be_bytes, i32::MAX as f32, 0.0);
         }
         Fmt::U16LE => convert_int!(u16, from_le_bytes, 32_768.0, 32_768.0),
         Fmt::U16BE => convert_int!(u16, from_be_bytes, 32_768.0, 32_768.0),
         Fmt::U8 => {
             for &byte in bytes {
-                samples.push((byte as f32 - 128.0) / 128.0);
+                samples.push((f32::from(byte) - 128.0) / 128.0);
             }
         }
         Fmt::S8 => {
             for &byte in bytes {
-                samples.push((byte as i8) as f32 / i8::MAX as f32);
+                samples.push(f32::from(byte as i8) / f32::from(i8::MAX));
             }
         }
         _ => return None,

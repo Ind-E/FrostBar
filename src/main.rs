@@ -39,7 +39,6 @@ use tracing_subscriber::{
 use zbus::Connection;
 
 mod config;
-mod constants;
 mod file_watcher;
 mod icon_cache;
 mod modules;

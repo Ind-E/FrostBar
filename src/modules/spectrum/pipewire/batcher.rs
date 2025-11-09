@@ -44,7 +44,7 @@ impl SampleBatcher {
             return self.chunks.pop();
         }
 
-        let total_samples = self.chunks.iter().map(|c| c.len()).sum();
+        let total_samples = self.chunks.iter().map(Vec::len).sum();
         let mut batch = self.reuse_buffer(total_samples);
 
         for chunk in self.chunks.drain(..) {

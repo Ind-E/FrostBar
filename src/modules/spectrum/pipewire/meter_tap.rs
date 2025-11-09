@@ -120,7 +120,7 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
                     last_flush = Instant::now();
                 }
             }
-            Err(_) => {
+            Err(()) => {
                 error!(
                     target: "pw_meter-tap",
                     "capture buffer unavailable; stopping tap"

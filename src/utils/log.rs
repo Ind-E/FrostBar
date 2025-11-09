@@ -6,7 +6,7 @@ use tracing_subscriber::{
     reload,
 };
 
-pub const TIME_FORMAT_STRING: &'static str = "%m-%d %H:%M:%S%.3f";
+pub const TIME_FORMAT_STRING: &str = "%m-%d %H:%M:%S%.3f";
 
 type BoxedLayer<S> =
     Box<dyn tracing_subscriber::layer::Layer<S> + Send + Sync + 'static>;

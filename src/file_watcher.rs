@@ -3,7 +3,7 @@
 //
 // niri is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
-use crate::{Message, utils::BoxStream};
+use crate::Message;
 use iced::{
     Subscription,
     advanced::subscription::{EventStream, Recipe, from_recipe},
@@ -113,7 +113,10 @@ impl Recipe for FileWatcher {
         std::any::TypeId::of::<Self>().hash(state);
     }
 
-    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<Self::Output> {
+    fn stream(
+        self: Box<Self>,
+        _input: EventStream,
+    ) -> iced::futures::stream::BoxStream<'static, Self::Output> {
         let (tx, rx) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {

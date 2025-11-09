@@ -110,12 +110,12 @@ impl<Message> canvas::Program<Message> for SpectrumCanvas<'_> {
                 } else {
                     frame.width() / bars_per_channel as f32
                 };
-                let spacing = bar_thickness_total * self.config.spectrum;
+                let spacing = bar_thickness_total * self.config.spacing;
                 let bar_thickness = bar_thickness_total - spacing;
 
                 for i in 0..bars_per_channel {
-                    let right_val = bars[bars_per_channel - i - 1] as f32;
-                    let left_val = bars[2 * bars_per_channel - i - 1] as f32;
+                    let right_val = bars[bars_per_channel - i - 1];
+                    let left_val = bars[2 * bars_per_channel - i - 1];
 
                     let max_bar_width =
                         if self.vertical { center.x } else { center.y };

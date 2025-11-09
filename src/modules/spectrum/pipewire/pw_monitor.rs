@@ -142,7 +142,7 @@ pub fn run() {
             }
         }
         Err(err) => {
-            error!(target: "pw_monitor", "failed to start PipeWire thread: {err}")
+            error!(target: "pw_monitor", "failed to start PipeWire thread: {err}");
         }
     }
 }

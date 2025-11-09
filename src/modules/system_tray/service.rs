@@ -90,13 +90,13 @@ impl Systray {
                 if let Err(e) =
                     yield_tx.send(Event::InitialItems(client.items())).await
                 {
-                    error!("{e}");
+                    error!(target: "system_tray", "{e}");
                 }
 
                 let mut tray_rx = client.subscribe();
                 while let Ok(event) = tray_rx.recv().await {
                     if let Err(e) = yield_tx.send(Event::Event(event)).await {
-                        error!("{e}");
+                        error!(target: "system_tray", "{e}");
                     }
                 }
             });
@@ -111,7 +111,7 @@ impl Systray {
             Event::InitialItems(mutex) => {
                 for (k, (sni, menu)) in mutex.lock().unwrap().iter() {
                     self.items.insert(
-                        k.to_string(),
+                        k.clone(),
                         (self.map_sni(sni.clone()), menu.clone()),
                     );
                 }

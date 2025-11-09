@@ -35,9 +35,6 @@ pub struct Fft {
 
     sens: f32,
     sens_init: bool,
-
-    hop_size: usize,
-    samples_since_last_fft: usize,
 }
 
 #[profiling::all_functions]
@@ -66,7 +63,6 @@ impl Fft {
             fft_buffer_size *= 2;
         }
         let fft_bass_buffer_size = fft_buffer_size * 2;
-        let hop_size = (fft_buffer_size / 4).max(1);
         let mut fft_planner = RealFftPlanner::<f32>::new();
         let fft_plan = fft_planner.plan_fft_forward(fft_buffer_size);
         let fft_bass_plan = fft_planner.plan_fft_forward(fft_bass_buffer_size);
@@ -93,7 +89,7 @@ impl Fft {
             .log10()
             / (1.0 / (bars as f32 + 1.0) - 1.0);
         for n in 0..=bars {
-            let bar_dist_coeff = frequency_constant * -1.0
+            let bar_dist_coeff = -frequency_constant
                 + ((n as f32 + 1.0) / (bars as f32 + 1.0) * frequency_constant);
             cut_off_frequencies[n] =
                 HIGH_CUT_OFF as f32 * 10.0f32.powf(bar_dist_coeff);
@@ -164,9 +160,6 @@ impl Fft {
 
             sens: 1.0,
             sens_init: true,
-
-            hop_size,
-            samples_since_last_fft: 0,
         }
     }
 
@@ -176,6 +169,8 @@ impl Fft {
 
     pub fn process(&mut self, new_samples: &[f32], buffer: &mut Box<[f32]>) {
         let new_samples_len = new_samples.len();
+
+        let silence = new_samples.iter().all(|&s| s == 0.0);
 
         if new_samples_len > 0 {
             let buffer_len = self.input_buffer.len();
@@ -188,24 +183,21 @@ impl Fft {
             for (dest_idx, sample) in fill_range.zip(new_samples.iter().rev()) {
                 self.input_buffer[dest_idx] = *sample;
             }
-            self.samples_since_last_fft += new_samples_len;
         }
 
-        let run_fft_this_frame = self.samples_since_last_fft >= self.hop_size;
-        if run_fft_this_frame {
-            self.samples_since_last_fft = 0;
+        let gravity_mod = ((60.0 / GRAVITY_RATE).powf(2.5) * 1.54
+            / f64::from(NOISE_REDUCTION)) as f32;
+        let mut overshoot = false;
 
-            for ch in 0..self.channels {
-                for i in 0..self.fft_bass_input.len() {
-                    self.fft_bass_input[i] = self.input_buffer
-                        [i * self.channels + ch]
-                        * self.hann_bass_window[i];
-                }
-                for i in 0..self.fft_input.len() {
-                    self.fft_input[i] = self.input_buffer
-                        [i * self.channels + ch]
-                        * self.hann_window[i];
-                }
+        for ch in 0..self.channels {
+            for i in 0..self.fft_bass_input.len() {
+                self.fft_bass_input[i] = self.input_buffer
+                    [i * self.channels + ch]
+                    * self.hann_bass_window[i];
+            }
+            for i in 0..self.fft_input.len() {
+                self.fft_input[i] = self.input_buffer[i * self.channels + ch]
+                    * self.hann_window[i];
             }
 
             self.fft_bass_plan
@@ -214,38 +206,30 @@ impl Fft {
             self.fft_plan
                 .process(&mut self.fft_input, &mut self.fft_output)
                 .unwrap();
-        }
 
-        let gravity_mod = ((60.0 / GRAVITY_RATE).powf(2.5) * 1.54
-            / NOISE_REDUCTION as f64) as f32;
-        let mut overshoot = false;
-
-        for ch in 0..self.channels {
             for n in 0..self.bars {
+                let (start, end) = self.bar_cutoff_indices[n];
                 let mut temp_val = 0.0;
 
-                if run_fft_this_frame {
-                    let (start, end) = self.bar_cutoff_indices[n];
-                    if n < self.bass_cutoff_bar {
-                        if start <= end && end < self.fft_bass_output.len() {
-                            for i in start..=end {
-                                temp_val += self.fft_bass_output[i].norm();
-                            }
-                        }
-                    } else {
-                        if start <= end && end < self.fft_output.len() {
-                            for i in start..=end {
-                                temp_val += self.fft_output[i].norm();
-                            }
+                if n < self.bass_cutoff_bar {
+                    if start <= end && end < self.fft_bass_output.len() {
+                        for i in start..=end {
+                            temp_val += self.fft_bass_output[i].norm();
                         }
                     }
-                    temp_val *= self.eq[n];
+                } else if start <= end && end < self.fft_output.len() {
+                    for i in start..=end {
+                        temp_val += self.fft_output[i].norm();
+                    }
                 }
+
+                temp_val *= self.eq[n];
 
                 temp_val *= self.sens;
 
                 let out_idx = n + ch * self.bars;
                 let mut current_bar_val = temp_val;
+
                 if current_bar_val < self.prev_out[out_idx] {
                     current_bar_val = self.peak[out_idx]
                         * (1.0
@@ -261,13 +245,13 @@ impl Fft {
                     self.fall[out_idx] = 0.0;
                 }
                 self.prev_out[out_idx] = current_bar_val;
-                current_bar_val =
-                    self.memory[out_idx] * NOISE_REDUCTION + current_bar_val;
+                current_bar_val += self.memory[out_idx] * NOISE_REDUCTION;
                 self.memory[out_idx] = current_bar_val;
 
                 if current_bar_val > 1.0 {
                     overshoot = true;
                 }
+
                 buffer[out_idx] = current_bar_val.clamp(0.0, 1.0);
             }
         }
@@ -275,7 +259,7 @@ impl Fft {
         if overshoot {
             self.sens *= 0.98;
             self.sens_init = false;
-        } else if new_samples_len > 0 && new_samples.iter().any(|&s| s != 0.0) {
+        } else if !silence {
             self.sens *= 1.001;
             if self.sens_init {
                 self.sens *= 1.1;

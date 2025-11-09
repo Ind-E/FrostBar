@@ -2,13 +2,15 @@ use super::mpris_player::PlayerProxy;
 use crate::{
     Message,
     modules::{self, ModuleAction},
-    utils::BoxStream,
 };
 use base64::Engine;
 use iced::{
     Color, Subscription, Task,
     advanced::graphics::image::image_rs,
-    futures::{StreamExt, stream::select_all},
+    futures::{
+        StreamExt,
+        stream::{BoxStream, select_all},
+    },
     widget::image,
 };
 use rustc_hash::FxHashMap;
@@ -39,7 +41,7 @@ impl MprisService {
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {
-                    error!("mpris stream error: {e}");
+                    error!(target: "mpris", "mpris stream error: {e}");
                     return;
                 }
             };
@@ -59,7 +61,7 @@ impl MprisService {
                     let name1 = name.clone();
                     if name.starts_with(MPRIS_PREFIX) {
                         if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
-                            error!("{e}");
+                            error!(target: "mpris", "{e}");
                         }
 
                         if let Ok(stream) = create_player_stream(&connection, name).await {
@@ -80,7 +82,7 @@ impl MprisService {
                         {
                             if !new.is_empty() && old.is_empty() {
                                 if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
-                                    error!("{e}");
+                                    error!(target: "mpris", "{e}");
                                 }
 
                                 let name1 = name.clone();
@@ -89,7 +91,7 @@ impl MprisService {
                                 }
                             } else if new.is_empty() && !old.is_empty()
                                 && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { name }) {
-                                    error!("{e}");
+                                    error!(target: "mpris", "{e}");
                                 }
                         }
                     },
@@ -101,7 +103,7 @@ impl MprisService {
                                     player_streams.remove(&pname);
                                 }
                             if let Err(e) = yield_tx.send(event) {
-                                error!("{e}");
+                                error!(target: "mpris", "{e}");
                             }
                         }
                     }
@@ -129,14 +131,14 @@ impl MprisService {
                 return action;
             }
             MprisEvent::PlayerVanished { name } => {
-                debug!("player vanished: {name}");
+                debug!(target: "mpris", "player vanished: {name}");
                 self.players.remove(&name);
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
                 status,
             } => {
-                debug!("{player_name} status changed: {status}");
+                debug!(target: "mpris", "{player_name} status changed: {status}");
                 if let Some(player) = self.players.get_mut(&player_name) {
                     if status == "Playing" {
                         player.status = status;
@@ -266,7 +268,7 @@ impl MprisPlayer {
                 match base64::engine::general_purpose::STANDARD.decode(url) {
                     Ok(bytes) => bytes,
                     Err(e) => {
-                        error!("base64 decode error: {e}");
+                        error!(target: "mpris", "base64 decode error: {e}");
                         return PlayerArt::None;
                     }
                 };
@@ -290,7 +292,7 @@ impl MprisPlayer {
                     let response = match reqwest::get(&art_url).await {
                         Ok(res) => res,
                         Err(e) => {
-                            error!("Failed to fetch album art: {e}");
+                            error!(target: "mpris", "Failed to fetch album art: {e}");
                             return None;
                         }
                     };
@@ -298,6 +300,7 @@ impl MprisPlayer {
                         Ok(bytes) => bytes,
                         Err(e) => {
                             error!(
+                                target: "mpris",
                                 "Failed to get bytes of album art from {art_url}: {e}"
                             );
                             return None;
@@ -350,9 +353,10 @@ async fn get_initial_player_state(
 async fn create_player_stream(
     connection: &Connection,
     name: String,
-) -> Result<BoxStream<Result<MprisEvent, zbus::Error>>, zbus::Error> {
+) -> Result<BoxStream<'static, Result<MprisEvent, zbus::Error>>, zbus::Error> {
     let player_proxy = PlayerProxy::new(connection, name.clone()).await?;
-    let mut streams: Vec<BoxStream<Result<MprisEvent, zbus::Error>>> = vec![];
+    let mut streams: Vec<BoxStream<'static, Result<MprisEvent, zbus::Error>>> =
+        vec![];
     {
         let name = name.clone();
         let playback_stream = player_proxy

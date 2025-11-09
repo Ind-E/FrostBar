@@ -1,18 +1,9 @@
 use crate::{Message, config};
 use iced::{
-    Background, Color, Theme,
+    Theme,
     padding::{left, top},
     widget::{Container, container},
 };
-
-pub fn _bg(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::from_rgba(
-            0.0, 0.0, 0.0, 0.8,
-        ))),
-        ..Default::default()
-    }
-}
 
 pub fn workspace_style<'a>(
     active: bool,

@@ -22,7 +22,7 @@ impl BatteryService {
         let manager = match battery::Manager::new() {
             Ok(manager) => Some(manager),
             Err(e) => {
-                error!("{e}");
+                error!(target: "battery", "{e}");
                 None
             }
         };
@@ -41,23 +41,23 @@ impl BatteryService {
 
     pub fn fetch_battery_info(&mut self) {
         let Some(manager) = &self.manager else {
-            return error!("No battery manager");
+            return error!(target: "battery", "No battery manager");
         };
 
         let batteries = match manager.batteries() {
             Ok(batteries) => batteries,
-            Err(e) => return error!("{e}"),
+            Err(e) => return error!(target: "battery", "{e}"),
         };
 
         let mut info = Vec::with_capacity(2);
         for battery in batteries {
             let mut bat = match battery {
                 Ok(bat) => bat,
-                Err(e) => return error!("{e}"),
+                Err(e) => return error!(target: "battery", "{e}"),
             };
 
             if let Err(e) = manager.refresh(&mut bat) {
-                return error!("{e}");
+                return error!(target: "battery", "{e}");
             }
 
             info.push(BatteryInfo {

@@ -159,7 +159,7 @@ impl<'a, T> Iterator for RingBufferIter<'a, T> {
     }
 }
 
-impl<'a, T> ExactSizeIterator for RingBufferIter<'a, T> {}
+impl<T> ExactSizeIterator for RingBufferIter<'_, T> {}
 
 impl<'a, T> IntoIterator for &'a RingBuffer<T> {
     type Item = &'a T;
