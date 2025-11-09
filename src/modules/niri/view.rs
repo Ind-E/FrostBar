@@ -259,7 +259,23 @@ impl WindowView {
     }
 
     fn render_tooltip<'a>(&self, window: &'a Window) -> Option<Element<'a>> {
-        Some(Text::new(&window.title).shaping(Shaping::Advanced).into())
+        Some(
+            Text::new(
+                if let Some(title) = &window.title
+                    && !title.is_empty()
+                {
+                    title
+                } else if let Some(app_id) = &window.app_id
+                    && !app_id.is_empty()
+                {
+                    app_id
+                } else {
+                    "N/A"
+                },
+            )
+            .shaping(Shaping::Advanced)
+            .into(),
+        )
     }
 
     fn view<'a>(
@@ -280,11 +296,26 @@ impl WindowView {
                 .into(),
             _ => {
                 let container = Container::new(
-                    Text::new(window.title.chars().take(2).collect::<String>())
-                        .size(placehdoler_text_size)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center(),
+                    Text::new(
+                        if let Some(title) = &window.title
+                            && !title.is_empty()
+                        {
+                            title
+                        } else if let Some(app_id) = &window.app_id
+                            && !app_id.is_empty()
+                        {
+                            app_id
+                        } else {
+                            "N/A"
+                        }
+                        .chars()
+                        .take(2)
+                        .collect::<String>(),
+                    )
+                    .size(placehdoler_text_size)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(),
                 );
                 if layout.anchor.vertical() {
                     container.center_x(Length::Fill).height(icon_size).into()

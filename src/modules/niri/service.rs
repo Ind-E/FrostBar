@@ -44,7 +44,8 @@ pub struct Window {
     pub id: u64,
     pub icon: Option<Icon>,
     pub layout: Layout,
-    pub title: String,
+    pub title: Option<String>,
+    pub app_id: Option<String>,
     pub is_focused: bool,
 }
 
@@ -77,7 +78,8 @@ fn map_window(window: &niri_ipc::Window, icon_cache: IconCache) -> Window {
             .as_ref()
             .and_then(|app_id| icon_cache.get_icon(app_id).clone()),
         layout: window.layout.clone().into(),
-        title: window.title.clone().unwrap_or("N/A".to_string()),
+        title: window.title.clone(),
+        app_id: window.app_id.clone(),
         is_focused: window.is_focused,
     }
 }
