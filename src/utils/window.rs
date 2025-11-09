@@ -5,7 +5,6 @@ use crate::{
         constants::BAR_NAMESPACE,
     },
 };
-
 use iced::{
     Size,
     window::settings::{

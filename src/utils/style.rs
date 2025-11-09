@@ -1,10 +1,9 @@
+use crate::{Message, other::config};
 use iced::{
     Background, Color, Theme,
     padding::{left, top},
     widget::{Container, container},
 };
-
-use crate::{Message, other::config};
 
 pub fn _bg(_theme: &Theme) -> container::Style {
     container::Style {

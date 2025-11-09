@@ -1,5 +1,10 @@
-use std::collections::HashMap;
-
+use crate::{
+    Message,
+    dbus_proxy::PlayerProxy,
+    modules::{self, ModuleAction},
+    utils::BoxStream,
+};
+use base64::Engine;
 use iced::{
     Color, Subscription, Task,
     advanced::graphics::image::image_rs,
@@ -7,20 +12,11 @@ use iced::{
     widget::image,
 };
 use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
-use zbus::{Connection, Proxy, zvariant::OwnedValue};
-
-use base64::Engine;
-
 use tracing::{debug, error};
-
-use crate::{
-    Message,
-    dbus_proxy::PlayerProxy,
-    modules::{self, ModuleAction},
-    utils::BoxStream,
-};
+use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 pub struct MprisService {
     pub players: FxHashMap<String, MprisPlayer>,

@@ -1,23 +1,18 @@
-use std::any::Any;
-
-use chrono::{DateTime, Local};
-use iced::{
-    Color, Task,
-    widget::{container, image},
-};
-use iced::{mouse::ScrollDelta, widget::MouseArea};
-
 use crate::{
-    Element, MouseEvent,
+    Element, Message, MouseEvent,
     other::{
-        config::{self, Config, ConfigModule},
+        config::{self, Config, ConfigModule, MouseBinds},
         icon_cache::IconCache,
     },
 };
-use crate::{Message, other::config::MouseBinds};
-
 use battery::{service::BatteryService, view::BatteryView};
 use cava::{service::CavaService, view::CavaView};
+use chrono::{DateTime, Local};
+use iced::{
+    Color, Task,
+    mouse::ScrollDelta,
+    widget::{MouseArea, container, image},
+};
 use label::LabelView;
 use mpris::{
     service::{MprisEvent, MprisService},
@@ -27,6 +22,7 @@ use niri::{
     service::{NiriEvent, NiriService},
     view::NiriView,
 };
+use std::any::Any;
 use system_tray::{service::Systray, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
 

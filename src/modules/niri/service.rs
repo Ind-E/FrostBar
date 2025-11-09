@@ -1,21 +1,18 @@
-use iced::{
-    Subscription,
-    futures::{self, FutureExt},
-};
-use rustc_hash::FxHashMap;
-use std::io;
-use tokio::sync::mpsc::{self};
-use tokio_stream::wrappers::UnboundedReceiverStream;
-
-use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
-use std::cmp::Ordering;
-use tracing::error;
-
 use crate::{
     Message,
     modules::{self, ModuleAction},
     other::icon_cache::{Icon, IconCache},
 };
+use iced::{
+    Subscription,
+    futures::{self, FutureExt},
+};
+use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
+use rustc_hash::FxHashMap;
+use std::{cmp::Ordering, io};
+use tokio::sync::mpsc::{self};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing::error;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Layout {

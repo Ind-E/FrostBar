@@ -3,6 +3,7 @@
 //
 // niri is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
+use crate::{Message, utils::BoxStream};
 use iced::{
     Subscription,
     advanced::subscription::{EventStream, Recipe, from_recipe},
@@ -15,8 +16,6 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-
-use crate::{Message, utils::BoxStream};
 
 const POLLING_INTERVAL: Duration = Duration::from_millis(500);
 

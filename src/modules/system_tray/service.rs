@@ -1,7 +1,10 @@
-use std::sync::{Arc, Mutex};
-
+use crate::{
+    Message, modules,
+    other::icon_cache::{Icon, IconCache},
+};
 use iced::Subscription;
 use rustc_hash::FxHashMap;
+use std::sync::{Arc, Mutex};
 use system_tray::{
     client::{self, Client, UpdateEvent},
     data::{BaseMap, apply_menu_diffs},
@@ -11,11 +14,6 @@ use system_tray::{
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
-
-use crate::{
-    Message, modules,
-    other::icon_cache::{Icon, IconCache},
-};
 
 pub struct TrayItem {
     pub id: String,

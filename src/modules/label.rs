@@ -1,18 +1,15 @@
-use std::any::Any;
-
-use iced::{
-    Length,
-    widget::{Container, Text, container, text},
-};
-
+use super::mouse_binds;
 use crate::{
     Element,
     modules::{BarPosition, Modules, ViewTrait},
     other::config,
     utils::style::container_style,
 };
-
-use super::mouse_binds;
+use iced::{
+    Length,
+    widget::{Container, Text, container, text},
+};
+use std::any::Any;
 
 pub struct LabelView {
     pub id: container::Id,

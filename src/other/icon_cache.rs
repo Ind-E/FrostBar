@@ -1,16 +1,15 @@
 use dashmap::DashMap;
+use freedesktop_desktop_entry::{DesktopEntry, default_paths};
+use iced::widget::{
+    image::{self},
+    svg,
+};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
 use system_tray::item::IconPixmap;
 use tracing::{debug, warn};
-
-use freedesktop_desktop_entry::{DesktopEntry, default_paths};
-use iced::widget::{
-    image::{self},
-    svg,
-};
 
 const ICON_SIZE: u16 = 48;
 const ICON_SCALE: u16 = 2;

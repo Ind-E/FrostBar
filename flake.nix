@@ -1,5 +1,5 @@
 {
-  description = "frostbar";
+  description = "FrostBar";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
@@ -58,7 +58,6 @@
       devOnlyInputs =
         pkgs: with pkgs; [
           lldb
-          rust-bin.nightly.latest.rust-analyzer
           python313Packages.mkdocs-material
           # for tracy
           stdenv.cc.cc

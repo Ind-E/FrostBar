@@ -1,3 +1,4 @@
+use crate::{Message, modules, utils::BoxStream};
 use iced::{
     Color,
     advanced::subscription::{EventStream, Recipe, from_recipe},
@@ -10,8 +11,6 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, warn};
-
-use crate::{Message, modules, utils::BoxStream};
 
 const CAVA_CONFIG: &str = include_str!("../../../assets/cava-config");
 

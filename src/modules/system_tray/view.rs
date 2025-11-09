@@ -1,5 +1,9 @@
-use std::any::Any;
-
+use super::service::TrayItem;
+use crate::{
+    Element, Message,
+    modules::{BarPosition, Modules, ViewTrait},
+    other::{config, icon_cache::Icon},
+};
 use iced::{
     Alignment,
     mouse::Interaction,
@@ -10,14 +14,8 @@ use iced::{
 };
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
+use std::any::Any;
 use system_tray::menu::TrayMenu;
-
-use super::service::TrayItem;
-use crate::{
-    Element, Message,
-    modules::{BarPosition, Modules, ViewTrait},
-    other::{config, icon_cache::Icon},
-};
 
 pub struct SystemTrayView {
     config: config::SystemTray,

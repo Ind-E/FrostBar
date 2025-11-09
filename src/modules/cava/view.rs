@@ -1,10 +1,3 @@
-use std::any::Any;
-
-use iced::{
-    Length, Point, Renderer, Size,
-    widget::{Canvas, Container, canvas},
-};
-
 use crate::{
     Element,
     modules::{
@@ -14,6 +7,11 @@ use crate::{
     other::config,
     utils::style::container_style,
 };
+use iced::{
+    Length, Point, Renderer, Size,
+    widget::{Canvas, Container, canvas},
+};
+use std::any::Any;
 
 const MAX_BAR_HEIGHT: u32 = 12;
 

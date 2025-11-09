@@ -1,28 +1,3 @@
-use chrono::Local;
-use itertools::Itertools;
-use tracing::{debug, info, warn};
-
-use tokio::process::Command as TokioCommand;
-
-use iced::{
-    Alignment, Background, Color, Event, Length, Pixels, Rectangle, Settings,
-    Size, Subscription, Task, Theme,
-    advanced::subscription::from_recipe,
-    border::rounded,
-    padding::{left, top},
-    theme,
-    widget::{Column, Container, Row, container, stack},
-    window::Id,
-};
-use notify_rust::Notification;
-use std::time::Duration;
-use tracing_subscriber::{
-    EnvFilter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
-};
-use zbus::Connection;
-
-use tracing::error;
-
 use crate::{
     dbus_proxy::PlayerProxy,
     modules::{
@@ -41,6 +16,26 @@ use crate::{
         window::{open_dummy_window, open_tooltip_window, open_window},
     },
 };
+use chrono::Local;
+use iced::{
+    Alignment, Background, Color, Event, Length, Pixels, Rectangle, Settings,
+    Size, Subscription, Task, Theme,
+    advanced::subscription::from_recipe,
+    border::rounded,
+    padding::{left, top},
+    theme,
+    widget::{Column, Container, Row, container, stack},
+    window::Id,
+};
+use itertools::Itertools;
+use notify_rust::Notification;
+use std::time::Duration;
+use tokio::process::Command as TokioCommand;
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::{
+    EnvFilter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
+};
+use zbus::Connection;
 
 mod dbus_proxy;
 mod modules;

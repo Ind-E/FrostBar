@@ -1,5 +1,9 @@
-use std::any::Any;
-
+use crate::{
+    Element, Message,
+    modules::{BarPosition, Modules, ViewTrait, mpris::service::MprisPlayer},
+    other::config,
+    utils::style::container_style,
+};
 use iced::{
     Length,
     mouse::{Interaction, ScrollDelta},
@@ -9,13 +13,7 @@ use iced::{
     },
 };
 use rustc_hash::FxHashMap;
-
-use crate::{
-    Element, Message,
-    modules::{BarPosition, Modules, ViewTrait, mpris::service::MprisPlayer},
-    other::config,
-    utils::style::container_style,
-};
+use std::any::Any;
 
 pub struct MprisView {
     config: config::Mpris,

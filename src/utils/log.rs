@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-
 use tracing::{Level, error};
 use tracing_subscriber::{
     fmt::{self, writer::MakeWriterExt},
