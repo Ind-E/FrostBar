@@ -1,13 +1,12 @@
 use std::path::{Path, PathBuf};
 use tracing::{Level, error};
 use tracing_subscriber::{
-    fmt::{
-        writer::MakeWriterExt,
-        {self},
-    },
+    fmt::{self, time::ChronoLocal, writer::MakeWriterExt},
     registry::LookupSpan,
     reload,
 };
+
+pub const TIME_FORMAT_STRING: &'static str = "%m-%d %H:%M:%S%.3f";
 
 type BoxedLayer<S> =
     Box<dyn tracing_subscriber::layer::Layer<S> + Send + Sync + 'static>;
@@ -65,7 +64,7 @@ pub fn init_tracing<S: tracing::Subscriber + for<'a> LookupSpan<'a>>(
         .compact()
         .with_writer(logfile)
         .with_ansi(false)
-        .with_target(false);
+        .with_timer(ChronoLocal::new(TIME_FORMAT_STRING.to_string()));
 
     let boxed_layer: BoxedLayer<S> = Box::new(logfile_layer);
 

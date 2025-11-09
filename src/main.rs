@@ -9,7 +9,7 @@ use crate::{
         system_tray::service::Systray,
     },
     utils::{
-        log::init_tracing,
+        log::{TIME_FORMAT_STRING, init_tracing},
         window::{open_dummy_window, open_tooltip_window, open_window},
     },
 };
@@ -30,7 +30,11 @@ use std::time::Duration;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{
-    EnvFilter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt,
+    EnvFilter,
+    fmt::{self, time::ChronoLocal},
+    layer::SubscriberExt,
+    reload,
+    util::SubscriberInitExt,
 };
 use zbus::Connection;
 
@@ -82,7 +86,7 @@ pub fn main() -> iced::Result {
             let stderr_layer = fmt::layer()
                 .compact()
                 .with_writer(std::io::stderr)
-                .with_target(false);
+                .with_timer(ChronoLocal::new(TIME_FORMAT_STRING.to_string()));
 
             let (file_layer, handle) = reload::Layer::new(None);
 
