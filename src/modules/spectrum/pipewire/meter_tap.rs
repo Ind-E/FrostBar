@@ -1,6 +1,7 @@
 use super::{
-    pw_virtual_sink::{self, CaptureBuffer, CapturedAudio},
-    util::audio::{DEFAULT_SAMPLE_RATE, SampleBatcher},
+    batcher::SampleBatcher,
+    pw_monitor::{self, CaptureBuffer, CapturedAudio},
+    util::DEFAULT_SAMPLE_RATE,
 };
 use async_channel::{Receiver as AsyncReceiver, Sender as AsyncSender};
 use parking_lot::RwLock;
@@ -49,16 +50,18 @@ pub fn current_format() -> MeterFormat {
     *format_state().read()
 }
 
+#[profiling::function]
 pub fn audio_sample_stream() -> Arc<AsyncReceiver<Vec<f32>>> {
     AUDIO_STREAM
         .get_or_init(|| {
             let (sender, receiver) = async_channel::bounded(CHANNEL_CAPACITY);
-            spawn_forwarder(sender, pw_virtual_sink::capture_buffer_handle());
+            spawn_forwarder(sender, pw_monitor::capture_buffer_handle());
             Arc::new(receiver)
         })
         .clone()
 }
 
+#[profiling::function]
 fn spawn_forwarder(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
     thread::Builder::new()
         .name("frostbar-audio-meter-tap".into())
@@ -66,6 +69,7 @@ fn spawn_forwarder(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
         .expect("failed to spawn audio meter tap thread");
 }
 
+#[profiling::function]
 fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
     let mut batcher = SampleBatcher::new(TARGET_BATCH_SAMPLES);
     let mut last_flush = Instant::now();
@@ -79,7 +83,8 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
             let dropped = buffer.dropped_frames();
             if dropped > drop_baseline {
                 warn!(
-                    "[meter-tap] dropped {} capture frames (total {})",
+                    target: "pw_meter-tap",
+                    " dropped {} capture frames (total {})",
                     dropped - drop_baseline,
                     dropped
                 );
@@ -116,7 +121,10 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
                 }
             }
             Err(_) => {
-                error!("[meter-tap] capture buffer unavailable; stopping tap");
+                error!(
+                    target: "pw_meter-tap",
+                    "capture buffer unavailable; stopping tap"
+                );
                 break;
             }
         }
@@ -130,7 +138,8 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
     let dropped = buffer.dropped_frames();
 
     info!(
-        "[meter-tap] audio channel closed; {} dropped capture frames",
+        target: "pw_meter-tap",
+        "audio channel closed; {} dropped capture frames",
         dropped
     );
 }

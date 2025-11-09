@@ -97,8 +97,8 @@ pub fn main() -> iced::Result {
 
             let logfile_path = init_tracing(&config_dir, &handle);
 
-            info!("starting version {}", env!("CARGO_PKG_VERSION"));
-            info!("saving logs to {:?}", logfile_path);
+            info!(target: "frostbar", "starting version {}", env!("CARGO_PKG_VERSION"));
+            info!(target: "frostbar", "saving logs to {:?}", logfile_path);
 
             Bar::new(config, color_vars, config_path)
         },
@@ -217,8 +217,6 @@ impl Bar {
 
         subscriptions.push(self.modules.audio.subscription());
 
-        // subscriptions.extend(self.modules.subscriptions());
-
         Subscription::batch(subscriptions)
     }
 
@@ -249,13 +247,14 @@ impl Bar {
                 }
             }
             Err(e) => {
-                error!("{:?}", e);
+                error!(target: "config", "{:?}", e);
                 if let Err(e) = Notification::new()
                     .summary(BAR_NAMESPACE)
                     .body("Failed to parse config file")
                     .show()
                 {
                     warn!(
+                        target: "config",
                         "Failed to send config parse error notification: {e:?}"
                     );
                 }
@@ -342,6 +341,7 @@ impl Bar {
                                     .show()
                                 {
                                     warn!(
+                                        target: "config",
                                         "Failed to send colors parse error notification: {e:?}"
                                     );
                                 }
@@ -357,6 +357,7 @@ impl Bar {
                             .show()
                         {
                             warn!(
+                                target: "config",
                                 "Failed to send colors parse error notification: {e:?}"
                             );
                         }
@@ -377,6 +378,7 @@ impl Bar {
                             .show()
                         {
                             warn!(
+                                target: "config",
                                 "Failed to send config parse error notification: {e:?}"
                             );
                         }

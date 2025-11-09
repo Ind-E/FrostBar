@@ -12,19 +12,19 @@ use iced::{
 };
 use std::any::Any;
 
-pub struct AudioView {
+pub struct SpectrumView {
     config: config::Spectrum,
     pub position: BarPosition,
 }
 
-impl AudioView {
+impl SpectrumView {
     pub fn new(config: config::Spectrum, position: BarPosition) -> Self {
         Self { config, position }
     }
 }
 
 #[profiling::all_functions]
-impl ViewTrait<Modules> for AudioView {
+impl ViewTrait<Modules> for SpectrumView {
     fn view<'a>(
         &'a self,
         modules: &'a Modules,
@@ -79,6 +79,7 @@ impl<'a> SpectrumCanvas<'a> {
     }
 }
 
+#[profiling::all_functions]
 impl<Message> canvas::Program<Message> for SpectrumCanvas<'_> {
     type State = ();
 

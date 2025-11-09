@@ -2,7 +2,7 @@ use crate::{
     Element, Message, MouseEvent,
     config::{self, Config, ConfigModule, MouseBinds},
     icon_cache::IconCache,
-    modules::spectrum::{service::SpectrumService, view::AudioView},
+    modules::spectrum::{service::SpectrumService, view::SpectrumView},
 };
 use battery::{service::BatteryService, view::BatteryView};
 use chrono::{DateTime, Local};
@@ -82,7 +82,7 @@ impl Modules {
                     self.views.push(Box::new(BatteryView::new(c, position)));
                 }
                 ConfigModule::Spectrum(c) => {
-                    self.views.push(Box::new(AudioView::new(c, position)));
+                    self.views.push(Box::new(SpectrumView::new(c, position)));
                 }
                 ConfigModule::Time(c) => {
                     self.views.push(Box::new(TimeView::new(c, position)));

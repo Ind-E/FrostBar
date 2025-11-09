@@ -51,6 +51,7 @@ fn map_tooltip(
     }
 }
 
+#[profiling::all_functions]
 impl Systray {
     pub fn new(icon_cache: IconCache) -> Self {
         Self {

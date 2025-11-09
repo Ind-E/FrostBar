@@ -1191,7 +1191,7 @@ impl RawConfig {
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knus::parse::<RawConfig>(filename, text) {
             Ok(config) => {
-                info!("Successfully parsed config");
+                info!(target: "config", "Successfully parsed config");
                 Ok(config)
             }
             Err(e) => Err(miette::Report::new(e)),

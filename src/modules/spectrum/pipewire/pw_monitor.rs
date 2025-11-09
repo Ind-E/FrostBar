@@ -1,25 +1,30 @@
 //! PipeWire virtual sink integration.
 
-use super::ring_buffer::RingBuffer;
-use super::util::audio::DEFAULT_SAMPLE_RATE;
-use super::util::{bytes_per_sample, convert_samples_to_f32};
+use super::{
+    ring_buffer::RingBuffer,
+    util::{DEFAULT_SAMPLE_RATE, bytes_per_sample, convert_samples_to_f32},
+};
 use pipewire as pw;
 use pw::{properties::properties, spa};
 use spa::pod::Pod;
-use std::error::Error;
-use std::io::Cursor;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
-use std::thread;
-use std::time::Duration;
+use std::{
+    error::Error,
+    io::Cursor,
+    sync::{
+        Arc, Condvar, Mutex, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    thread,
+    time::Duration,
+};
 use tracing::{error, info, warn};
 
-const VIRTUAL_SINK_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
-const VIRTUAL_SINK_CHANNELS: u32 = 2;
+const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
+const MONITOR_PREFERRED_CHANNELS: u32 = 2;
 const CAPTURE_BUFFER_CAPACITY: usize = 256;
 const DESIRED_LATENCY_FRAMES: u32 = 256;
 
-static SINK_THREAD: OnceLock<thread::JoinHandle<()>> = OnceLock::new();
+static MONITOR_THREAD: OnceLock<thread::JoinHandle<()>> = OnceLock::new();
 static CAPTURE_BUFFER: OnceLock<Arc<CaptureBuffer>> = OnceLock::new();
 
 /// Audio block captured from PipeWire with associated format metadata.
@@ -36,6 +41,7 @@ pub struct CaptureBuffer {
     dropped_frames: AtomicU64,
 }
 
+#[profiling::all_functions]
 impl CaptureBuffer {
     fn new(capacity: usize) -> Self {
         Self {
@@ -59,7 +65,11 @@ impl CaptureBuffer {
         }
     }
 
-    pub fn pop_wait_timeout(&self, timeout: Duration) -> Result<Option<CapturedAudio>, ()> {
+    #[profiling::skip]
+    pub fn pop_wait_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<Option<CapturedAudio>, ()> {
         let mut guard = match self.inner.lock() {
             Ok(guard) => guard,
             Err(err) => {
@@ -77,7 +87,10 @@ impl CaptureBuffer {
         }
 
         loop {
-            let (new_guard, wait_result) = match self.available.wait_timeout(guard, timeout) {
+            let (new_guard, wait_result) = match self
+                .available
+                .wait_timeout(guard, timeout)
+            {
                 Ok(outcome) => outcome,
                 Err(err) => {
                     error!("[virtual-sink] capture buffer wait failed: {err}");
@@ -107,27 +120,30 @@ impl CaptureBuffer {
     }
 }
 
-/// Spawn the virtual sink in a background thread.
+/// Spawn the monitor in a background thread.
+#[profiling::function]
 pub fn run() {
     ensure_capture_buffer();
 
-    if SINK_THREAD.get().is_some() {
+    if MONITOR_THREAD.get().is_some() {
         return;
     }
 
     match thread::Builder::new()
-        .name("frostbar-pw-virtual-sink".into())
+        .name("frostbar-pw-monitor".into())
         .spawn(|| {
-            if let Err(err) = run_virtual_sink() {
-                error!("[virtual-sink] stopped: {err}");
+            if let Err(err) = run_monitor_source() {
+                error!(target: "pw_monitor", "stopped: {err}");
             }
         }) {
         Ok(handle) => {
-            if SINK_THREAD.set(handle).is_err() {
+            if MONITOR_THREAD.set(handle).is_err() {
                 // Another caller raced us; the thread will keep running but we can drop our handle.
             }
         }
-        Err(err) => error!("[virtual-sink] failed to start PipeWire thread: {err}"),
+        Err(err) => {
+            error!(target: "pw_monitor", "failed to start PipeWire thread: {err}")
+        }
     }
 }
 
@@ -137,17 +153,18 @@ pub fn capture_buffer_handle() -> Arc<CaptureBuffer> {
 }
 
 /// Cached parameters describing the negotiated stream format.
-struct VirtualSinkState {
+struct MonitorState {
     frame_bytes: usize,
     channels: u32,
     sample_rate: u32,
     format: spa::param::audio::AudioFormat,
 }
 
-impl VirtualSinkState {
+impl MonitorState {
     fn new(channels: u32, sample_rate: u32) -> Self {
         let default_format = spa::param::audio::AudioFormat::F32LE;
-        let sample_bytes = bytes_per_sample(default_format).unwrap_or(std::mem::size_of::<f32>());
+        let sample_bytes = bytes_per_sample(default_format)
+            .unwrap_or(std::mem::size_of::<f32>());
         let frame_bytes = channels.max(1) as usize * sample_bytes;
         Self {
             frame_bytes,
@@ -165,12 +182,14 @@ impl VirtualSinkState {
             self.frame_bytes = self.channels as usize * sample_bytes;
         } else {
             warn!(
-                "[virtual-sink] unsupported audio format {:?}; falling back to recorded frame size",
+                target: "pw_monitor",
+                "unsupported audio format {:?}; falling back to recorded frame size",
                 self.format
             );
         }
         info!(
-            "[virtual-sink] negotiated format: {:?}, rate {} Hz, channels {}",
+            target: "pw_monitor",
+            "negotiated format: {:?}, rate {} Hz, channels {}",
             info.format(),
             self.sample_rate,
             self.channels
@@ -179,36 +198,37 @@ impl VirtualSinkState {
 }
 
 /// PipeWire main loop body that registers and services the virtual sink.
-fn run_virtual_sink() -> Result<(), Box<dyn Error + Send + Sync>> {
+#[profiling::function]
+fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
     pw::init();
 
     let mainloop = pw::main_loop::MainLoopRc::new(None)?;
     let context = pw::context::ContextRc::new(&mainloop, None)?;
     let core = context.connect_rc(None)?;
 
-    let stream = pw::stream::StreamBox::new(
-        &core,
-        "FrostBar Sink",
-        properties! {
-            *pw::keys::MEDIA_CLASS => "Audio/Sink",
-            *pw::keys::MEDIA_TYPE => "Audio",
-            *pw::keys::MEDIA_ROLE => "Playback",
-            *pw::keys::MEDIA_CATEGORY => "Playback",
-            *pw::keys::NODE_DESCRIPTION => "FrostBar Sink",
-            *pw::keys::NODE_NAME => "frostbar.sink",
-            *pw::keys::APP_NAME => "FrostBar",
-            *pw::keys::AUDIO_CHANNELS => VIRTUAL_SINK_CHANNELS.to_string(),
-            *pw::keys::NODE_LATENCY => format!("{}/{}", DESIRED_LATENCY_FRAMES, VIRTUAL_SINK_SAMPLE_RATE),
-        },
-    )?;
+    let mut props = properties! {
+        *pw::keys::MEDIA_TYPE => "Audio",
+        *pw::keys::MEDIA_CATEGORY => "Capture",
+        *pw::keys::MEDIA_ROLE => "Music",
+        *pw::keys::APP_NAME => "FrostBar",
+        *pw::keys::NODE_LATENCY => format!("{}/{}", DESIRED_LATENCY_FRAMES, DEFAULT_SAMPLE_RATE),
+        *pw::keys::NODE_PASSIVE => "true",
+    };
 
-    let audio_state = VirtualSinkState::new(VIRTUAL_SINK_CHANNELS, VIRTUAL_SINK_SAMPLE_RATE);
+    props.insert(*pw::keys::STREAM_CAPTURE_SINK, "true");
+
+    let stream = pw::stream::StreamBox::new(&core, "FrostBar Capture", props)?;
+
+    let audio_state = MonitorState::new(
+        MONITOR_PREFERRED_CHANNELS,
+        MONITOR_PREFERRED_SAMPLE_RATE,
+    );
     let capture_buffer = capture_buffer_handle();
 
     let _listener = stream
         .add_local_listener_with_user_data(audio_state)
         .state_changed(|_, _, previous, current| {
-            info!("[virtual-sink] state {previous:?} -> {current:?}");
+            info!(target: "pw_monitor", "state {previous:?} -> {current:?}");
         })
         .param_changed(|_, state, id, param| {
             if id != spa::param::ParamType::Format.as_raw() {
@@ -224,7 +244,7 @@ fn run_virtual_sink() -> Result<(), Box<dyn Error + Send + Sync>> {
         })
         .process(move |stream, state| {
             let Some(mut buffer) = stream.dequeue_buffer() else {
-                warn!("[virtual-sink] no buffer available to dequeue");
+                warn!(target: "pw_monitor", "no buffer available to dequeue");
                 return;
             };
 
@@ -241,7 +261,8 @@ fn run_virtual_sink() -> Result<(), Box<dyn Error + Send + Sync>> {
                 let mut captured = None;
                 if let Some(slice) = data.data() {
                     let len = used.min(slice.len());
-                    captured = convert_samples_to_f32(&slice[..len], state.format);
+                    captured =
+                        convert_samples_to_f32(&slice[..len], state.format);
                 }
 
                 if let Some(samples) = captured {
@@ -261,8 +282,12 @@ fn run_virtual_sink() -> Result<(), Box<dyn Error + Send + Sync>> {
         })
         .register()?;
 
-    let format_bytes = build_format_pod(VIRTUAL_SINK_CHANNELS, VIRTUAL_SINK_SAMPLE_RATE)?;
-    let mut params = [Pod::from_bytes(&format_bytes).ok_or(pw::Error::CreationFailed)?];
+    let format_bytes = build_format_pod(
+        MONITOR_PREFERRED_CHANNELS,
+        MONITOR_PREFERRED_SAMPLE_RATE,
+    )?;
+    let mut params =
+        [Pod::from_bytes(&format_bytes).ok_or(pw::Error::CreationFailed)?];
 
     stream.connect(
         spa::utils::Direction::Input,
@@ -273,19 +298,18 @@ fn run_virtual_sink() -> Result<(), Box<dyn Error + Send + Sync>> {
         &mut params,
     )?;
 
-    if let Err(err) = stream.set_active(true) {
-        error!("[virtual-sink] failed to activate stream: {err}");
-    }
-
-    info!("[virtual-sink] PipeWire sink active");
+    info!(target: "pw_monitor", "PipeWire monitor active");
     mainloop.run();
-    info!("[virtual-sink] main loop exited");
+    info!(target: "pw_monitor", "main loop exited");
 
     Ok(())
 }
 
 /// Describe the desired raw audio format as a SPA pod for negotiation.
-fn build_format_pod(channels: u32, rate: u32) -> Result<Vec<u8>, Box<dyn Error + Send + Sync>> {
+fn build_format_pod(
+    channels: u32,
+    rate: u32,
+) -> Result<Vec<u8>, Box<dyn Error + Send + Sync>> {
     let mut info = spa::param::audio::AudioInfoRaw::new();
     info.set_format(spa::param::audio::AudioFormat::F32LE);
     info.set_rate(rate);
@@ -304,7 +328,8 @@ fn build_format_pod(channels: u32, rate: u32) -> Result<Vec<u8>, Box<dyn Error +
 }
 
 fn ensure_capture_buffer() -> &'static Arc<CaptureBuffer> {
-    CAPTURE_BUFFER.get_or_init(|| Arc::new(CaptureBuffer::new(CAPTURE_BUFFER_CAPACITY)))
+    CAPTURE_BUFFER
+        .get_or_init(|| Arc::new(CaptureBuffer::new(CAPTURE_BUFFER_CAPACITY)))
 }
 
 #[cfg(test)]
@@ -322,7 +347,7 @@ mod tests {
 
     #[test]
     fn virtual_sink_state_defaults_match_requested_configuration() {
-        let state = VirtualSinkState::new(2, DEFAULT_SAMPLE_RATE as u32);
+        let state = MonitorState::new(2, DEFAULT_SAMPLE_RATE as u32);
         assert_eq!(state.channels, 2);
         assert_eq!(state.sample_rate, DEFAULT_SAMPLE_RATE as u32);
         assert_eq!(state.format, spa::param::audio::AudioFormat::F32LE);
@@ -334,7 +359,7 @@ mod tests {
 
     #[test]
     fn update_from_info_clamps_channels_and_updates_frame_bytes() {
-        let mut state = VirtualSinkState::new(4, 96_000);
+        let mut state = MonitorState::new(4, 96_000);
         let mut info = spa::param::audio::AudioInfoRaw::new();
         info.set_channels(0); // PipeWire may report 0 before negotiation; we clamp to at least 1.
         info.set_rate(44_100);

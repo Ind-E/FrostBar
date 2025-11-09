@@ -1,7 +1,4 @@
-use super::pipewire::{
-    config::{CaptureMode, RoutingCommand},
-    meter_tap, pw_loopback, pw_registry, pw_virtual_sink, registry_monitor,
-};
+use super::pipewire::{meter_tap, pw_monitor};
 use crate::{
     Message,
     modules::{ModuleMsg, spectrum::fft::Fft},
@@ -12,17 +9,10 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     futures::{self, StreamExt as _},
 };
-use std::{
-    fmt,
-    hash::Hasher as _,
-    sync::{Arc, mpsc},
-};
-use tracing::error;
+use std::{fmt, hash::Hasher as _, sync::Arc};
 
 pub struct SpectrumService {
     audio_stream: Arc<AsyncChannel<Vec<f32>>>,
-    routing_tx: mpsc::Sender<RoutingCommand>,
-    snapshot_rx: AsyncChannel<pw_registry::RegistrySnapshot>,
     fft: Fft,
     pub gradient: Option<Vec<Color>>,
     pub bars: Box<[f32]>,
@@ -30,39 +20,20 @@ pub struct SpectrumService {
 
 const BAR_COUNT: usize = 12;
 
+#[profiling::all_functions]
 impl SpectrumService {
     pub fn new() -> Self {
-        let (routing_tx, routing_rx) = mpsc::channel::<RoutingCommand>();
-        let (snapshot_tx, snapshot_rx) =
-            async_channel::bounded::<pw_registry::RegistrySnapshot>(64);
-
-        let _ = registry_monitor::init_registry_monitor(
-            routing_rx,
-            snapshot_tx.clone(),
-        );
-
-        if let Err(e) =
-            routing_tx.send(RoutingCommand::SetCaptureMode(CaptureMode::Device))
-        {
-            error!("{e}");
-        }
-
-        pw_virtual_sink::run();
-        pw_loopback::run();
+        pw_monitor::run();
 
         let audio_stream = meter_tap::audio_sample_stream();
 
-        drop(snapshot_tx);
-
-        let spectrum = Fft::new(meter_tap::current_format(), BAR_COUNT);
+        let fft = Fft::new(meter_tap::current_format(), BAR_COUNT);
 
         Self {
             audio_stream,
-            routing_tx,
-            snapshot_rx,
             gradient: None,
-            bars: spectrum.init_bars(),
-            fft: spectrum,
+            bars: fft.init_bars(),
+            fft,
         }
     }
 
@@ -74,7 +45,7 @@ impl SpectrumService {
     }
 
     pub fn update(&mut self, new_samples: Vec<f32>) {
-        self.fft.process(new_samples, &mut self.bars);
+        self.fft.process(&new_samples, &mut self.bars);
     }
 
     pub fn update_gradient(&mut self, gradient: Option<Vec<Color>>) {
@@ -87,6 +58,7 @@ struct AudioStreamRecipe<T> {
     audio_stream: Arc<AsyncChannel<T>>,
 }
 
+#[profiling::all_functions]
 impl<T> Recipe for AudioStreamRecipe<T>
 where
     T: Send + 'static,
