@@ -118,7 +118,7 @@
                 rustc = toolchain;
               };
             in
-            rustPlatform.buildRustPackage {
+            rustPlatform.buildRustPackage rec {
               pname = with builtins; (fromTOML (readFile ./Cargo.toml)).package.name;
               version = with builtins; (fromTOML (readFile ./Cargo.toml)).package.version;
               src = self;
@@ -129,6 +129,11 @@
 
               nativeBuildInputs = packageNativeBuildInputs final;
               buildInputs = packageBuildInputs final;
+
+              postFixup = ''
+                rpath=$(patchelf --print-rpath $out/bin/frostbar)
+                patchelf --set-rpath "$rpath:${lib.makeLibraryPath buildInputs}" $out/bin/frostbar
+              '';
 
               buildType = "release";
               strictDeps = true;
