@@ -51,14 +51,14 @@ tokio = { version = "1.47.1", features = ["macros"] }
 tokio-stream = "0.1.17"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
-tracing-subscriber = { version = "0.3.19", default-features = false, features = [
+tracing-subscriber = { version = "=0.3.19", default-features = false, features = [
     "fmt",
     "std",
     "chrono",
     "env-filter",
     "ansi",
 ] }
-tracy-client = { version = "0.17.3", default-features = false }
+tracy-client = { version = "=0.17.3", default-features = false }
 zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 
 [features]
