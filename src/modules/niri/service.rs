@@ -237,6 +237,10 @@ impl NiriService {
                     .collect();
             }
             Event::WindowsChanged { windows } => {
+                let focused_window_id = windows
+                    .iter()
+                    .find_map(|w| if w.is_focused { Some(w.id) } else { None });
+                self.focused_window_id = focused_window_id;
                 self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
 
                 self.workspaces.values_mut().for_each(|ws| {

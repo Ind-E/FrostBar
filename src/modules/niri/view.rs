@@ -56,7 +56,7 @@ impl ViewTrait<Modules> for NiriView {
                     if let Some(ws_view) = self.workspace_views.get(&ws.id) {
                         col.push(
                             ws_view.view(
-                                &niri,
+                                niri,
                                 ws,
                                 niri.hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
@@ -79,7 +79,7 @@ impl ViewTrait<Modules> for NiriView {
                     if let Some(ws_view) = self.workspace_views.get(&ws.id) {
                         row.push(
                             ws_view.view(
-                                &niri,
+                                niri,
                                 ws,
                                 niri.hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
@@ -183,7 +183,7 @@ impl WorkspaceView {
                                 window,
                                 niri.focused_window_id == Some(window.id),
                                 &config.window_style,
-                                &layout,
+                                layout,
                             ))
                         } else {
                             col

@@ -8,11 +8,11 @@ use iced::{
     widget::{Container, container},
 };
 
-pub fn workspace_style<'a>(
+pub fn workspace_style(
     active: bool,
     hovered: bool,
-    style: &'a NiriWorkspaceStyle,
-) -> container::StyleFn<'a, Theme> {
+    style: &NiriWorkspaceStyle,
+) -> container::StyleFn<'_, Theme> {
     let style = if active && hovered {
         &style.active_hovered
     } else if active {
@@ -25,10 +25,10 @@ pub fn workspace_style<'a>(
     Box::new(move |_| style.inner)
 }
 
-pub fn window_style<'a>(
+pub fn window_style(
     focused: bool,
-    style: &'a NiriWindowStyle,
-) -> container::StyleFn<'a, Theme> {
+    style: &NiriWindowStyle,
+) -> container::StyleFn<'_, Theme> {
     let style = if focused { &style.focused } else { &style.base };
     Box::new(move |_| style.inner)
 }
