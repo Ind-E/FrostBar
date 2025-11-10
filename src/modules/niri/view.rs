@@ -1,9 +1,12 @@
 use super::service::{NiriEvent, Window, Workspace};
 use crate::{
-    Element, Message, MouseEvent, config,
+    Element, Message, MouseEvent,
+    config::{self, NiriWindowStyle},
     icon_cache::Icon,
-    modules::{BarPosition, ModuleMsg, Modules, ViewTrait},
-    utils::style::workspace_style,
+    modules::{
+        BarPosition, ModuleMsg, Modules, ViewTrait, niri::service::NiriService,
+    },
+    utils::style::{window_style, workspace_style},
 };
 use iced::{
     Alignment, Length,
@@ -53,16 +56,11 @@ impl ViewTrait<Modules> for NiriView {
                     if let Some(ws_view) = self.workspace_views.get(&ws.id) {
                         col.push(
                             ws_view.view(
+                                &niri,
                                 ws,
                                 niri.hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
-                                &self
-                                    .config
-                                    .workspace_active_hovered_style_merged,
-                                &self.config.workspace_active_style_merged,
-                                &self.config.workspace_hovered_style_merged,
-                                &self.config.workspace_default_style,
-                                self.config.workspace_offset,
+                                &self.config,
                                 layout,
                             ),
                         )
@@ -81,16 +79,11 @@ impl ViewTrait<Modules> for NiriView {
                     if let Some(ws_view) = self.workspace_views.get(&ws.id) {
                         row.push(
                             ws_view.view(
+                                &niri,
                                 ws,
                                 niri.hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
-                                &self
-                                    .config
-                                    .workspace_active_hovered_style_merged,
-                                &self.config.workspace_active_style_merged,
-                                &self.config.workspace_hovered_style_merged,
-                                &self.config.workspace_default_style,
-                                self.config.workspace_offset,
+                                &self.config,
                                 layout,
                             ),
                         )
@@ -169,32 +162,36 @@ impl WorkspaceView {
 
     fn view<'a>(
         &self,
+        niri: &NiriService,
         workspace: &'a Workspace,
         hovered: bool,
-        active_hovered_style: &'a config::ContainerStyle,
-        active_style: &'a config::ContainerStyle,
-        hovered_style: &'a config::ContainerStyle,
-        base_style: &'a config::ContainerStyle,
-        offset: i8,
+        config: &'a config::Niri,
         layout: &config::Layout,
     ) -> Element<'a> {
         let windows = if layout.anchor.vertical() {
             Container::new(
                 workspace.windows.values().sorted_unstable().fold(
-                    Column::new()
-                        .align_x(Alignment::Center)
-                        .spacing(5)
-                        .push(Text::new(workspace.idx as i8 + offset).size(20)),
+                    Column::new().align_x(Alignment::Center).push(
+                        Text::new(
+                            workspace.idx as i8 + config.workspace_offset,
+                        )
+                        .size(20),
+                    ),
                     |col, window| {
                         if let Some(view) = self.window_views.get(&window.id) {
-                            col.push(view.view(window, layout))
+                            col.push(view.view(
+                                window,
+                                niri.focused_window_id == Some(window.id),
+                                &config.window_style,
+                                &layout,
+                            ))
                         } else {
                             col
                         }
                     },
                 ),
             )
-            .padding(top(5).bottom(5))
+            .padding(top(3).bottom(3))
             .width(Length::Fill)
             .align_x(Alignment::Center)
         } else {
@@ -204,10 +201,20 @@ impl WorkspaceView {
                         .align_y(Alignment::Center)
                         .spacing(5)
                         .padding(5)
-                        .push(Text::new(workspace.idx as i8 + offset).size(20)),
+                        .push(
+                            Text::new(
+                                workspace.idx as i8 + config.workspace_offset,
+                            )
+                            .size(20),
+                        ),
                     |row, window| {
                         if let Some(view) = self.window_views.get(&window.id) {
-                            row.push(view.view(window, layout))
+                            row.push(view.view(
+                                window,
+                                niri.focused_window_id == Some(window.id),
+                                &config.window_style,
+                                layout,
+                            ))
                         } else {
                             row
                         }
@@ -222,10 +229,7 @@ impl WorkspaceView {
         let windows = windows.style(workspace_style(
             workspace.is_active,
             hovered,
-            active_hovered_style,
-            active_style,
-            hovered_style,
-            base_style,
+            &config.workspace_style,
         ));
 
         MouseArea::new(windows)
@@ -281,6 +285,8 @@ impl WindowView {
     fn view<'a>(
         &self,
         window: &'a Window,
+        focused: bool,
+        style: &'a NiriWindowStyle,
         layout: &config::Layout,
     ) -> Element<'a> {
         let icon_size = layout.width as f32 * 0.7;
@@ -318,9 +324,9 @@ impl WindowView {
                     .center(),
                 );
                 if layout.anchor.vertical() {
-                    container.center_x(Length::Fill).height(icon_size).into()
+                    container.center_x(Length::Shrink).height(icon_size).into()
                 } else {
-                    container.center_y(Length::Fill).width(icon_size).into()
+                    container.center_y(Length::Shrink).width(icon_size).into()
                 }
             }
         };
@@ -330,12 +336,14 @@ impl WindowView {
                 Action::FocusWindow { id: window.id },
             ))),
         ))
+        .padding(3)
+        .style(window_style(focused, style))
         .id(self.id.clone());
 
         if layout.anchor.vertical() {
-            content = content.center_x(Length::Fill);
+            content = content.align_x(Alignment::Center);
         } else {
-            content = content.center_y(Length::Fill);
+            content = content.align_y(Alignment::Center);
         }
 
         MouseArea::new(content)

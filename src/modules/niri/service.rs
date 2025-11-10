@@ -46,7 +46,6 @@ pub struct Window {
     pub layout: Layout,
     pub title: Option<String>,
     pub app_id: Option<String>,
-    pub is_focused: bool,
 }
 
 impl PartialOrd for Window {
@@ -80,7 +79,6 @@ fn map_window(window: &niri_ipc::Window, icon_cache: IconCache) -> Window {
         layout: window.layout.clone().into(),
         title: window.title.clone(),
         app_id: window.app_id.clone(),
-        is_focused: window.is_focused,
     }
 }
 
@@ -103,6 +101,7 @@ pub struct NiriService {
     pub workspaces: FxHashMap<u64, Workspace>,
     pub windows: FxHashMap<u64, niri_ipc::Window>,
     pub hovered_workspace_id: Option<u64>,
+    pub focused_window_id: Option<u64>,
     pub icon_cache: IconCache,
     pub sender: Option<mpsc::Sender<Request>>,
 }
@@ -114,6 +113,7 @@ impl NiriService {
             workspaces: FxHashMap::default(),
             windows: FxHashMap::default(),
             hovered_workspace_id: None,
+            focused_window_id: None,
             icon_cache,
             sender: None,
         }
@@ -251,6 +251,10 @@ impl NiriService {
             Event::WindowOpenedOrChanged { window } => {
                 let window_id = window.id;
 
+                if window.is_focused {
+                    self.focused_window_id = Some(window_id);
+                }
+
                 let old_workspace_id =
                     self.windows.get(&window_id).and_then(|w| w.workspace_id);
                 let new_workspace_id = window.workspace_id;
@@ -279,6 +283,9 @@ impl NiriService {
                 self.workspaces.values_mut().for_each(|ws| {
                     ws.windows.remove(&id);
                 });
+                if Some(id) == self.focused_window_id {
+                    self.focused_window_id = None;
+                }
             }
             Event::WorkspaceActivated { id, .. } => {
                 let output = self.workspaces.iter().find_map(|(wid, ws)| {
@@ -309,9 +316,11 @@ impl NiriService {
                         .collect();
                 });
             }
+            Event::WindowFocusChanged { id } => {
+                self.focused_window_id = id;
+            }
             Event::WorkspaceUrgencyChanged { .. }
             | Event::WorkspaceActiveWindowChanged { .. }
-            | Event::WindowFocusChanged { .. }
             | Event::WindowUrgencyChanged { .. }
             | Event::KeyboardLayoutsChanged { .. }
             | Event::KeyboardLayoutSwitched { .. }

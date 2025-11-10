@@ -1,4 +1,7 @@
-use crate::{Message, config};
+use crate::{
+    Message,
+    config::{self, NiriWindowStyle, NiriWorkspaceStyle},
+};
 use iced::{
     Theme,
     padding::{left, top},
@@ -8,20 +11,25 @@ use iced::{
 pub fn workspace_style<'a>(
     active: bool,
     hovered: bool,
-    active_hovered_style: &'a config::ContainerStyle,
-    active_style: &'a config::ContainerStyle,
-    hovered_style: &'a config::ContainerStyle,
-    base_style: &'a config::ContainerStyle,
+    style: &'a NiriWorkspaceStyle,
 ) -> container::StyleFn<'a, Theme> {
     let style = if active && hovered {
-        active_hovered_style
+        &style.active_hovered
     } else if active {
-        active_style
+        &style.active
     } else if hovered {
-        hovered_style
+        &style.hovered
     } else {
-        base_style
+        &style.base
     };
+    Box::new(move |_| style.inner)
+}
+
+pub fn window_style<'a>(
+    focused: bool,
+    style: &'a NiriWindowStyle,
+) -> container::StyleFn<'a, Theme> {
+    let style = if focused { &style.focused } else { &style.base };
     Box::new(move |_| style.inner)
 }
 

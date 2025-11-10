@@ -456,22 +456,23 @@ pub struct RawNiri {
 
 impl RawNiri {
     fn hydrate(self, colors: &ColorVars) -> ConfigModule {
-        let default_style = self.workspace_style.hydrate(colors);
+        let workspace_base_style = self.workspace_style.hydrate(colors);
 
-        let mut hovered_style = default_style.clone();
+        let mut workspace_hovered_style = workspace_base_style.clone();
         if let Some(text_color) = &self
             .workspace_hovered_style
             .text_color
             .map(|c| c.resolve(colors))
         {
-            hovered_style.text_color = Some(*text_color);
+            workspace_hovered_style.text_color = Some(*text_color);
         }
         if let Some(background) = &self
             .workspace_hovered_style
             .background
             .map(|c| c.resolve(colors))
         {
-            hovered_style.background = Some(Background::Color(*background));
+            workspace_hovered_style.background =
+                Some(Background::Color(*background));
         }
         if let Some(border) = &self.workspace_hovered_style.border {
             let mut hovered_border = iced::Border::default();
@@ -486,26 +487,28 @@ impl RawNiri {
             if let Some(radius) = &border.radius {
                 hovered_border.radius = radius.clone().into();
             }
-            hovered_style.border = hovered_border;
+            workspace_hovered_style.border = hovered_border;
         }
 
-        let mut active_style = default_style.clone();
-        let mut active_hovered_style = hovered_style.clone();
+        let mut workspace_active_style = workspace_base_style.clone();
+        let mut workspace_active_hovered_style =
+            workspace_hovered_style.clone();
         if let Some(text_color) = &self
             .workspace_active_style
             .text_color
             .map(|c| c.resolve(colors))
         {
-            active_style.text_color = Some(*text_color);
-            active_hovered_style.text_color = Some(*text_color);
+            workspace_active_style.text_color = Some(*text_color);
+            workspace_active_hovered_style.text_color = Some(*text_color);
         }
         if let Some(background) = &self
             .workspace_active_style
             .background
             .map(|c| c.resolve(colors))
         {
-            active_style.background = Some(Background::Color(*background));
-            active_hovered_style.background =
+            workspace_active_style.background =
+                Some(Background::Color(*background));
+            workspace_active_hovered_style.background =
                 Some(Background::Color(*background));
         }
 
@@ -526,25 +529,67 @@ impl RawNiri {
                 active_border.radius = radius.clone().into();
                 active_hovered_border.radius = radius.clone().into();
             }
-            active_style.border = active_border;
-            active_hovered_style.border = active_hovered_border;
+            workspace_active_style.border = active_border;
+            workspace_active_hovered_style.border = active_hovered_border;
         }
 
-        let workspace_active_hovered_style_merged = active_hovered_style;
-        let workspace_active_style_merged = active_style;
-        let workspace_hovered_style_merged = hovered_style;
-        let window_focused_style_merged = ContainerStyle::default();
+        let workspace_active_hovered_style_merged =
+            workspace_active_hovered_style;
+        let workspace_active_style_merged = workspace_active_style;
+        let workspace_hovered_style_merged = workspace_hovered_style;
+
+        let window_base_style = self.window_style.hydrate(colors);
+        let mut window_focused_style = window_base_style.clone();
+
+        if let Some(text_color) = &self
+            .window_focused_style
+            .text_color
+            .map(|c| c.resolve(colors))
+        {
+            window_focused_style.text_color = Some(*text_color);
+            window_focused_style.text_color = Some(*text_color);
+        }
+        if let Some(background) = &self
+            .window_focused_style
+            .background
+            .map(|c| c.resolve(colors))
+        {
+            window_focused_style.background =
+                Some(Background::Color(*background));
+            window_focused_style.background =
+                Some(Background::Color(*background));
+        }
+
+        if let Some(border) = &self.window_focused_style.border {
+            let mut focused_border = iced::Border::default();
+            if let Some(color) =
+                border.color.as_ref().map(|c| c.resolve(colors))
+            {
+                focused_border.color = color;
+            }
+            if let Some(width) = border.width {
+                focused_border.width = width;
+            }
+            if let Some(radius) = &border.radius {
+                focused_border.radius = radius.clone().into();
+            }
+            window_focused_style.border = focused_border;
+        }
 
         let niri = Niri {
             spacing: self.spacing,
             workspace_offset: self.workspace_offset,
             style: self.style.hydrate(colors),
-            workspace_active_hovered_style_merged,
-            workspace_active_style_merged,
-            workspace_hovered_style_merged,
-            workspace_default_style: default_style,
-            window_focused_style_merged,
-            window_default_style: self.window_style.hydrate(colors),
+            workspace_style: NiriWorkspaceStyle {
+                active_hovered: workspace_active_hovered_style_merged,
+                active: workspace_active_style_merged,
+                hovered: workspace_hovered_style_merged,
+                base: workspace_base_style,
+            },
+            window_style: NiriWindowStyle {
+                focused: window_focused_style,
+                base: window_base_style,
+            },
         };
 
         ConfigModule::Niri(Box::new(niri))
@@ -555,12 +600,20 @@ pub struct Niri {
     pub spacing: u32,
     pub workspace_offset: i8,
     pub style: ContainerStyle,
-    pub workspace_active_hovered_style_merged: ContainerStyle,
-    pub workspace_active_style_merged: ContainerStyle,
-    pub workspace_hovered_style_merged: ContainerStyle,
-    pub workspace_default_style: ContainerStyle,
-    pub window_focused_style_merged: ContainerStyle,
-    pub window_default_style: ContainerStyle,
+    pub workspace_style: NiriWorkspaceStyle,
+    pub window_style: NiriWindowStyle,
+}
+
+pub struct NiriWorkspaceStyle {
+    pub active_hovered: ContainerStyle,
+    pub active: ContainerStyle,
+    pub hovered: ContainerStyle,
+    pub base: ContainerStyle,
+}
+
+pub struct NiriWindowStyle {
+    pub focused: ContainerStyle,
+    pub base: ContainerStyle,
 }
 
 #[derive(knus::Decode, Debug)]

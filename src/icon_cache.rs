@@ -51,7 +51,13 @@ fn from_desktop_file(app_id: &str) -> Option<String> {
 
 #[profiling::function]
 fn icon_path_from_name(icon_path: &str) -> Option<PathBuf> {
-    if let Some(theme) = &*ICON_THEME
+    if let Some(Ok(icon)) = linicon::lookup_icon(icon_path)
+        .with_size(ICON_SIZE)
+        .with_scale(ICON_SCALE)
+        .next()
+    {
+        return Some(icon.path);
+    } else if let Some(theme) = &*ICON_THEME
         && let Some(icon) = freedesktop_icons::lookup(icon_path)
             .with_theme(theme)
             .with_size(ICON_SIZE)
