@@ -37,7 +37,7 @@ pub enum ModuleMsg {
     Tick(DateTime<Local>),
     Niri(NiriEvent),
     AudioSample(Vec<f32>),
-    SpectrumColorUpdate(Option<Vec<Color>>),
+    SpectrumGradientUpdate(Option<Vec<Color>>),
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
     Systray(system_tray::service::Event),
@@ -51,7 +51,7 @@ pub type View = Box<dyn ViewTrait<Modules>>;
 
 pub struct Modules {
     pub battery: BatteryService,
-    pub audio: SpectrumService,
+    pub spectrum: SpectrumService,
     pub mpris: MprisService,
     pub time: TimeService,
     pub niri: NiriService,
@@ -64,7 +64,7 @@ impl Modules {
     pub fn new(icon_cache: IconCache) -> Self {
         Self {
             battery: BatteryService::new(),
-            audio: SpectrumService::new(),
+            spectrum: SpectrumService::new(),
             mpris: MprisService::new(),
             time: TimeService::new(),
             niri: NiriService::new(icon_cache.clone()),
@@ -130,27 +130,27 @@ impl Modules {
                 self.niri.hovered_workspace_id = None;
             }
             ModuleMsg::Tick(time) => {
-                self.time.handle_event(time);
+                self.time.update(time);
                 self.battery.fetch_battery_info();
                 self.synchronize_views_filtered(|view| {
                     view.as_any().is::<TimeView>()
                 });
             }
             ModuleMsg::Niri(event) => {
-                let task = self.niri.handle_event(event);
+                let task = self.niri.update(event);
                 self.synchronize_views_filtered(|view| {
                     view.as_any().is::<NiriView>()
                 });
                 return task;
             }
             ModuleMsg::AudioSample(sample) => {
-                self.audio.update(sample);
+                self.spectrum.update(sample);
             }
-            ModuleMsg::SpectrumColorUpdate(gradient) => {
-                self.audio.update_gradient(gradient);
+            ModuleMsg::SpectrumGradientUpdate(gradient) => {
+                self.spectrum.update_gradient(gradient);
             }
             ModuleMsg::Mpris(event) => {
-                let task = self.mpris.handle_event(event);
+                let task = self.mpris.update(event);
                 self.synchronize_views_filtered(|view| {
                     view.as_any().is::<MprisView>()
                 });
@@ -162,11 +162,11 @@ impl Modules {
                 {
                     player.art = Some(art);
                     player.colors.clone_from(&gradient);
-                    self.audio.update_gradient(gradient);
+                    self.spectrum.update_gradient(gradient);
                 }
             }
             ModuleMsg::Systray(event) => {
-                self.systray.handle_event(event);
+                self.systray.update(event);
                 self.synchronize_views_filtered(|view| {
                     view.as_any().is::<SystemTrayView>()
                 });

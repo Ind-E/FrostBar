@@ -30,7 +30,7 @@ impl ViewTrait<Modules> for SpectrumView {
         modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a> {
-        let audio = &modules.audio;
+        let audio = &modules.spectrum;
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
             Canvas::new(SpectrumCanvas::new(audio, &self.config, vertical))
@@ -125,7 +125,6 @@ impl<Message> canvas::Program<Message> for SpectrumCanvas<'_> {
 
                     let pos = i as f32 * bar_thickness_total + spacing / 2.0;
 
-                    let fallback_color = &self.config.color;
                     let bar_color = if self.config.dynamic_color {
                         self.service.gradient.as_ref().and_then(|gradient| {
                             gradient.get(i * gradient.len() / bars_per_channel)
@@ -133,7 +132,7 @@ impl<Message> canvas::Program<Message> for SpectrumCanvas<'_> {
                     } else {
                         None
                     }
-                    .unwrap_or(fallback_color);
+                    .unwrap_or(&self.config.color);
 
                     if left_val > 0.0 {
                         let (top_left, bar_size) = if self.vertical {

@@ -118,7 +118,7 @@ impl MprisService {
         }).map(|f| Message::Module(modules::ModuleMsg::Mpris(f)))
     }
 
-    pub fn handle_event(&mut self, event: MprisEvent) -> ModuleAction {
+    pub fn update(&mut self, event: MprisEvent) -> ModuleAction {
         match event {
             MprisEvent::PlayerAppeared {
                 name,
@@ -145,7 +145,7 @@ impl MprisService {
                         let colors = player.colors.clone();
                         return ModuleAction::Task(Task::perform(
                             async move { colors },
-                            modules::ModuleMsg::SpectrumColorUpdate,
+                            modules::ModuleMsg::SpectrumGradientUpdate,
                         ));
                     }
                     player.status = status;
@@ -160,12 +160,12 @@ impl MprisService {
                         let colors = player.colors.clone();
                         return ModuleAction::Task(iced::Task::perform(
                             async move { colors },
-                            modules::ModuleMsg::SpectrumColorUpdate,
+                            modules::ModuleMsg::SpectrumGradientUpdate,
                         ));
                     }
                     return ModuleAction::Task(Task::perform(
                         async move { None },
-                        modules::ModuleMsg::SpectrumColorUpdate,
+                        modules::ModuleMsg::SpectrumGradientUpdate,
                     ));
                 }
             }
@@ -241,7 +241,7 @@ impl MprisPlayer {
                             let captured_colors = colors;
                             return ModuleAction::Task(iced::Task::perform(
                                 async move { captured_colors },
-                                modules::ModuleMsg::SpectrumColorUpdate,
+                                modules::ModuleMsg::SpectrumGradientUpdate,
                             ));
                         }
                     }
@@ -258,7 +258,7 @@ impl MprisPlayer {
         self.colors = None;
         ModuleAction::Task(Task::perform(
             async { None },
-            modules::ModuleMsg::SpectrumColorUpdate,
+            modules::ModuleMsg::SpectrumGradientUpdate,
         ))
     }
 

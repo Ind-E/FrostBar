@@ -20,7 +20,7 @@ impl TimeService {
             .map(|_| Message::Module(modules::ModuleMsg::Tick(Local::now())))
     }
 
-    pub fn handle_event(&mut self, event: DateTime<Local>) {
+    pub fn update(&mut self, event: DateTime<Local>) {
         self.time = event;
     }
 }

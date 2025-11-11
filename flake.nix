@@ -91,6 +91,7 @@
             platformRustFlagsEnv = lib.optionalString pkgs.stdenv.isLinux "-Clink-arg=-Wl,--no-rosegment -Clink-arg=-lwayland-client";
           in
           pkgs.mkShell rec {
+            name = "frostbar";
             nativeBuildInputs = [
               (rustToolchain pkgs)
             ]

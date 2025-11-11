@@ -106,7 +106,7 @@ impl Systray {
         .map(|f| Message::Module(modules::ModuleMsg::Systray(f)))
     }
 
-    pub fn handle_event(&mut self, event: Event) {
+    pub fn update(&mut self, event: Event) {
         match event {
             Event::InitialItems(mutex) => {
                 for (k, (sni, menu)) in mutex.lock().unwrap().iter() {

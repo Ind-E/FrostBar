@@ -176,7 +176,7 @@ impl NiriService {
         .map(|f| Message::Module(modules::ModuleMsg::Niri(f)))
     }
 
-    pub fn handle_event(&mut self, event: NiriEvent) -> ModuleAction {
+    pub fn update(&mut self, event: NiriEvent) -> ModuleAction {
         match event {
             NiriEvent::Ready(sender) => {
                 self.sender = Some(sender);

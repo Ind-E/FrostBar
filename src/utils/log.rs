@@ -1,5 +1,7 @@
+use crate::BAR_NAMESPACE;
+use notify_rust::Notification;
 use std::path::{Path, PathBuf};
-use tracing::{Level, error};
+use tracing::{Level, error, warn};
 use tracing_subscriber::{
     fmt::{self, time::ChronoLocal, writer::MakeWriterExt},
     registry::LookupSpan,
@@ -88,4 +90,11 @@ fn read_log_dir(path: &Path) -> std::io::Result<Vec<String>> {
         }
     }
     Ok(filenames)
+}
+
+pub fn notification(msg: &str) {
+    if let Err(e) = Notification::new().summary(BAR_NAMESPACE).body(msg).show()
+    {
+        warn!("Failed to send notification: {e:?}");
+    }
 }

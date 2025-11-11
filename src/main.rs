@@ -218,7 +218,7 @@ impl Bar {
 
         subscriptions.push(Systray::subscription());
 
-        subscriptions.push(self.modules.audio.subscription());
+        subscriptions.push(self.modules.spectrum.subscription());
 
         Subscription::batch(subscriptions)
     }
@@ -367,7 +367,6 @@ impl Bar {
                     }
                     CheckType::Unchanged => {}
                 }
-
                 match event.config {
                     CheckType::Changed => {
                         return self.reload_config();
