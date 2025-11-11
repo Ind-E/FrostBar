@@ -6,7 +6,6 @@ const LOW_CUT_OFF: u32 = 50;
 const HIGH_CUT_OFF: u32 = 10000;
 const BASS_CUT_OFF_HZ: f32 = 100.0;
 const NOISE_REDUCTION: f32 = 0.77;
-pub const GRAVITY_RATE: f64 = 30.0;
 
 pub struct Fft {
     channels: usize,
@@ -185,8 +184,6 @@ impl Fft {
             }
         }
 
-        let gravity_mod = ((60.0 / GRAVITY_RATE).powf(2.5) * 1.54
-            / f64::from(NOISE_REDUCTION)) as f32;
         let mut overshoot = false;
 
         for ch in 0..self.channels {
@@ -232,10 +229,7 @@ impl Fft {
 
                 if current_bar_val < self.prev_out[out_idx] {
                     current_bar_val = self.peak[out_idx]
-                        * (1.0
-                            - (self.fall[out_idx]
-                                * self.fall[out_idx]
-                                * gravity_mod));
+                        * (1.0 - (self.fall[out_idx] * self.fall[out_idx]));
                     if current_bar_val < 0.0 {
                         current_bar_val = 0.0;
                     }

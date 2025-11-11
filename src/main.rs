@@ -9,7 +9,7 @@ use crate::{
         system_tray::service::Systray,
     },
     utils::{
-        log::{TIME_FORMAT_STRING, init_tracing},
+        log::{TIME_FORMAT_STRING, init_tracing, notification},
         window::{open_dummy_window, open_tooltip_window, open_window},
     },
 };
@@ -25,10 +25,9 @@ use iced::{
     window::Id,
 };
 use itertools::Itertools;
-use notify_rust::Notification;
 use std::time::Duration;
 use tokio::process::Command as TokioCommand;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use tracing_subscriber::{
     EnvFilter,
     fmt::{self, time::ChronoLocal},
@@ -223,49 +222,6 @@ impl Bar {
         Subscription::batch(subscriptions)
     }
 
-    fn reload_config(&mut self) -> Task<Message> {
-        match RawConfig::load(&self.path.config) {
-            Ok(new_config) => {
-                let mut new_config = new_config.hydrate(&self.color_vars);
-                self.modules.update_from_config(&mut new_config);
-
-                if self.config.layout == new_config.layout {
-                    self.config = new_config;
-                    return Task::done(Message::Module(
-                        ModuleMsg::SynchronizeAll,
-                    ));
-                } else if let Some(id) = self.id {
-                    self.config = new_config;
-                    let close = iced::window::close(id);
-                    let (id, open) = open_window(
-                        &self.config.layout,
-                        self.monitor_size.unwrap(),
-                    );
-                    self.id = Some(id);
-                    return Task::batch([
-                        close,
-                        open,
-                        Task::done(Message::Module(ModuleMsg::SynchronizeAll)),
-                    ]);
-                }
-            }
-            Err(e) => {
-                error!(target: "config", "{:?}", e);
-                if let Err(e) = Notification::new()
-                    .summary(BAR_NAMESPACE)
-                    .body("Failed to parse config file")
-                    .show()
-                {
-                    warn!(
-                        target: "config",
-                        "Failed to send config parse error notification: {e:?}"
-                    );
-                }
-            }
-        }
-        Task::none()
-    }
-
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::IcedEvent(event) => {
@@ -338,32 +294,15 @@ impl Bar {
                             }
                             Err(e) => {
                                 error!("{:?}", e);
-                                if let Err(e) = Notification::new()
-                                    .summary(BAR_NAMESPACE)
-                                    .body("Failed to parse colors file")
-                                    .show()
-                                {
-                                    warn!(
-                                        target: "config",
-                                        "Failed to send colors parse error notification: {e:?}"
-                                    );
-                                }
+                                notification("Failed to parse colors file");
                             }
                         }
                     }
                     CheckType::Missing => {
-                        if let Err(e) = Notification::new()
-                            .summary(&format!(
-                                "Colors file not found at {}",
-                                self.path.config.display()
-                            ))
-                            .show()
-                        {
-                            warn!(
-                                target: "config",
-                                "Failed to send colors parse error notification: {e:?}"
-                            );
-                        }
+                        notification(&format!(
+                            "Colors file not found at {}",
+                            self.path.config.display()
+                        ));
                     }
                     CheckType::Unchanged => {}
                 }
@@ -372,18 +311,10 @@ impl Bar {
                         return self.reload_config();
                     }
                     CheckType::Missing => {
-                        if let Err(e) = Notification::new()
-                            .summary(&format!(
-                                "Config file not found at {}",
-                                self.path.config.display()
-                            ))
-                            .show()
-                        {
-                            warn!(
-                                target: "config",
-                                "Failed to send config parse error notification: {e:?}"
-                            );
-                        }
+                        notification(&format!(
+                            "Config file not found at {}",
+                            self.path.config.display()
+                        ));
                     }
                     CheckType::Unchanged => {}
                 }
@@ -661,5 +592,34 @@ impl Bar {
 
     pub fn theme(&self, _id: Id) -> Theme {
         Theme::Dark
+    }
+
+    fn reload_config(&mut self) -> Task<Message> {
+        match RawConfig::load(&self.path.config) {
+            Ok(new_config) => {
+                let mut new_config = new_config.hydrate(&self.color_vars);
+                self.modules.update_from_config(&mut new_config);
+
+                if self.config.layout == new_config.layout {
+                    self.config = new_config;
+                    self.modules.synchronize_views();
+                } else if let Some(id) = self.id {
+                    self.config = new_config;
+                    let close = iced::window::close(id);
+                    let (id, open) = open_window(
+                        &self.config.layout,
+                        self.monitor_size.unwrap(),
+                    );
+                    self.id = Some(id);
+                    self.modules.synchronize_views();
+                    return Task::batch([close, open]);
+                }
+            }
+            Err(e) => {
+                error!(target: "config", "{:?}", e);
+                notification("Failed to parse config file");
+            }
+        }
+        Task::none()
     }
 }

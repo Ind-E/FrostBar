@@ -179,7 +179,7 @@ impl Modules {
         ModuleAction::None
     }
 
-    fn synchronize_views(&mut self) {
+    pub fn synchronize_views(&mut self) {
         for i in 0..self.views.len() {
             let view = unsafe { &mut *(&raw mut self.views[i]) };
             view.synchronize(unsafe { &*(self as *const _) });
