@@ -38,6 +38,7 @@ pub enum ModuleMsg {
     Niri(NiriEvent),
     AudioSample(Vec<f32>),
     SpectrumGradientUpdate(Option<Vec<Color>>),
+    SpectrumTimer,
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
     Systray(system_tray::service::Event),
@@ -173,6 +174,9 @@ impl Modules {
             }
             ModuleMsg::SynchronizeAll => {
                 self.synchronize_views();
+            }
+            ModuleMsg::SpectrumTimer => {
+                self.spectrum.timer_update();
             }
             ModuleMsg::NoOp => {}
         }

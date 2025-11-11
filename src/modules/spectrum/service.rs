@@ -1,7 +1,10 @@
 use super::pipewire::{meter_tap, pw_monitor};
 use crate::{
     Message,
-    modules::{ModuleMsg, spectrum::fft::Fft},
+    modules::{
+        ModuleMsg,
+        spectrum::fft::{Fft, MILLIS_PER_FRAME},
+    },
 };
 use async_channel::Receiver as AsyncChannel;
 use iced::{
@@ -9,11 +12,15 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     futures::{self, StreamExt as _},
 };
-use std::{fmt, hash::Hasher as _, sync::Arc};
+use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
 
 pub struct SpectrumService {
     audio_stream: Arc<AsyncChannel<Vec<f32>>>,
     fft: Fft,
+    sample_buffer: Vec<f32>,
+    last_sample: Vec<f32>,
+    silence_frames: u8,
+    animating_gravity: bool,
     pub gradient: Option<Vec<Color>>,
     pub bars: Box<[f32]>,
 }
@@ -26,26 +33,70 @@ impl SpectrumService {
         pw_monitor::run();
 
         let audio_stream = meter_tap::audio_sample_stream();
-
         let fft = Fft::new(meter_tap::current_format(), BAR_COUNT);
 
         Self {
             audio_stream,
             gradient: None,
+            animating_gravity: false,
+            sample_buffer: Vec::new(),
+            last_sample: Vec::new(),
+            silence_frames: 0,
             bars: fft.init_bars(),
             fft,
         }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        from_recipe(AudioStreamRecipe {
+        let audio_sub = from_recipe(AudioStreamRecipe {
             audio_stream: self.audio_stream.clone(),
         })
-        .map(|sample| Message::Module(ModuleMsg::AudioSample(sample)))
+        .map(|sample| Message::Module(ModuleMsg::AudioSample(sample)));
+        if let Some(timer_sub) = self.timer_subscription() {
+            Subscription::batch([audio_sub, timer_sub])
+        } else {
+            audio_sub
+        }
     }
 
-    pub fn update(&mut self, new_samples: Vec<f32>) {
-        self.fft.process(&new_samples, &mut self.bars);
+    pub fn timer_subscription(&self) -> Option<Subscription<Message>> {
+        if self.animating_gravity {
+            Some(
+                iced::time::every(Duration::from_millis(MILLIS_PER_FRAME))
+                    .map(|_| Message::Module(ModuleMsg::SpectrumTimer)),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn update(&mut self, new_sample: Vec<f32>) {
+        self.sample_buffer.extend(new_sample);
+
+        self.fft.process(Some(&self.sample_buffer), &mut self.bars);
+
+        self.last_sample.clone_from(&self.sample_buffer);
+        self.sample_buffer.clear();
+        self.silence_frames = 0;
+
+        self.animating_gravity = true;
+    }
+
+    pub fn timer_update(&mut self) {
+        if self.silence_frames < 3 && !self.last_sample.is_empty() {
+            self.silence_frames += 1;
+            self.fft.process(Some(&self.last_sample), &mut self.bars);
+            self.animating_gravity = true;
+        } else {
+            self.fft.process(None, &mut self.bars);
+
+            let all_bars_are_zero = self.bars.iter().all(|&val| val <= 0.001);
+            if all_bars_are_zero {
+                self.animating_gravity = false;
+            } else {
+                self.animating_gravity = true;
+            }
+        }
     }
 
     pub fn update_gradient(&mut self, gradient: Option<Vec<Color>>) {

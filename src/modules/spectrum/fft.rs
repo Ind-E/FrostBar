@@ -6,6 +6,8 @@ const LOW_CUT_OFF: u32 = 50;
 const HIGH_CUT_OFF: u32 = 10000;
 const BASS_CUT_OFF_HZ: f32 = 100.0;
 const NOISE_REDUCTION: f32 = 0.77;
+const FRAME_RATE: f32 = 60.0;
+pub const MILLIS_PER_FRAME: u64 = (1000.0 / FRAME_RATE) as u64;
 
 pub struct Fft {
     channels: usize,
@@ -34,6 +36,8 @@ pub struct Fft {
 
     sens: f32,
     sens_init: bool,
+
+    last_sample_len: usize,
 }
 
 #[profiling::all_functions]
@@ -159,6 +163,7 @@ impl Fft {
 
             sens: 1.0,
             sens_init: true,
+            last_sample_len: 0,
         }
     }
 
@@ -166,23 +171,43 @@ impl Fft {
         vec![0.0; self.bars * self.channels].into_boxed_slice()
     }
 
-    pub fn process(&mut self, new_samples: &[f32], buffer: &mut Box<[f32]>) {
-        let new_samples_len = new_samples.len();
+    pub fn process(
+        &mut self,
+        new_sample: Option<&[f32]>,
+        buffer: &mut Box<[f32]>,
+    ) {
+        let silence = if let Some(new_sample) = new_sample {
+            let new_sample_len = new_sample.len();
+            self.last_sample_len = new_sample_len;
 
-        let silence = new_samples.iter().all(|&s| s == 0.0);
+            if new_sample_len > 0 {
+                let buffer_len = self.input_buffer.len();
+                let shift_amount = new_sample_len.min(buffer_len);
+                if buffer_len > shift_amount {
+                    self.input_buffer.copy_within(
+                        0..buffer_len - shift_amount,
+                        shift_amount,
+                    );
+                }
+                let fill_range = 0..shift_amount;
+                for (dest_idx, sample) in
+                    fill_range.zip(new_sample.iter().rev())
+                {
+                    self.input_buffer[dest_idx] = *sample;
+                }
+            }
 
-        if new_samples_len > 0 {
+            new_sample.iter().all(|&s| s == 0.0)
+        } else {
             let buffer_len = self.input_buffer.len();
-            let shift_amount = new_samples_len.min(buffer_len);
+            let shift_amount = self.last_sample_len.min(buffer_len);
             if buffer_len > shift_amount {
                 self.input_buffer
                     .copy_within(0..buffer_len - shift_amount, shift_amount);
             }
-            let fill_range = 0..shift_amount;
-            for (dest_idx, sample) in fill_range.zip(new_samples.iter().rev()) {
-                self.input_buffer[dest_idx] = *sample;
-            }
-        }
+            self.input_buffer[..shift_amount].fill(0.0);
+            true
+        };
 
         let mut overshoot = false;
 
