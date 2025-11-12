@@ -3,20 +3,21 @@ use crate::{
     icon_cache::{Icon, IconCache},
     modules,
 };
-use iced::Subscription;
+use iced::{Subscription, Task};
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, Mutex};
 use system_tray::{
-    client::{self, Client, UpdateEvent},
+    client::{self, ActivateRequest, Client, UpdateEvent},
     data::{BaseMap, apply_menu_diffs},
     item::StatusNotifierItem,
     menu::TrayMenu,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::error;
+use tracing::{debug, error};
 
 pub struct TrayItem {
+    pub address: String,
     pub id: String,
     pub title: Option<String>,
     pub tooltip: Option<TrayItemTooltip>,
@@ -26,6 +27,7 @@ pub struct TrayItem {
     pub overlay_icon: Option<Icon>,
     pub attention_icon: Option<Icon>,
     pub _dbus_menu: Option<String>,
+    pub menu_only: bool,
 }
 
 pub struct TrayItemTooltip {
@@ -34,9 +36,10 @@ pub struct TrayItemTooltip {
     pub icon: Option<Icon>,
 }
 
-pub struct Systray {
+pub struct SystemTrayService {
     pub items: FxHashMap<String, (TrayItem, Option<TrayMenu>)>,
     icon_cache: IconCache,
+    client: Option<Arc<Client>>,
 }
 
 fn map_tooltip(
@@ -52,15 +55,16 @@ fn map_tooltip(
 }
 
 #[profiling::all_functions]
-impl Systray {
+impl SystemTrayService {
     pub fn new(icon_cache: IconCache) -> Self {
         Self {
             items: FxHashMap::default(),
             icon_cache,
+            client: None,
         }
     }
 
-    fn map_sni(&self, sni: StatusNotifierItem) -> TrayItem {
+    fn map_sni(&self, address: String, sni: StatusNotifierItem) -> TrayItem {
         TrayItem {
             id: sni.id,
             title: sni.title,
@@ -75,7 +79,9 @@ impl Systray {
                 sni.attention_icon_name,
                 sni.attention_icon_pixmap,
             ),
+            menu_only: sni.item_is_menu,
             _dbus_menu: sni.menu,
+            address,
         }
     }
 
@@ -85,15 +91,20 @@ impl Systray {
 
             tokio::spawn(async move {
                 let Ok(client) = Client::new().await else {
+                    error!(target: "system_tray", "failed to create client");
                     return;
                 };
-                if let Err(e) =
-                    yield_tx.send(Event::InitialItems(client.items())).await
+                let mut tray_rx = client.subscribe();
+                if let Err(e) = yield_tx
+                    .send(Event::InitialItems((
+                        client.items(),
+                        Arc::new(client),
+                    )))
+                    .await
                 {
                     error!(target: "system_tray", "{e}");
                 }
 
-                let mut tray_rx = client.subscribe();
                 while let Ok(event) = tray_rx.recv().await {
                     if let Err(e) = yield_tx.send(Event::Event(event)).await {
                         error!(target: "system_tray", "{e}");
@@ -108,19 +119,23 @@ impl Systray {
 
     pub fn update(&mut self, event: Event) {
         match event {
-            Event::InitialItems(mutex) => {
-                for (k, (sni, menu)) in mutex.lock().unwrap().iter() {
+            Event::InitialItems((mutex, client)) => {
+                self.client = Some(client);
+                for (address, (sni, menu)) in mutex.lock().unwrap().iter() {
                     self.items.insert(
-                        k.clone(),
-                        (self.map_sni(sni.clone()), menu.clone()),
+                        address.clone(),
+                        (
+                            self.map_sni(address.clone(), sni.clone()),
+                            menu.clone(),
+                        ),
                     );
                 }
             }
             Event::Event(event) => match event {
-                client::Event::Add(name, status_notifier_item) => {
+                client::Event::Add(address, status_notifier_item) => {
                     self.items.insert(
-                        name,
-                        (self.map_sni(*status_notifier_item), None),
+                        address.clone(),
+                        (self.map_sni(address, *status_notifier_item), None),
                     );
                 }
                 client::Event::Update(name, update_event) => {
@@ -172,10 +187,33 @@ impl Systray {
             },
         }
     }
+
+    pub fn activate_menu(&mut self, address: String) -> Option<Task<Message>> {
+        if let Some(client) = self.client.clone() {
+            debug!(target: "system_tray", "activating {address}");
+            Some(Task::perform(
+                async move {
+                    if let Err(e) = client
+                        .activate(ActivateRequest::Default {
+                            address,
+                            x: 0,
+                            y: 0,
+                        })
+                        .await
+                    {
+                        error!(target: "system_tray", "{e}");
+                    }
+                },
+                |_| Message::NoOp,
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    InitialItems(Arc<Mutex<BaseMap>>),
+    InitialItems((Arc<Mutex<BaseMap>>, Arc<Client>)),
     Event(client::Event),
 }

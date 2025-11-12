@@ -8,8 +8,8 @@ use iced::{
     Alignment,
     mouse::Interaction,
     widget::{
-        Column, Container, Image, MouseArea, Stack, Svg, Text, container, row,
-        text::Shaping,
+        Column, Container, Image, MouseArea, Stack, Svg, Text, container,
+        opaque, row, text::Shaping,
     },
 };
 use itertools::Itertools;
@@ -80,6 +80,22 @@ impl ViewTrait<Modules> for SystemTrayView {
                 && let Some(item) = tray.items.get(item_id)
             {
                 return Some(view.render_tooltip(item));
+            }
+        }
+        None
+    }
+
+    fn menu<'a>(
+        &'a self,
+        modules: &'a Modules,
+        id: &container::Id,
+    ) -> Option<Element<'a>> {
+        let tray = &modules.systray;
+        for (item_id, view) in &self.tray_item_views {
+            if view.id == *id
+                && let Some(item) = tray.items.get(item_id)
+            {
+                return Some(opaque(view.render_tooltip(item)));
             }
         }
         None
@@ -178,6 +194,12 @@ impl TrayItemView {
         MouseArea::new(Container::new(stack).id(self.id.clone()))
             .on_enter(Message::OpenTooltip(self.id.clone()))
             .on_exit(Message::CloseTooltip(self.id.clone()))
+            .on_release(if item.menu_only {
+                Message::OpenMenu(self.id.clone())
+            } else {
+                Message::ActivateMenu(item.address.clone())
+            })
+            .on_right_release(Message::OpenMenu(self.id.clone()))
             .interaction(Interaction::Pointer)
             .into()
     }
