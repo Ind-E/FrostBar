@@ -21,7 +21,7 @@ use niri::{
     view::NiriView,
 };
 use std::any::Any;
-use system_tray::{service::Systray, view::SystemTrayView};
+use system_tray::{service::SystemTrayService, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
 
 pub mod battery;
@@ -56,7 +56,7 @@ pub struct Modules {
     pub mpris: MprisService,
     pub time: TimeService,
     pub niri: NiriService,
-    pub systray: Systray,
+    pub systray: SystemTrayService,
     pub views: Vec<View>,
 }
 
@@ -69,7 +69,7 @@ impl Modules {
             mpris: MprisService::new(),
             time: TimeService::new(),
             niri: NiriService::new(icon_cache.clone()),
-            systray: Systray::new(icon_cache),
+            systray: SystemTrayService::new(icon_cache),
             views: Vec::new(),
         }
     }
@@ -118,6 +118,13 @@ impl Modules {
         id: &container::Id,
     ) -> Option<Element<'a>> {
         self.views.iter().find_map(|view| view.tooltip(self, id))
+    }
+
+    pub fn render_menu_for_id<'a>(
+        &'a self,
+        id: &container::Id,
+    ) -> Option<Element<'a>> {
+        self.views.iter().find_map(|view| view.menu(self, id))
     }
 
     #[must_use]
@@ -228,6 +235,14 @@ pub trait ViewTrait<M>: Any {
     fn position(&self) -> BarPosition;
 
     fn tooltip<'a>(
+        &'a self,
+        _modules: &'a M,
+        _id: &container::Id,
+    ) -> Option<Element<'a>> {
+        None
+    }
+
+    fn menu<'a>(
         &'a self,
         _modules: &'a M,
         _id: &container::Id,
