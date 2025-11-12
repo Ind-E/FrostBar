@@ -20,6 +20,99 @@ use std::{
 };
 use tracing::{debug, error, info};
 
+const DEFAULT_CONFIG: &[u8; 972] =
+    include_bytes!("../assets/default-config.kdl");
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct FloatOrInt<const MIN: i32, const MAX: i32>(pub f32);
+
+impl<const MIN: i32, const MAX: i32> FloatOrInt<MIN, MAX> {
+    fn into_f32(self) -> f32 {
+        self.0 as f32
+    }
+}
+
+impl<const MIN: i32, const MAX: i32> From<f32> for FloatOrInt<MIN, MAX> {
+    fn from(value: f32) -> Self {
+        if value < MIN as f32 || value > MAX as f32 {
+            panic!("out of range");
+        }
+        FloatOrInt(value)
+    }
+}
+
+impl<const MIN: i32, const MAX: i32> From<FloatOrInt<MIN, MAX>> for f32 {
+    fn from(value: FloatOrInt<MIN, MAX>) -> Self {
+        value.0 as f32
+    }
+}
+
+impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
+    knus::DecodeScalar<S> for FloatOrInt<MIN, MAX>
+{
+    fn type_check(
+        type_name: &Option<knus::span::Spanned<knus::ast::TypeName, S>>,
+        ctx: &mut knus::decode::Context<S>,
+    ) {
+        if let Some(type_name) = &type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+    }
+
+    fn raw_decode(
+        val: &knus::span::Spanned<knus::ast::Literal, S>,
+        ctx: &mut knus::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        match &**val {
+            knus::ast::Literal::Int(value) => match value.try_into() {
+                Ok(v) => {
+                    if (MIN..=MAX).contains(&v) {
+                        Ok(FloatOrInt(v as f32))
+                    } else {
+                        ctx.emit_error(DecodeError::conversion(
+                            val,
+                            format!("value must be between {MIN} and {MAX}"),
+                        ));
+                        Ok(FloatOrInt::default())
+                    }
+                }
+                Err(e) => {
+                    ctx.emit_error(DecodeError::conversion(val, e));
+                    Ok(FloatOrInt::default())
+                }
+            },
+            knus::ast::Literal::Decimal(value) => match value.try_into() {
+                Ok(v) => {
+                    if ((MIN as f32)..=(MAX as f32)).contains(&v) {
+                        Ok(FloatOrInt(v as f32))
+                    } else {
+                        ctx.emit_error(DecodeError::conversion(
+                            val,
+                            format!("value must be between {MIN} and {MAX}"),
+                        ));
+                        Ok(FloatOrInt::default())
+                    }
+                }
+                Err(e) => {
+                    ctx.emit_error(DecodeError::conversion(val, e));
+                    Ok(FloatOrInt::default())
+                }
+            },
+            _ => {
+                ctx.emit_error(DecodeError::unsupported(
+                    val,
+                    "Unsupported value, only numbers are recognized",
+                ));
+                Ok(FloatOrInt::default())
+            }
+        }
+    }
+}
+
 #[derive(knus::Decode, Default, Debug)]
 pub struct RawConfig {
     #[knus(child, default)]
@@ -67,7 +160,7 @@ fn hydrate_modules(
                     RawConfigModule::Battery(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
-                    RawConfigModule::Spectrum(c) => {
+                    RawConfigModule::AudioVisualizer(c) => {
                         modules.push((c.hydrate(colors), position));
                     }
                     RawConfigModule::Mpris(c) => {
@@ -166,7 +259,7 @@ impl Default for Layout {
 #[derive(knus::Decode, Debug, Clone)]
 pub struct RawTopLevelStyle {
     #[knus(child, default = Self::default().border_radius)]
-    pub border_radius: ConfigRadius,
+    pub border_radius: RawConfigRadius,
     #[knus(child, unwrap(argument), default = Self::default().background)]
     pub background: ConfigColor,
 }
@@ -174,7 +267,7 @@ pub struct RawTopLevelStyle {
 impl Default for RawTopLevelStyle {
     fn default() -> Self {
         Self {
-            border_radius: ConfigRadius::All(0.0),
+            border_radius: RawConfigRadius::All(0.0.into()),
             background: Color::from_rgb(0.0, 0.0, 0.0).into(),
         }
     }
@@ -227,7 +320,7 @@ where
 
 #[derive(knus::Decode, Debug)]
 pub enum RawConfigModule {
-    Spectrum(RawSpectrum),
+    AudioVisualizer(RawAudioVisualizer),
     Battery(RawBattery),
     Time(RawTime),
     Mpris(RawMpris),
@@ -237,7 +330,7 @@ pub enum RawConfigModule {
 }
 
 pub enum ConfigModule {
-    Spectrum(Spectrum),
+    AudioVisualizer(AudioVisualizer),
     Battery(Battery),
     Time(Time),
     Mpris(Mpris),
@@ -265,9 +358,9 @@ impl std::ops::DerefMut for ConfigModules {
 }
 
 #[derive(knus::Decode, Debug)]
-pub struct RawSpectrum {
+pub struct RawAudioVisualizer {
     #[knus(child, unwrap(argument), default = Self::default().spacing)]
-    pub spacing: f32,
+    pub spacing: FloatOrInt<0, { i32::MAX }>,
 
     #[knus(child, unwrap(argument), default = Self::default().color)]
     pub color: ConfigColor,
@@ -282,10 +375,10 @@ pub struct RawSpectrum {
     pub style: RawContainerStyle,
 }
 
-impl Default for RawSpectrum {
+impl Default for RawAudioVisualizer {
     fn default() -> Self {
         Self {
-            spacing: 0.1,
+            spacing: 0.1.into(),
             dynamic_color: true,
             color: Color::WHITE.into(),
             binds: RawMouseBinds::default(),
@@ -294,21 +387,21 @@ impl Default for RawSpectrum {
     }
 }
 
-impl RawSpectrum {
+impl RawAudioVisualizer {
     fn hydrate(self, colors: &ColorVars) -> ConfigModule {
-        let spectrum = Spectrum {
-            spacing: self.spacing,
+        let audio_visualizer = AudioVisualizer {
+            spacing: self.spacing.into(),
             color: self.color.resolve(colors),
             dynamic_color: self.dynamic_color,
             binds: self.binds.hydrate(),
             style: self.style.hydrate(colors),
         };
-        ConfigModule::Spectrum(spectrum)
+        ConfigModule::AudioVisualizer(audio_visualizer)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Spectrum {
+pub struct AudioVisualizer {
     pub spacing: f32,
     pub color: Color,
     pub dynamic_color: bool,
@@ -403,7 +496,7 @@ pub struct RawMpris {
     pub placeholder: String,
 
     #[knus(flatten(child), default)]
-    pub binds: MouseBindsForMpris,
+    pub binds: RawMouseBindsForMpris,
 
     #[knus(child, default)]
     pub placeholder_style: RawContainerStyle,
@@ -413,7 +506,7 @@ impl RawMpris {
     fn hydrate(self, colors: &ColorVars) -> ConfigModule {
         let mpris = Mpris {
             placeholder: self.placeholder,
-            binds: self.binds,
+            binds: self.binds.into(),
             placeholder_style: self.placeholder_style.hydrate(colors),
         };
 
@@ -482,7 +575,7 @@ impl RawNiri {
                 hovered_border.color = color;
             }
             if let Some(width) = border.width {
-                hovered_border.width = width;
+                hovered_border.width = width.into();
             }
             if let Some(radius) = &border.radius {
                 hovered_border.radius = radius.clone().into();
@@ -522,8 +615,8 @@ impl RawNiri {
                 active_hovered_border.color = color;
             }
             if let Some(width) = border.width {
-                active_border.width = width;
-                active_hovered_border.width = width;
+                active_border.width = width.into();
+                active_hovered_border.width = width.into();
             }
             if let Some(radius) = &border.radius {
                 active_border.radius = radius.clone().into();
@@ -568,7 +661,7 @@ impl RawNiri {
                 focused_border.color = color;
             }
             if let Some(width) = border.width {
-                focused_border.width = width;
+                focused_border.width = width.into();
             }
             if let Some(radius) = &border.radius {
                 focused_border.radius = radius.clone().into();
@@ -755,6 +848,19 @@ pub struct ScrollBinds {
     pub left: Option<Message>,
 }
 
+#[derive(Debug, Clone)]
+pub enum RawMediaControl {
+    Play,
+    Pause,
+    PlayPause,
+    Stop,
+    Next,
+    Previous,
+    Seek(i64),
+    Volume(FloatOrInt<{ -i32::MAX }, { i32::MAX }>),
+    SetVolume(FloatOrInt<0, { i32::MAX }>),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MediaControl {
     Play,
@@ -764,11 +870,27 @@ pub enum MediaControl {
     Next,
     Previous,
     Seek(i64),
-    Volume(f64),
-    SetVolume(f64),
+    Volume(f32),
+    SetVolume(f32),
 }
 
-impl<S> knus::Decode<S> for MediaControl
+impl From<RawMediaControl> for MediaControl {
+    fn from(value: RawMediaControl) -> Self {
+        match value {
+            RawMediaControl::Play => MediaControl::Play,
+            RawMediaControl::Pause => MediaControl::Pause,
+            RawMediaControl::PlayPause => MediaControl::PlayPause,
+            RawMediaControl::Stop => MediaControl::Stop,
+            RawMediaControl::Next => MediaControl::Next,
+            RawMediaControl::Previous => MediaControl::Previous,
+            RawMediaControl::Seek(x) => MediaControl::Seek(x),
+            RawMediaControl::Volume(x) => MediaControl::Volume(x.into()),
+            RawMediaControl::SetVolume(x) => MediaControl::SetVolume(x.into()),
+        }
+    }
+}
+
+impl<S> knus::Decode<S> for RawMediaControl
 where
     S: knus::traits::ErrorSpan,
 {
@@ -814,12 +936,12 @@ where
         };
         match &*first_arg.literal {
             Literal::String(arg) => match arg.as_ref() {
-                "play" => Ok(MediaControl::Play),
-                "pause" => Ok(MediaControl::Pause),
-                "play-pause" => Ok(MediaControl::PlayPause),
-                "stop" => Ok(MediaControl::Stop),
-                "next" => Ok(MediaControl::Next),
-                "previous" => Ok(MediaControl::Previous),
+                "play" => Ok(RawMediaControl::Play),
+                "pause" => Ok(RawMediaControl::Pause),
+                "play-pause" => Ok(RawMediaControl::PlayPause),
+                "stop" => Ok(RawMediaControl::Stop),
+                "next" => Ok(RawMediaControl::Next),
+                "previous" => Ok(RawMediaControl::Previous),
                 "seek" => {
                     let Some(second_arg) = iter_args.next() else {
                         return Err(DecodeError::missing(
@@ -831,7 +953,7 @@ where
                     match &*second_arg.literal {
                         Literal::Int(seek_amount) => {
                             match i64::try_from(seek_amount) {
-                                Ok(seek_amount) => Ok(MediaControl::Seek(
+                                Ok(seek_amount) => Ok(RawMediaControl::Seek(
                                     // convert from microseconds to millseconds
                                     seek_amount * 1000,
                                 )),
@@ -855,22 +977,9 @@ where
                         ));
                     };
 
-                    match &*second_arg.literal {
-                        Literal::Decimal(volume_amount) => {
-                            match f64::try_from(volume_amount) {
-                                Ok(amount) => Ok(MediaControl::Volume(amount)),
-
-                                Err(e) => Err(DecodeError::conversion(
-                                    &second_arg.literal,
-                                    format!("{e}"),
-                                )),
-                            }
-                        }
-
-                        _other => Err(DecodeError::scalar_kind(
-                            Kind::Decimal,
-                            &second_arg.literal,
-                        )),
+                    match FloatOrInt::raw_decode(&second_arg.literal, ctx) {
+                        Ok(amount) => Ok(RawMediaControl::Volume(amount)),
+                        Err(e) => Err(e),
                     }
                 }
                 "set-volume" => {
@@ -881,24 +990,9 @@ where
                         ));
                     };
 
-                    match &*second_arg.literal {
-                        Literal::Decimal(volume_amount) => {
-                            match f64::try_from(volume_amount) {
-                                Ok(amount) => {
-                                    Ok(MediaControl::SetVolume(amount))
-                                }
-
-                                Err(e) => Err(DecodeError::conversion(
-                                    &second_arg.literal,
-                                    format!("{e}"),
-                                )),
-                            }
-                        }
-
-                        _other => Err(DecodeError::scalar_kind(
-                            Kind::Decimal,
-                            &second_arg.literal,
-                        )),
+                    match FloatOrInt::raw_decode(&second_arg.literal, ctx) {
+                        Ok(amount) => Ok(RawMediaControl::SetVolume(amount)),
+                        Err(e) => Err(e),
                     }
                 }
                 _other => Err(DecodeError::conversion(
@@ -914,30 +1008,56 @@ where
 }
 
 #[derive(knus::Decode, Debug, Clone, Default)]
+pub struct RawMouseBindsForMpris {
+    #[knus(child)]
+    pub mouse_left: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub double_click: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub mouse_right: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub mouse_middle: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub scroll_up: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub scroll_down: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub scroll_right: Option<RawMediaControl>,
+
+    #[knus(child)]
+    pub scroll_left: Option<RawMediaControl>,
+}
+
 pub struct MouseBindsForMpris {
-    #[knus(child)]
     pub mouse_left: Option<MediaControl>,
-
-    #[knus(child)]
     pub double_click: Option<MediaControl>,
-
-    #[knus(child)]
     pub mouse_right: Option<MediaControl>,
-
-    #[knus(child)]
     pub mouse_middle: Option<MediaControl>,
-
-    #[knus(child)]
     pub scroll_up: Option<MediaControl>,
-
-    #[knus(child)]
     pub scroll_down: Option<MediaControl>,
-
-    #[knus(child)]
     pub scroll_right: Option<MediaControl>,
-
-    #[knus(child)]
     pub scroll_left: Option<MediaControl>,
+}
+
+impl From<RawMouseBindsForMpris> for MouseBindsForMpris {
+    fn from(other: RawMouseBindsForMpris) -> Self {
+        Self {
+            mouse_left: other.mouse_left.map(|x| x.into()),
+            double_click: other.double_click.map(|x| x.into()),
+            mouse_right: other.mouse_right.map(|x| x.into()),
+            mouse_middle: other.mouse_middle.map(|x| x.into()),
+            scroll_up: other.scroll_up.map(|x| x.into()),
+            scroll_down: other.scroll_down.map(|x| x.into()),
+            scroll_right: other.scroll_right.map(|x| x.into()),
+            scroll_left: other.scroll_left.map(|x| x.into()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -956,7 +1076,7 @@ pub struct RawContainerStyle {
     #[knus(child)]
     pub border: Option<ConfigBorder>,
     #[knus(child, unwrap(argument))]
-    pub padding: Option<f32>,
+    pub padding: Option<FloatOrInt<0, { i32::MAX }>>,
 }
 
 impl RawContainerStyle {
@@ -973,7 +1093,7 @@ impl RawContainerStyle {
                 }),
                 ..Default::default()
             },
-            padding: self.padding,
+            padding: self.padding.map(|x| x.into()),
         }
     }
 }
@@ -1003,9 +1123,9 @@ pub struct ConfigBorder {
     #[knus(child, unwrap(argument))]
     pub color: Option<ConfigColor>,
     #[knus(child, unwrap(argument), default)]
-    pub width: Option<f32>,
+    pub width: Option<FloatOrInt<0, { i32::MAX }>>,
     #[knus(child)]
-    pub radius: Option<ConfigRadius>,
+    pub radius: Option<RawConfigRadius>,
 }
 
 fn to_iced_border(
@@ -1018,19 +1138,22 @@ fn to_iced_border(
             .color
             .unwrap_or(default_border.color.into())
             .resolve(color_vars),
-        width: border.width.unwrap_or(default_border.width),
+        width: border
+            .width
+            .unwrap_or(FloatOrInt(default_border.width))
+            .into(),
         radius: match border.radius {
-            Some(ConfigRadius::All(r)) => iced::border::radius(r),
-            Some(ConfigRadius::PerCorner(PerCorner {
+            Some(RawConfigRadius::All(r)) => iced::border::radius(r.into_f32()),
+            Some(RawConfigRadius::PerCorner(PerCorner {
                 top_left,
                 top_right,
                 bottom_left,
                 bottom_right,
             })) => iced::border::Radius {
-                top_left,
-                top_right,
-                bottom_right,
-                bottom_left,
+                top_left: top_left.into(),
+                top_right: top_right.into(),
+                bottom_right: bottom_right.into(),
+                bottom_left: bottom_left.into(),
             },
             None => default_border.radius,
         },
@@ -1038,20 +1161,20 @@ fn to_iced_border(
 }
 
 #[derive(Debug, Clone)]
-pub enum ConfigRadius {
-    All(f32),
+pub enum RawConfigRadius {
+    All(FloatOrInt<0, { i32::MAX }>),
     PerCorner(PerCorner),
 }
 
-impl From<ConfigRadius> for iced::border::Radius {
-    fn from(radius: ConfigRadius) -> Self {
+impl From<RawConfigRadius> for iced::border::Radius {
+    fn from(radius: RawConfigRadius) -> Self {
         match radius {
-            ConfigRadius::All(r) => iced::border::radius(r),
-            ConfigRadius::PerCorner(corners) => iced::border::Radius {
-                top_left: corners.top_left,
-                top_right: corners.top_right,
-                bottom_left: corners.bottom_left,
-                bottom_right: corners.bottom_right,
+            RawConfigRadius::All(r) => iced::border::radius(r.into_f32()),
+            RawConfigRadius::PerCorner(corners) => iced::border::Radius {
+                top_left: corners.top_left.into(),
+                top_right: corners.top_right.into(),
+                bottom_left: corners.bottom_left.into(),
+                bottom_right: corners.bottom_right.into(),
             },
         }
     }
@@ -1060,16 +1183,16 @@ impl From<ConfigRadius> for iced::border::Radius {
 #[derive(knus::Decode, Debug, Clone, Default)]
 pub struct PerCorner {
     #[knus(child, unwrap(argument))]
-    top_left: f32,
+    top_left: FloatOrInt<0, { i32::MAX }>,
     #[knus(child, unwrap(argument))]
-    top_right: f32,
+    top_right: FloatOrInt<0, { i32::MAX }>,
     #[knus(child, unwrap(argument))]
-    bottom_left: f32,
+    bottom_left: FloatOrInt<0, { i32::MAX }>,
     #[knus(child, unwrap(argument))]
-    bottom_right: f32,
+    bottom_right: FloatOrInt<0, { i32::MAX }>,
 }
 
-impl<S> knus::Decode<S> for ConfigRadius
+impl<S> knus::Decode<S> for RawConfigRadius
 where
     S: knus::traits::ErrorSpan,
 {
@@ -1114,7 +1237,7 @@ where
                 ));
             });
             let radius = iter_args.next().unwrap();
-            Ok(Self::All(f32::decode(radius, ctx)?))
+            Ok(Self::All(FloatOrInt::decode(radius, ctx)?))
         } else {
             iter_args.for_each(|arg| {
                 ctx.emit_error(DecodeError::unexpected(
@@ -1279,10 +1402,8 @@ impl RawConfig {
             format!("error opening config file at {}", path.display())
         })?;
 
-        let default_config = include_bytes!("../assets/default-config.kdl");
-
         new_file
-            .write_all(default_config)
+            .write_all(DEFAULT_CONFIG)
             .into_diagnostic()
             .with_context(|| {
                 format!("error writing default config to {}", path.display())
@@ -1437,6 +1558,20 @@ where
                 }
             }
             _ => Err(DecodeError::conversion(value, "invalid hex literal")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_default_config() {
+        if let Err(e) =
+            RawConfig::parse("", str::from_utf8(DEFAULT_CONFIG).unwrap())
+        {
+            panic!("{e}")
         }
     }
 }

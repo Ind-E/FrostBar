@@ -102,7 +102,7 @@
       devShells = lib.mapAttrs (system: pkgs: {
         default =
           let
-            commonRustFlagsEnv = "-C link-arg=-fuse-ld=lld -C target-cpu=native --cfg tokio_unstable";
+            commonRustFlagsEnv = "-C link-arg=-fuse-ld=lld -C target-cpu=native --cfg tokio_unstable -Zthreads=8";
             platformRustFlagsEnv = lib.optionalString pkgs.stdenv.isLinux "-Clink-arg=-Wl,--no-rosegment -Clink-arg=-lwayland-client";
           in
           pkgs.mkShell rec {
@@ -142,6 +142,8 @@
                 allowBuiltinFetchGit = true;
                 lockFile = ./Cargo.lock;
               };
+
+              cargoBuildFlags = [ "-Zunstable-options" ];
 
               nativeBuildInputs = packageNativeBuildInputs final;
               buildInputs = packageBuildInputs final;

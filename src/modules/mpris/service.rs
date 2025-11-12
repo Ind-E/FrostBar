@@ -145,7 +145,7 @@ impl MprisService {
                         let colors = player.colors.clone();
                         return ModuleAction::Task(Task::perform(
                             async move { colors },
-                            modules::ModuleMsg::SpectrumGradientUpdate,
+                            modules::ModuleMsg::AudioVisualizerGradientUpdate,
                         ));
                     }
                     player.status = status;
@@ -160,12 +160,12 @@ impl MprisService {
                         let colors = player.colors.clone();
                         return ModuleAction::Task(iced::Task::perform(
                             async move { colors },
-                            modules::ModuleMsg::SpectrumGradientUpdate,
+                            modules::ModuleMsg::AudioVisualizerGradientUpdate,
                         ));
                     }
                     return ModuleAction::Task(Task::perform(
                         async move { None },
-                        modules::ModuleMsg::SpectrumGradientUpdate,
+                        modules::ModuleMsg::AudioVisualizerGradientUpdate,
                     ));
                 }
             }
@@ -241,7 +241,7 @@ impl MprisPlayer {
                             let captured_colors = colors;
                             return ModuleAction::Task(iced::Task::perform(
                                 async move { captured_colors },
-                                modules::ModuleMsg::SpectrumGradientUpdate,
+                                modules::ModuleMsg::AudioVisualizerGradientUpdate,
                             ));
                         }
                     }
@@ -258,7 +258,7 @@ impl MprisPlayer {
         self.colors = None;
         ModuleAction::Task(Task::perform(
             async { None },
-            modules::ModuleMsg::SpectrumGradientUpdate,
+            modules::ModuleMsg::AudioVisualizerGradientUpdate,
         ))
     }
 

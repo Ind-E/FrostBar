@@ -204,7 +204,7 @@ impl SystemTrayService {
                         error!(target: "system_tray", "{e}");
                     }
                 },
-                |_| Message::NoOp,
+                |()| Message::NoOp,
             ))
         } else {
             None

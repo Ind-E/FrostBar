@@ -2,7 +2,9 @@ use crate::{
     Element, Message, MouseEvent,
     config::{self, Config, ConfigModule, MouseBinds},
     icon_cache::IconCache,
-    modules::spectrum::{service::SpectrumService, view::SpectrumView},
+    modules::audio_visualizer::{
+        service::AudioVisualizerService, view::AudioVisualizerView,
+    },
 };
 use battery::{service::BatteryService, view::BatteryView};
 use chrono::{DateTime, Local};
@@ -24,11 +26,11 @@ use std::any::Any;
 use system_tray::{service::SystemTrayService, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
 
+pub mod audio_visualizer;
 pub mod battery;
 pub mod label;
 pub mod mpris;
 pub mod niri;
-pub mod spectrum;
 pub mod system_tray;
 pub mod time;
 
@@ -37,8 +39,8 @@ pub enum ModuleMsg {
     Tick(DateTime<Local>),
     Niri(NiriEvent),
     AudioSample(Vec<f32>),
-    SpectrumGradientUpdate(Option<Vec<Color>>),
-    SpectrumTimer,
+    AudioVisualizerGradientUpdate(Option<Vec<Color>>),
+    AudioVisualizerTimer,
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
     Systray(system_tray::service::Event),
@@ -52,7 +54,7 @@ pub type View = Box<dyn ViewTrait<Modules>>;
 
 pub struct Modules {
     pub battery: BatteryService,
-    pub spectrum: SpectrumService,
+    pub audio_visualizer: AudioVisualizerService,
     pub mpris: MprisService,
     pub time: TimeService,
     pub niri: NiriService,
@@ -65,7 +67,7 @@ impl Modules {
     pub fn new(icon_cache: IconCache) -> Self {
         Self {
             battery: BatteryService::new(),
-            spectrum: SpectrumService::new(),
+            audio_visualizer: AudioVisualizerService::new(),
             mpris: MprisService::new(),
             time: TimeService::new(),
             niri: NiriService::new(icon_cache.clone()),
@@ -82,8 +84,8 @@ impl Modules {
                 ConfigModule::Battery(c) => {
                     self.views.push(Box::new(BatteryView::new(c, position)));
                 }
-                ConfigModule::Spectrum(c) => {
-                    self.views.push(Box::new(SpectrumView::new(c, position)));
+                ConfigModule::AudioVisualizer(c) => {
+                    self.views.push(Box::new(AudioVisualizerView::new(c, position)));
                 }
                 ConfigModule::Time(c) => {
                     self.views.push(Box::new(TimeView::new(c, position)));
@@ -152,10 +154,10 @@ impl Modules {
                 return task;
             }
             ModuleMsg::AudioSample(sample) => {
-                self.spectrum.update(sample);
+                self.audio_visualizer.update(sample);
             }
-            ModuleMsg::SpectrumGradientUpdate(gradient) => {
-                self.spectrum.update_gradient(gradient);
+            ModuleMsg::AudioVisualizerGradientUpdate(gradient) => {
+                self.audio_visualizer.update_gradient(gradient);
             }
             ModuleMsg::Mpris(event) => {
                 let task = self.mpris.update(event);
@@ -170,7 +172,7 @@ impl Modules {
                 {
                     player.art = Some(art);
                     player.colors.clone_from(&gradient);
-                    self.spectrum.update_gradient(gradient);
+                    self.audio_visualizer.update_gradient(gradient);
                 }
             }
             ModuleMsg::Systray(event) => {
@@ -182,14 +184,15 @@ impl Modules {
             ModuleMsg::SynchronizeAll => {
                 self.synchronize_views();
             }
-            ModuleMsg::SpectrumTimer => {
-                self.spectrum.timer_update();
+            ModuleMsg::AudioVisualizerTimer => {
+                self.audio_visualizer.timer_update();
             }
             ModuleMsg::NoOp => {}
         }
         ModuleAction::None
     }
 
+    #[allow(clippy::deref_addrof, clippy::ref_as_ptr)]
     pub fn synchronize_views(&mut self) {
         for i in 0..self.views.len() {
             let view = unsafe { &mut *(&raw mut self.views[i]) };
@@ -197,6 +200,7 @@ impl Modules {
         }
     }
 
+    #[allow(clippy::deref_addrof, clippy::ref_as_ptr)]
     fn synchronize_views_filtered(&mut self, filter: fn(&View) -> bool) {
         for i in 0..self.views.len() {
             let view = unsafe { &mut *(&raw mut self.views[i]) };

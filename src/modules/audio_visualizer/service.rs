@@ -1,11 +1,5 @@
 use super::pipewire::{meter_tap, pw_monitor};
-use crate::{
-    Message,
-    modules::{
-        ModuleMsg,
-        spectrum::fft::{Fft, MILLIS_PER_FRAME},
-    },
-};
+use crate::{Message, modules::ModuleMsg};
 use async_channel::Receiver as AsyncChannel;
 use iced::{
     Color, Subscription,
@@ -14,7 +8,9 @@ use iced::{
 };
 use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
 
-pub struct SpectrumService {
+use super::fft::{Fft, MILLIS_PER_FRAME};
+
+pub struct AudioVisualizerService {
     audio_stream: Arc<AsyncChannel<Vec<f32>>>,
     fft: Fft,
     sample_buffer: Vec<f32>,
@@ -28,7 +24,7 @@ pub struct SpectrumService {
 const BAR_COUNT: usize = 12;
 
 #[profiling::all_functions]
-impl SpectrumService {
+impl AudioVisualizerService {
     pub fn new() -> Self {
         pw_monitor::run();
 
@@ -63,7 +59,7 @@ impl SpectrumService {
         if self.animating_gravity {
             Some(
                 iced::time::every(Duration::from_millis(MILLIS_PER_FRAME))
-                    .map(|_| Message::Module(ModuleMsg::SpectrumTimer)),
+                    .map(|_| Message::Module(ModuleMsg::AudioVisualizerTimer)),
             )
         } else {
             None
@@ -90,12 +86,7 @@ impl SpectrumService {
         } else {
             self.fft.process(None, &mut self.bars);
 
-            let all_bars_are_zero = self.bars.iter().all(|&val| val <= 0.001);
-            if all_bars_are_zero {
-                self.animating_gravity = false;
-            } else {
-                self.animating_gravity = true;
-            }
+            self.animating_gravity = !self.bars.iter().all(|&val| val <= 0.001);
         }
     }
 

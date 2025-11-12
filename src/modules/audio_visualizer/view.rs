@@ -1,9 +1,6 @@
 use crate::{
     Element, config,
-    modules::{
-        BarPosition, Modules, ViewTrait, mouse_binds,
-        spectrum::service::SpectrumService,
-    },
+    modules::{BarPosition, Modules, ViewTrait, mouse_binds},
     utils::style::container_style,
 };
 use iced::{
@@ -12,32 +9,34 @@ use iced::{
 };
 use std::any::Any;
 
-pub struct SpectrumView {
-    config: config::Spectrum,
+use super::service::AudioVisualizerService;
+
+pub struct AudioVisualizerView {
+    config: config::AudioVisualizer,
     pub position: BarPosition,
 }
 
-impl SpectrumView {
-    pub fn new(config: config::Spectrum, position: BarPosition) -> Self {
+impl AudioVisualizerView {
+    pub fn new(config: config::AudioVisualizer, position: BarPosition) -> Self {
         Self { config, position }
     }
 }
 
 #[profiling::all_functions]
-impl ViewTrait<Modules> for SpectrumView {
+impl ViewTrait<Modules> for AudioVisualizerView {
     fn view<'a>(
         &'a self,
         modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a> {
-        let audio = &modules.spectrum;
+        let audio = &modules.audio_visualizer;
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
-            Canvas::new(SpectrumCanvas::new(audio, &self.config, vertical))
+            Canvas::new(AudioVisualizerCanvas::new(audio, &self.config, vertical))
                 .width(Length::Fill)
                 .height(130)
         } else {
-            Canvas::new(SpectrumCanvas::new(audio, &self.config, vertical))
+            Canvas::new(AudioVisualizerCanvas::new(audio, &self.config, vertical))
                 .width(130)
                 .height(Length::Fill)
         };
@@ -57,17 +56,17 @@ impl ViewTrait<Modules> for SpectrumView {
     }
 }
 
-struct SpectrumCanvas<'a> {
-    service: &'a SpectrumService,
-    config: &'a config::Spectrum,
+struct AudioVisualizerCanvas<'a> {
+    service: &'a AudioVisualizerService,
+    config: &'a config::AudioVisualizer,
     cache: canvas::Cache,
     vertical: bool,
 }
 
-impl<'a> SpectrumCanvas<'a> {
+impl<'a> AudioVisualizerCanvas<'a> {
     pub fn new(
-        service: &'a SpectrumService,
-        config: &'a config::Spectrum,
+        service: &'a AudioVisualizerService,
+        config: &'a config::AudioVisualizer,
         vertical: bool,
     ) -> Self {
         Self {
@@ -80,7 +79,7 @@ impl<'a> SpectrumCanvas<'a> {
 }
 
 #[profiling::all_functions]
-impl<Message> canvas::Program<Message> for SpectrumCanvas<'_> {
+impl<Message> canvas::Program<Message> for AudioVisualizerCanvas<'_> {
     type State = ();
 
     fn draw(

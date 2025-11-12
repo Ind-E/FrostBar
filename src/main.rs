@@ -233,7 +233,7 @@ impl Bar {
 
         subscriptions.push(SystemTrayService::subscription());
 
-        subscriptions.push(self.modules.spectrum.subscription());
+        subscriptions.push(self.modules.audio_visualizer.subscription());
 
         Subscription::batch(subscriptions)
     }
@@ -256,6 +256,15 @@ impl Bar {
 
                     let close_task = iced::window::close(self.dummy_id);
                     return Task::batch([open_task, close_task]);
+                }
+
+                if let Event::Mouse(iced::mouse::Event::ButtonPressed(_)) =
+                    event
+                    && let Some(window_id) = self.menu_window_id.take()
+                {
+                    debug!("closing menu {}", window_id);
+                    self.active_menu_id = None;
+                    return iced::window::close(window_id);
                 }
 
                 // if let Event::Window(iced::window::Event::Closed) = event {
@@ -412,7 +421,8 @@ impl Bar {
                                         Ok(current) => {
                                             player
                                                 .set_volume(
-                                                    (current + amount).max(0.0),
+                                                    (current + amount as f64)
+                                                        .max(0.0),
                                                 )
                                                 .await
                                         }
@@ -421,7 +431,9 @@ impl Bar {
                                 }
 
                                 MediaControl::SetVolume(amount) => {
-                                    player.set_volume(amount.max(0.0)).await
+                                    player
+                                        .set_volume(amount.max(0.0) as f64)
+                                        .await
                                 }
                             }
                         {
@@ -667,14 +679,7 @@ impl Bar {
         };
 
         MouseArea::new(
-            Container::new(pin)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(|_| {
-                    container::Style::default().background(Background::Color(
-                        Color::from_rgba8(255, 0, 0, 0.2),
-                    ))
-                }),
+            Container::new(pin).width(Length::Fill).height(Length::Fill),
         )
         .on_press(Message::CloseMenu(menu_id.id.clone()))
         .into()
