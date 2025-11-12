@@ -15,7 +15,7 @@ use iced::{
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::any::Any;
-use system_tray::menu::TrayMenu;
+use system_tray::menu::{MenuItem, TrayMenu};
 
 pub struct SystemTrayView {
     config: config::SystemTray,
@@ -95,7 +95,7 @@ impl ViewTrait<Modules> for SystemTrayView {
             if view.id == *id
                 && let Some(item) = tray.items.get(item_id)
             {
-                return Some(opaque(view.render_tooltip(item)));
+                return Some(opaque(view.render_menu(item)));
             }
         }
         None
@@ -251,4 +251,29 @@ impl TrayItemView {
         .shaping(Shaping::Advanced)
         .into()
     }
+
+    pub fn render_menu<'a>(
+        &self,
+        (_item, menu): &'a (TrayItem, Option<TrayMenu>),
+    ) -> Element<'a> {
+        let Some(menu) = menu else {
+            return Column::new().into();
+        };
+
+        render_menu_inner(&menu.submenus)
+    }
+}
+
+fn render_menu_inner<'a>(menu: &'a [MenuItem]) -> Element<'a> {
+    let mut col = Column::new();
+    for item in menu {
+        if let Some(label) = &item.label {
+            col = col.push(Text::new(label).shaping(Shaping::Advanced));
+        }
+        if !item.submenu.is_empty() {
+            col = col.push(render_menu_inner(&item.submenu));
+        }
+    }
+
+    col.into()
 }

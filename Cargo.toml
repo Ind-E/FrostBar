@@ -77,9 +77,11 @@ opt-level = 3
 pedantic = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }
+doc_markdown = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
 cast_sign_loss = "allow"
 cast_precision_loss = "allow"
 unreadable_literal = "allow"
 too_many_lines = "allow"
+unnecessary_wraps = "allow"

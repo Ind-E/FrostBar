@@ -28,7 +28,7 @@ start {
         format "%I\n%M"
     }
 
-    /-spectrum {
+    audio-visualizer {
         // scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
         // scroll-down "wpctl" "set-volume" "@DEFAULT_SINK@" "3%-"
     }

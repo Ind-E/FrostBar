@@ -9,6 +9,7 @@ const NOISE_REDUCTION: f32 = 0.77;
 const FRAME_RATE: f32 = 60.0;
 pub const MILLIS_PER_FRAME: u64 = (1000.0 / FRAME_RATE) as u64;
 
+#[allow(clippy::struct_field_names)]
 pub struct Fft {
     channels: usize,
     bars: usize,
@@ -91,11 +92,12 @@ impl Fft {
         let frequency_constant = (LOW_CUT_OFF as f32 / HIGH_CUT_OFF as f32)
             .log10()
             / (1.0 / (bars as f32 + 1.0) - 1.0);
-        for n in 0..=bars {
+        for (n, freq) in
+            cut_off_frequencies.iter_mut().enumerate().take(bars + 1)
+        {
             let bar_dist_coeff = -frequency_constant
                 + ((n as f32 + 1.0) / (bars as f32 + 1.0) * frequency_constant);
-            cut_off_frequencies[n] =
-                HIGH_CUT_OFF as f32 * 10.0f32.powf(bar_dist_coeff);
+            *freq = HIGH_CUT_OFF as f32 * 10.0f32.powf(bar_dist_coeff);
         }
         let mut bass_cutoff_bar = 0;
         let mut lower_cutoff_indices = vec![0; bars + 1];

@@ -4,16 +4,17 @@ FrostBar comes with a variety of modules that you can make use of. Each module
 may be added any number of times to the bar with different configurations for
 each.
 
-Here is a list of all currently avaialable modules (as of 10/2/25):
+Here is a list of all currently avaialable modules (as of 11/13/25):
 
 
 ```kdl
 battery
-spectrum
+audio-visualizer
 label
 mpris
 niri
 time
+system-tray
 ```
 
 ## Common Configuration Options
@@ -109,9 +110,9 @@ Affects the size of the battery icon.
 Affects the color of the battery while plugged in. Use `text-color` in the
 `style` section to affect the color while not plugged in.
 
-### Spectrum
+### Audio Visualizer
 ```kdl
-spectrum {
+audio-visualizer {
     spacing 0.1
     dynamic-color true
     color "#fff"
