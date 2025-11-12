@@ -80,9 +80,24 @@
         default = self.packages.${system}.frostbar;
       });
 
-      checks = lib.mapAttrs (system: pkgs: {
-        inherit (self.packages.${system}) frostbar;
-      }) pkgsFor;
+      checks = eachSystem (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        {
+          # meta-package for caching.
+          cached-package =
+            pkgs.runCommand "frostbar-cached"
+              {
+                buildInputs = [ self.packages.${system}.frostbar ];
+              }
+              ''
+                mkdir -p $out/bin
+                ln -s ${self.packages.${system}.frostbar}/bin/frostbar $out/bin/frostbar
+              '';
+        }
+      );
 
       devShells = lib.mapAttrs (system: pkgs: {
         default =

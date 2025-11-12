@@ -20,4 +20,4 @@ jobs:
         name: frostbar
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - name: Build packages and push to cachix
-      run: nix build .#frostbar
+      run: nix build .#checks.x86_64-linux.cached-package
