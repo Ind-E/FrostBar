@@ -15,4 +15,4 @@ jobs:
         with:
           name: frostbar
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix build --extra-experimental-features 'nix-command flakes' .
+      - run: nix --extra-experimental-features 'nix-command flakes' build
