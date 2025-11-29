@@ -330,6 +330,7 @@ impl NiriService {
             | Event::KeyboardLayoutSwitched { .. }
             | Event::OverviewOpenedOrClosed { .. }
             | Event::ConfigLoaded { .. }
+            | Event::WindowFocusTimestampChanged { .. }
             | Event::ScreenshotCaptured { .. } => {}
         }
         ModuleAction::None
