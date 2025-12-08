@@ -59,6 +59,7 @@ include:
 style {
     text-color "#fff"
     background "#000"
+    padding 5
     border {
         color "#fff"
         width 0.5
@@ -75,6 +76,9 @@ Affects the color of text inside the widget.
 
 #### background
 Affects the background color of the widget.
+
+#### padding
+Inner margin for items inside the container
 
 #### border
 Affects the border around the widget.
@@ -150,10 +154,11 @@ Text that appears in a tooltip when hovering over the label.
 
 ### Mpris
 The mpris module does not support the generic `style` or mouse binds settings.
-If there is music playing, the album art will be displayed. If there is an audio
-player where no album art is able to be retrieved (for example on Netflix), the
-placeholder will be shown instead. `placeholder-style` has the same options as
-the [Container Style](#container-style) section.
+
+If an mpris compatible player is detected, its album art will be displayed. If
+no album art is availabl,  the placeholder will be shown instead.
+`placeholder-style` has the same options as the [Container
+Style](#container-style) section.
 
 If multiple players are active at the same time, one album art will be shown for
 each. Mouse binds can be specified to interact with individual players. Possible
@@ -162,6 +167,7 @@ actions for mouse binds include:
 ```kdl
 "play"
 "pause"
+// if currently playing, pause. If currently paused, play
 "play-pause"
 "next"
 "previous"
@@ -179,7 +185,6 @@ mpris {
     mouse-right "next"
     mouse-middle "stop"
 
-
     placeholder "󰝚"
     placeholder-style {
         border {
@@ -195,10 +200,23 @@ mpris {
 
 ### Niri
 
+Displays information about windows and workspaces.
+
 ```kdl
 niri {
     spacing 10
     workspace-offset -1
+    workspace-active-style {
+        text-color "#fff"
+        border {
+            color "#fff"
+            width 3.0
+            radius 0.0
+        }
+    }
+    workspace-hovered-style {
+        background "#aaa4"
+    }
 }
 ```
 
@@ -207,7 +225,26 @@ Spacing between workspaces.
 
 #### workspace-offset
 Offset to apply to the index of each workspace. I use this with niri's
-`empty-workspace-above-first` option to start labeling workspaces at 0.
+`empty-workspace-above-first` option to start labeling workspaces at 0 instead of 1.
+
+#### styles
+There are 4 different styles for different parts of the niri widget:
+`window-focused-style`, `window-style`, `workspace-active-style`,
+`workspace-hovered-style`, and `workspace-style`. All niri styles have the same
+options as the [Container Style](#container-style) section.
+
+Niri styles are merged according to their priority. FrostBar will use specific
+styling components from higher styles first, and fallback to lower ones if they
+are unset, eventually falling back to the default style.
+
+Niri styles have the following priority:
+
+- `workspace-hovered-style`
+- `workspace-active-style`
+- `workspace-style`
+- `window-focused-style`
+- `window-style`
+
 
 ### Time
 ```kdl

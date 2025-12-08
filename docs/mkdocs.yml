@@ -13,6 +13,7 @@ theme:
     - search.suggest
     - content.code.copy
     - content.action.edit
+    - content.footnote.tooltips
   palette:
     - media: "(prefers-color-scheme)"
       primary: custom
@@ -41,6 +42,7 @@ markdown_extensions:
   - pymdownx.snippets
   - pymdownx.superfences
   - pymdownx.magiclink
+  - footnotes
   - toc:
       permalink: '#'
 

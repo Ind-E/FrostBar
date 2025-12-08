@@ -35,27 +35,40 @@ ignored.
 
 #### Colors
 
-Colors can be specified as either:
-
-- Hex literals in the form of `#rrggbb`, `#rrggbbaa`, `#rgb`, or `#rgba`.
-
-- Component values as space-separated numbers (`R G B` or `R G B A`, with alpha
-defaulting to 1.0).
+Colors can be specified as hex literals in the form of `#rrggbb`, `#rrggbbaa`,
+`#rgb`, or `#rgba` and are case-insensitive.
 
 Example:
 
 ```kdl
-// As a hex literal
 background "#73F5AB"
-
-// As RGB with alpha
-background 115 244 170 1.0
-
-// As RGB only (alpha defaults to 1.0)
-background 115 244 170
 ```
 
-## Planned Features
-- change bar position (left, top, right, bottom)
-- specify config file with cli argument
-- change colors/styles of each module
+#### Colors File
+
+In addition to specifying hex codes directly in the main config file, there is
+also the option to source colors from a separate file, located at `colors.kdl`
+in the same directory as the main `config.kdl` file. This could be useful to
+change colors dynamically based on your wallpaper, for example.
+
+The format of this file is a list of color names and hex codes.
+
+Example:
+
+```kdl
+color1 "f00"
+color2 "858585"
+```
+
+Then, in the min `config.kdl` file, you can use one of the defined color names
+prefixed with a `$` instead of a hex code.
+
+Example:
+
+```kdl
+background: "$color1"
+```
+
+If a color name cannot be found in the `colors.kdl` file, it will default to red.
+
+The ability to specift a config file with a command line argument is planned.
