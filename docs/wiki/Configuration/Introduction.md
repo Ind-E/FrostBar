@@ -13,11 +13,11 @@ will be sent.
 
 ### Syntax
 
-The config is written in [KDL](https://kdl.dev).
+The config is written in [KDL v1](https://kdl.dev/spec-v1/) (pronounced "cuddle").
 
 (Neo)Vim and Helix come with KDL syntax highlighting by default.
-VSCode users can install the [KDL
-Extension](https://marketplace.visualstudio.com/items?itemName=kdl-org.kdl).
+VSCode users can install the [KDL v1
+Extension](https://marketplace.visualstudio.com/items?itemName=kdl-org.kdl-v1).
 
 #### Comments
 
@@ -56,8 +56,8 @@ The format of this file is a list of color names and hex codes.
 Example:
 
 ```kdl
-color1 "f00"
-color2 "858585"
+color1 "#f00"
+color2 "#858585"
 ```
 
 Then, in the min `config.kdl` file, you can use one of the defined color names
