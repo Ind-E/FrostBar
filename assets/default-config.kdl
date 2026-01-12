@@ -38,6 +38,8 @@ start {
         mouse-left "play-pause"
         mouse-right "next"
         mouse-middle "stop"
+        scroll-up "volume" 0.05
+        scroll-down "volume" -0.05
     }
 
 }
@@ -62,6 +64,6 @@ middle {
 }
 
 end {
-
+    system-tray
 }
 
