@@ -1,9 +1,9 @@
 [project]
-name = "frostbar"
+name = "frostbar_docs"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "mkdocs-material>=9.6.20",
+    "zensical>=0.0.15",
     "pygments",
 ]
 
