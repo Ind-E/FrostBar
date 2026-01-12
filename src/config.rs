@@ -20,7 +20,7 @@ use std::{
 };
 use tracing::{debug, error, info};
 
-const DEFAULT_CONFIG: &[u8; 972] =
+const DEFAULT_CONFIG: &[u8; 1054] =
     include_bytes!("../assets/default-config.kdl");
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
