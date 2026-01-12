@@ -174,6 +174,9 @@ actions for mouse binds include:
 "stop"
 // in milliseconds. Can be negative
 "seek" 100
+// decrease volume by 5%
+"volume" -0.05
+"set-volume" 0
 ```
 
 Here is an example config:
