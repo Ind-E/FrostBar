@@ -70,8 +70,11 @@ tracy-ondemand = [
 ]
 tracy-allocations = ["tracy"]
 
-[profile.dev]
+[profile.dev.package."*"]
 opt-level = 3
+
+[profile.dev]
+overflow-checks = false
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
