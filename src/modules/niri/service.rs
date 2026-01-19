@@ -135,7 +135,7 @@ impl NiriService {
 
             tokio::spawn(async move {
                 if let Err(e) = yield_tx.send(NiriEvent::Ready(request_tx)) {
-                    error!(target: "niri", "{e}");
+                    error!("niri: {e}");
                 }
                 loop {
                     futures::select! {
@@ -146,10 +146,10 @@ impl NiriService {
                                 ));
 
                                 if let Err(e) = send_result {
-                                    error!(target: "niri", "{e}");
+                                    error!( "niri: {e}");
                                 }
                             } else {
-                                error!(target: "niri", "failed to receive event");
+                                error!("failed to receive niri event");
                                 break;
                             }
                         },
@@ -157,10 +157,10 @@ impl NiriService {
                         request = request_rx.recv().fuse() => {
                             if let Some(request) = request {
                                 if let Err(e) = socket.send(request) {
-                                    error!(target: "niri", "failed to send request to niri socket: {e}");
+                                    error!("failed to send request to niri socket: {e}");
                                 }
                             } else {
-                                error!(target: "niri", "failed to receive request");
+                                error!("failed to receive niri request");
                                 break;
                             }
                         },
@@ -185,7 +185,7 @@ impl NiriService {
             NiriEvent::Event(event) => self.handle_ipc_event(event),
             NiriEvent::Action(action) => {
                 let Some(sender) = &self.sender else {
-                    error!(target: "niri", "Niri action triggered before sender was ready.");
+                    error!("niri action triggered before sender was ready.");
                     return ModuleAction::None;
                 };
                 let request = Request::Action(action);
@@ -195,7 +195,7 @@ impl NiriService {
                         async move { sender.try_send(request) },
                         |result| {
                             if let Err(e) = result {
-                                error!(target: "niri", "{e}");
+                                error!("niri: {e}");
                             }
                             modules::ModuleMsg::NoOp
                         },
@@ -211,7 +211,7 @@ impl NiriService {
         let event = match event {
             Ok(event) => event,
             Err(e) => {
-                error!(target: "niri", "{e}");
+                error!("niri: {e}");
                 return ModuleAction::None;
             }
         };
@@ -341,7 +341,7 @@ fn run_event_listener(tx: &mpsc::UnboundedSender<io::Result<Event>>) {
     let mut sock = match Socket::connect() {
         Ok(s) => s,
         Err(e) => {
-            return error!(target: "niri", "Failed to connect to socket: {e}");
+            return error!("niri: failed to connect to socket: {e}");
         }
     };
 
@@ -349,14 +349,14 @@ fn run_event_listener(tx: &mpsc::UnboundedSender<io::Result<Event>>) {
         Ok(sent) => match sent {
             Ok(niri_ipc::Response::Handled) => {}
             Ok(other) => {
-                return error!(target: "niri", "Niri responded unexpectedly {other:?}");
+                return error!("niri responded unexpectedly {other:?}");
             }
             Err(e) => {
-                return error!(target: "niri", "Niri handshake failed: {e}");
+                return error!("niri handshake failed: {e}");
             }
         },
         Err(e) => {
-            return error!(target: "niri", "Failed to send {e}");
+            return error!("niri: failed to send {e}");
         }
     }
 
@@ -364,7 +364,7 @@ fn run_event_listener(tx: &mpsc::UnboundedSender<io::Result<Event>>) {
 
     loop {
         if let Err(e) = tx.send(read_event()) {
-            return error!(target: "niri", "{e}");
+            return error!("niri: {e}");
         }
     }
 }

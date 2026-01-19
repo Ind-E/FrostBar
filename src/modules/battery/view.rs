@@ -106,7 +106,7 @@ impl BatteryView {
 fn get_battery_icon(percentage: f32) -> &'static str {
     match percentage {
         p if !(0.0..=1.0).contains(&p) => {
-            warn!(target: "battery", "Battery percentage {} is out of range [0.0, 1.0]", p);
+            warn!("Battery percentage {} is out of range [0.0, 1.0]", p);
             "?"
         }
         p if p < 0.1 => "󰁺",

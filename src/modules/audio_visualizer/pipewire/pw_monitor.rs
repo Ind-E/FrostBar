@@ -133,7 +133,7 @@ pub fn run() {
         .name("frostbar-pw-monitor".into())
         .spawn(|| {
             if let Err(err) = run_monitor_source() {
-                error!(target: "pw_monitor", "stopped: {err}");
+                error!("pw monitor: stopped: {err}");
             }
         }) {
         Ok(handle) => {
@@ -142,7 +142,7 @@ pub fn run() {
             }
         }
         Err(err) => {
-            error!(target: "pw_monitor", "failed to start PipeWire thread: {err}");
+            error!("pw monitor: failed to start PipeWire thread: {err}");
         }
     }
 }
@@ -182,14 +182,12 @@ impl MonitorState {
             self.frame_bytes = self.channels as usize * sample_bytes;
         } else {
             warn!(
-                target: "pw_monitor",
-                "unsupported audio format {:?}; falling back to recorded frame size",
+                "pw monitor: unsupported audio format {:?}; falling back to recorded frame size",
                 self.format
             );
         }
         info!(
-            target: "pw_monitor",
-            "negotiated format: {:?}, rate {} Hz, channels {}",
+            "pw monitor: negotiated format: {:?}, rate {} Hz, channels {}",
             info.format(),
             self.sample_rate,
             self.channels
@@ -228,7 +226,7 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
     let _listener = stream
         .add_local_listener_with_user_data(audio_state)
         .state_changed(|_, _, previous, current| {
-            info!(target: "pw_monitor", "state {previous:?} -> {current:?}");
+            info!("pw monitor: state {previous:?} -> {current:?}");
         })
         .param_changed(|_, state, id, param| {
             if id != spa::param::ParamType::Format.as_raw() {
@@ -244,7 +242,7 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
         })
         .process(move |stream, state| {
             let Some(mut buffer) = stream.dequeue_buffer() else {
-                warn!(target: "pw_monitor", "no buffer available to dequeue");
+                warn!("pw monitor: no buffer available to dequeue");
                 return;
             };
 
@@ -298,9 +296,9 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
         &mut params,
     )?;
 
-    info!(target: "pw_monitor", "PipeWire monitor active");
+    info!("pw monitor: PipeWire monitor active");
     mainloop.run();
-    info!(target: "pw_monitor", "main loop exited");
+    info!("pw monitor: main loop exited");
 
     Ok(())
 }

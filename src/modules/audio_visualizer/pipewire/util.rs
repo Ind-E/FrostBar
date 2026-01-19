@@ -35,8 +35,7 @@ pub fn convert_samples_to_f32(
     let sample_bytes = bytes_per_sample(format)?;
     if !bytes.len().is_multiple_of(sample_bytes) {
         warn!(
-            target: "pw_monitor",
-            "buffer length {} is not aligned to {:?}",
+            "pw monitor: buffer length {} is not aligned to {:?}",
             bytes.len(),
             format
         );
