@@ -99,8 +99,8 @@ pub fn main() -> iced::Result {
 
             let logfile_path = init_tracing(&config_dir, &handle);
 
-            info!(target: "frostbar", "starting version {}", env!("CARGO_PKG_VERSION"));
-            info!(target: "frostbar", "saving logs to {:?}", logfile_path);
+            info!("starting version {}", env!("CARGO_PKG_VERSION"));
+            info!("saving logs to {:?}", logfile_path);
 
             Bar::new(config, color_vars, config_path)
         },
@@ -453,26 +453,25 @@ impl Bar {
 
                     match command.output().await {
                         Ok(output) => {
-                            info!(target: "child_process", "spawned `{cmd}`");
+                            info!("spawned `{cmd}`");
 
                             if !output.stdout.is_empty() {
-                                info!(target: "child_process",
-                                    "{}",
+                                info!(
+                                    "{cmd}: {}",
                                     String::from_utf8_lossy(&output.stdout)
                                 );
                             }
 
                             if !output.stderr.is_empty() {
                                 error!(
-                                    target: "child_process",
-                                    "{cmd}: {}",
+                                    "child process {cmd}: {}",
                                     String::from_utf8_lossy(&output.stderr)
                                 );
                             }
                         }
 
                         Err(e) => {
-                            error!(target: "child_process", "failed to spawn `{cmd}`: {e}");
+                            error!("failed to spawn `{cmd}`: {e}");
                         }
                     }
 
@@ -735,7 +734,7 @@ impl Bar {
                 }
             }
             Err(e) => {
-                error!(target: "config", "{:?}", e);
+                error!("{:?}", e);
                 notification("Failed to parse config file");
             }
         }

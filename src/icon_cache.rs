@@ -99,7 +99,6 @@ fn load_icon_from_path(path: &Path) -> Option<Icon> {
         }
         _ => {
             warn!(
-                target: "icon",
                 "Unrecognized or missing icon extension at path: {}",
                 path.display()
             );

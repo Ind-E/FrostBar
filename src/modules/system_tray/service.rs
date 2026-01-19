@@ -91,7 +91,7 @@ impl SystemTrayService {
 
             tokio::spawn(async move {
                 let Ok(client) = Client::new().await else {
-                    error!(target: "system_tray", "failed to create client");
+                    error!("system tray: failed to create client");
                     return;
                 };
                 let mut tray_rx = client.subscribe();
@@ -102,12 +102,12 @@ impl SystemTrayService {
                     )))
                     .await
                 {
-                    error!(target: "system_tray", "{e}");
+                    error!("system tray: {e}");
                 }
 
                 while let Ok(event) = tray_rx.recv().await {
                     if let Err(e) = yield_tx.send(Event::Event(event)).await {
-                        error!(target: "system_tray", "{e}");
+                        error!("system tray: {e}");
                     }
                 }
             });
@@ -190,7 +190,7 @@ impl SystemTrayService {
 
     pub fn activate_menu(&mut self, address: String) -> Option<Task<Message>> {
         if let Some(client) = self.client.clone() {
-            debug!(target: "system_tray", "activating {address}");
+            debug!("system tray: activating {address}");
             Some(Task::perform(
                 async move {
                     if let Err(e) = client
@@ -201,7 +201,7 @@ impl SystemTrayService {
                         })
                         .await
                     {
-                        error!(target: "system_tray", "{e}");
+                        error!("system tray: {e}");
                     }
                 },
                 |()| Message::NoOp,

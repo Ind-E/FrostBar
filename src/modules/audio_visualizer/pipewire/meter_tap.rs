@@ -83,8 +83,7 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
             let dropped = buffer.dropped_frames();
             if dropped > drop_baseline {
                 warn!(
-                    target: "pw_meter-tap",
-                    " dropped {} capture frames (total {})",
+                    "pw meter-tap: dropped {} capture frames (total {})",
                     dropped - drop_baseline,
                     dropped
                 );
@@ -122,8 +121,7 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
             }
             Err(()) => {
                 error!(
-                    target: "pw_meter-tap",
-                    "capture buffer unavailable; stopping tap"
+                    "pw meter-tap: capture buffer unavailable; stopping tap"
                 );
                 break;
             }
@@ -138,8 +136,7 @@ fn forward_loop(sender: AsyncSender<Vec<f32>>, buffer: Arc<CaptureBuffer>) {
     let dropped = buffer.dropped_frames();
 
     info!(
-        target: "pw_meter-tap",
-        "audio channel closed; {} dropped capture frames",
+        "pw meter-tap: audio channel closed; {} dropped capture frames",
         dropped
     );
 }

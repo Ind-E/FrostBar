@@ -1337,7 +1337,7 @@ impl ColorVars {
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knus::parse::<ColorVars>(filename, text) {
             Ok(colors) => {
-                debug!(target: "config", "Successfully parsed colors");
+                debug!("Successfully parsed colors");
                 Ok(colors)
             }
             Err(e) => Err(miette::Report::new(e)),
@@ -1365,7 +1365,7 @@ impl RawConfig {
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knus::parse::<RawConfig>(filename, text) {
             Ok(config) => {
-                info!(target: "config", "Successfully parsed config");
+                info!("Successfully parsed config");
                 Ok(config)
             }
             Err(e) => Err(miette::Report::new(e)),
@@ -1429,12 +1429,9 @@ impl RawConfig {
                     let _ = Notification::new()
                         .summary(BAR_NAMESPACE)
                         .body("Failed to parse colors file")
-                        .show()
-                    {
-                        error!(target: "config", "{e}");
-                    }
-                    error!(target: "config", "Failed to parse colors file ");
-                    error!(target: "config", "{e:?}");
+                        .show();
+                    error!("Failed to parse colors file ");
+                    error!("{e:?}");
                     ColorVars::default()
                 }
                 Ok(colors) => colors,
@@ -1452,10 +1449,10 @@ impl RawConfig {
                         )
                         .show()
                     {
-                        error!(target: "config", "{e}");
+                        error!("config: {e}");
                     }
-                    error!(target: "config", "Failed to parse config file, using default config");
-                    error!(target: "config", "{e:?}");
+                    error!("Failed to parse config file, using default config");
+                    error!("{e:?}");
                     RawConfig::default()
                 }
                 Ok(config) => config,
@@ -1486,7 +1483,6 @@ impl ConfigColor {
             ConfigColor::Variable(name) => {
                 colors.get(name).unwrap_or_else(|| {
                     error!(
-                        target: "config",
                         "Color variable '{}' not found, using red as default",
                         name
                     );
@@ -1501,7 +1497,6 @@ impl ConfigColor {
             ConfigColor::Literal(c) => *c,
             ConfigColor::Variable(name) => {
                 error!(
-                    target: "config",
                     "Color variable '{}' not found, using red as default",
                     name
                 );

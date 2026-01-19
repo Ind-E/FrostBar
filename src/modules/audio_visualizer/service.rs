@@ -6,6 +6,7 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     futures::{self, StreamExt as _},
 };
+use tracing::debug;
 use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
 
 use super::fft::{Fft, MILLIS_PER_FRAME};
@@ -91,6 +92,7 @@ impl AudioVisualizerService {
     }
 
     pub fn update_gradient(&mut self, gradient: Option<Vec<Color>>) {
+        debug!("updating audio gradient");
         self.gradient = gradient;
     }
 }

@@ -41,7 +41,7 @@ impl MprisService {
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {
-                    error!(target: "mpris", "mpris stream error: {e}");
+                    error!("mpris stream error: {e}");
                     return;
                 }
             };
@@ -61,7 +61,7 @@ impl MprisService {
                     let name1 = name.clone();
                     if name.starts_with(MPRIS_PREFIX) {
                         if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
-                            error!(target: "mpris", "{e}");
+                            error!("mpris: {e}");
                         }
 
                         if let Ok(stream) = create_player_stream(&connection, name).await {
@@ -82,7 +82,7 @@ impl MprisService {
                         {
                             if !new.is_empty() && old.is_empty() {
                                 if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
-                                    error!(target: "mpris", "{e}");
+                                    error!( "mpris: {e}");
                                 }
 
                                 let name1 = name.clone();
@@ -91,7 +91,7 @@ impl MprisService {
                                 }
                             } else if new.is_empty() && !old.is_empty()
                                 && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { name }) {
-                                    error!(target: "mpris", "{e}");
+                                    error!( "mpris: {e}");
                                 }
                         }
                     },
@@ -103,7 +103,7 @@ impl MprisService {
                                     player_streams.remove(&pname);
                                 }
                             if let Err(e) = yield_tx.send(event) {
-                                error!(target: "mpris", "{e}");
+                                error!("mpris: {e}");
                             }
                         }
                     }
@@ -131,14 +131,14 @@ impl MprisService {
                 return action;
             }
             MprisEvent::PlayerVanished { name } => {
-                debug!(target: "mpris", "player vanished: {name}");
+                debug!("mpris player vanished: {name}");
                 self.players.remove(&name);
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
                 status,
             } => {
-                debug!(target: "mpris", "{player_name} status changed: {status}");
+                debug!("{player_name} status changed: {status}");
                 if let Some(player) = self.players.get_mut(&player_name) {
                     if status == "Playing" {
                         player.status = status;
@@ -268,7 +268,7 @@ impl MprisPlayer {
                 match base64::engine::general_purpose::STANDARD.decode(url) {
                     Ok(bytes) => bytes,
                     Err(e) => {
-                        error!(target: "mpris", "base64 decode error: {e}");
+                        error!("base64 decode error: {e}");
                         return PlayerArt::None;
                     }
                 };
@@ -292,7 +292,7 @@ impl MprisPlayer {
                     let response = match reqwest::get(&art_url).await {
                         Ok(res) => res,
                         Err(e) => {
-                            error!(target: "mpris", "Failed to fetch album art: {e}");
+                            error!("Failed to fetch album art: {e}");
                             return None;
                         }
                     };
@@ -300,7 +300,6 @@ impl MprisPlayer {
                         Ok(bytes) => bytes,
                         Err(e) => {
                             error!(
-                                target: "mpris",
                                 "Failed to get bytes of album art from {art_url}: {e}"
                             );
                             return None;
