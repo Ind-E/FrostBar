@@ -85,7 +85,8 @@ impl Modules {
                     self.views.push(Box::new(BatteryView::new(c, position)));
                 }
                 ConfigModule::AudioVisualizer(c) => {
-                    self.views.push(Box::new(AudioVisualizerView::new(c, position)));
+                    self.views
+                        .push(Box::new(AudioVisualizerView::new(c, position)));
                 }
                 ConfigModule::Time(c) => {
                     self.views.push(Box::new(TimeView::new(c, position)));
@@ -172,7 +173,13 @@ impl Modules {
                 {
                     player.art = Some(art);
                     player.colors.clone_from(&gradient);
-                    self.audio_visualizer.update_gradient(gradient);
+                    if player.status == "Playing" {
+                        let captured_colors = gradient;
+                        return ModuleAction::Task(iced::Task::perform(
+                            async move { captured_colors },
+                            ModuleMsg::AudioVisualizerGradientUpdate,
+                        ));
+                    }
                 }
             }
             ModuleMsg::Systray(event) => {
