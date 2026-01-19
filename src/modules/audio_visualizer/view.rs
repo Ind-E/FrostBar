@@ -32,13 +32,21 @@ impl ViewTrait<Modules> for AudioVisualizerView {
         let audio = &modules.audio_visualizer;
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
-            Canvas::new(AudioVisualizerCanvas::new(audio, &self.config, vertical))
-                .width(Length::Fill)
-                .height(130)
+            Canvas::new(AudioVisualizerCanvas::new(
+                audio,
+                &self.config,
+                vertical,
+            ))
+            .width(Length::Fill)
+            .height(130)
         } else {
-            Canvas::new(AudioVisualizerCanvas::new(audio, &self.config, vertical))
-                .width(130)
-                .height(Length::Fill)
+            Canvas::new(AudioVisualizerCanvas::new(
+                audio,
+                &self.config,
+                vertical,
+            ))
+            .width(130)
+            .height(Length::Fill)
         };
 
         let container =

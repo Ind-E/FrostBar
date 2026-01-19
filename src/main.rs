@@ -421,8 +421,9 @@ impl Bar {
                                         Ok(current) => {
                                             player
                                                 .set_volume(
-                                                    (current + amount as f64)
-                                                        .max(0.0),
+                                                    (current
+                                                        + f64::from(amount))
+                                                    .max(0.0),
                                                 )
                                                 .await
                                         }
@@ -432,7 +433,7 @@ impl Bar {
 
                                 MediaControl::SetVolume(amount) => {
                                     player
-                                        .set_volume(amount.max(0.0) as f64)
+                                        .set_volume(f64::from(amount.max(0.0)))
                                         .await
                                 }
                             }

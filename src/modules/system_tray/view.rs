@@ -264,7 +264,7 @@ impl TrayItemView {
     }
 }
 
-fn render_menu_inner<'a>(menu: &'a [MenuItem]) -> Element<'a> {
+fn render_menu_inner(menu: &[MenuItem]) -> Element<'_> {
     let mut col = Column::new();
     for item in menu {
         if let Some(label) = &item.label {
