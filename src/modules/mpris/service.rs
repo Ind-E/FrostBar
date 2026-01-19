@@ -125,6 +125,7 @@ impl MprisService {
                 status,
                 metadata,
             } => {
+                debug!("mpris player appeared: {name}");
                 let mut player = MprisPlayer::new(name.clone(), status);
                 let action = player.update_metadata(&metadata);
                 self.players.insert(name, player);
@@ -133,6 +134,20 @@ impl MprisService {
             MprisEvent::PlayerVanished { name } => {
                 debug!("mpris player vanished: {name}");
                 self.players.remove(&name);
+                let players_with_colors = self
+                    .players
+                    .iter()
+                    .filter(|(_, p)| {
+                        p.colors.is_some() && p.status == "Playing"
+                    })
+                    .collect::<Vec<_>>();
+                if let Some((_, player)) = players_with_colors.first() {
+                    let colors = player.colors.clone();
+                    return ModuleAction::Task(iced::Task::perform(
+                        async move { colors },
+                        modules::ModuleMsg::AudioVisualizerGradientUpdate,
+                    ));
+                }
             }
             MprisEvent::PlaybackStatusChanged {
                 player_name,
@@ -173,6 +188,7 @@ impl MprisService {
                 player_name,
                 metadata,
             } => {
+                debug!("{player_name} metadata changed: {metadata:?}");
                 if let Some(player) = self.players.get_mut(&player_name) {
                     return player.update_metadata(&metadata);
                 }
