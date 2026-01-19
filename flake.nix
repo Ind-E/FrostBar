@@ -1,8 +1,7 @@
 {
-  description = "FrostBar";
-
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    systems.url = "github:nix-systems/default";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -11,154 +10,130 @@
 
   outputs =
     {
-      self,
       nixpkgs,
+      systems,
       rust-overlay,
       ...
     }:
     let
-      inherit (nixpkgs) lib;
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
-      eachSystem = lib.genAttrs systems;
+      frostbar-package =
+        {
+          pkgs,
+          lib,
+          rustPlatform,
+          makeWrapper,
+        }:
+        rustPlatform.buildRustPackage {
+          pname = "frostbar";
+          inherit ((fromTOML (builtins.readFile ./Cargo.toml)).package) version;
 
-      rustToolchain = pkgs: pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          strictDeps = true;
 
-      packageNativeBuildInputs =
-        pkgs: with pkgs; [
-          lld
-          pkg-config
-          rustPlatform.bindgenHook
-        ];
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./src
+              ./Cargo.toml
+              ./Cargo.lock
+              ./assets
+            ];
+          };
 
-      packageBuildInputs =
-        pkgs: with pkgs; [
-          openssl
-          alsa-lib
-          pipewire
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXi
-          xorg.libXrandr
-          vulkan-loader
-          libxkbcommon
-          fontconfig
-          wayland
-          rust-jemalloc-sys
-          expat
-          freetype
-          freetype.dev
-          libGL
-        ];
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+            allowBuiltinFetchGit = true;
+          };
 
-      devOnlyInputs =
-        pkgs: with pkgs; [
-          lldb
-          python313Packages.mkdocs-material
-          # for tracy
-          stdenv.cc.cc
-        ];
-
-      pkgsFor = eachSystem (
-        system:
-        import nixpkgs {
-          localSystem.system = system;
-          overlays = [
-            (import rust-overlay)
-            self.overlays.frostbar
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            rustPlatform.bindgenHook
+            makeWrapper
           ];
-        }
-      );
+
+          buildInputs = with pkgs; [
+            openssl
+            pipewire
+          ];
+
+          postInstall = ''
+            wrapProgram $out/bin/frostbar \
+            --set LD_LIBRARY_PATH ${lib.makeLibraryPath (dlopenLibraries pkgs)}
+          '';
+
+          env.RUSTFLAGS = RUSTFLAGS pkgs;
+
+        };
+
+      inherit (nixpkgs) lib;
+
+      dlopenLibraries =
+        pkgs: with pkgs; [
+          libxkbcommon
+          vulkan-loader
+          wayland
+        ];
+
+      RUSTFLAGS = pkgs: "-C link-arg=-Wl,-rpath,${lib.makeLibraryPath (dlopenLibraries pkgs)}";
+
+      eachSystem = lib.genAttrs (import systems);
+      pkgsFor = nixpkgs.legacyPackages;
     in
     {
-      packages = eachSystem (system: {
-        inherit (pkgsFor.${system}) frostbar;
-        default = self.packages.${system}.frostbar;
-      });
-
-      checks = eachSystem (
+      devShells = eachSystem (
         system:
         let
           pkgs = pkgsFor.${system};
+          rust-bin = rust-overlay.lib.mkRustBin { } pkgs;
         in
         {
-          # meta-package for caching.
-          cached-package =
-            pkgs.runCommand "frostbar-cached"
-              {
-                buildInputs = [ self.packages.${system}.frostbar ];
-              }
-              ''
-                mkdir -p $out/bin
-                ln -s ${self.packages.${system}.frostbar}/bin/frostbar $out/bin/frostbar
-              '';
+          default = pkgs.mkShell {
+            nativeBuildInputs = with pkgs; [
+              (rust-bin.stable.latest.default.override {
+                extensions = [
+                  "rust-src"
+                  "rust-analyzer"
+                ];
+              })
+
+              pkg-config
+              rustPlatform.bindgenHook
+            ];
+
+            buildInputs = with pkgs; [
+              openssl
+              pipewire
+            ];
+
+            env.RUSTFLAGS = RUSTFLAGS pkgs;
+          };
         }
       );
 
-      devShells = lib.mapAttrs (system: pkgs: {
-        default =
-          let
-            commonRustFlagsEnv = "-C link-arg=-fuse-ld=lld -C target-cpu=native --cfg tokio_unstable -Zthreads=8";
-            platformRustFlagsEnv = lib.optionalString pkgs.stdenv.isLinux "-Clink-arg=-Wl,--no-rosegment -Clink-arg=-lwayland-client";
-          in
-          pkgs.mkShell rec {
-            name = "frostbar";
-            nativeBuildInputs = [
-              (rustToolchain pkgs)
-            ]
-            ++ (packageNativeBuildInputs pkgs)
-            ++ (devOnlyInputs pkgs);
-            buildInputs = packageBuildInputs pkgs;
+      packages = eachSystem (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+          frostbar = pkgs.callPackage frostbar-package { };
+        in
+        {
+          inherit frostbar;
+          default = frostbar;
 
-            shellHook = ''
-              export RUST_BACKTRACE="1"
-              export RUSTFLAGS="''${RUSTFLAGS:-""} ${commonRustFlagsEnv} ${platformRustFlagsEnv}"
-            '';
+          frostbar-debug = frostbar.overrideAttrs (
+            final: prev: {
+              pname = prev.pname + "-debug";
 
-            LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
-            RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
-          };
-      }) pkgsFor;
+              cargoBuildType = "debug";
+              cargoCheckType = final.cargoBuildType;
 
-      overlays = {
-        frostbar = final: prev: {
-          frostbar =
-            let
-              toolchain = rustToolchain final;
-              rustPlatform = final.makeRustPlatform {
-                cargo = toolchain;
-                rustc = toolchain;
-              };
-            in
-            rustPlatform.buildRustPackage rec {
-              pname = with builtins; (fromTOML (readFile ./Cargo.toml)).package.name;
-              version = with builtins; (fromTOML (readFile ./Cargo.toml)).package.version;
-              src = self;
-              cargoLock = {
-                allowBuiltinFetchGit = true;
-                lockFile = ./Cargo.lock;
-              };
+              dontStrip = true;
+            }
+          );
+        }
+      );
 
-              cargoBuildFlags = [ "-Zunstable-options" ];
-
-              nativeBuildInputs = packageNativeBuildInputs final;
-              buildInputs = packageBuildInputs final;
-
-              postFixup = ''
-                rpath=$(patchelf --print-rpath $out/bin/frostbar)
-                patchelf --set-rpath "$rpath:${lib.makeLibraryPath buildInputs}" $out/bin/frostbar
-              '';
-
-              buildType = "release";
-              strictDeps = true;
-              doCheck = false;
-            };
-        };
-        default = self.overlays.frostbar;
+      overlays.default = final: _: {
+        frostbar = final.callPackage frostbar-package { };
       };
     };
 }
