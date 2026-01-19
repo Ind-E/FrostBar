@@ -28,22 +28,20 @@ pub struct FloatOrInt<const MIN: i32, const MAX: i32>(pub f32);
 
 impl<const MIN: i32, const MAX: i32> FloatOrInt<MIN, MAX> {
     fn into_f32(self) -> f32 {
-        self.0 as f32
+        self.0
     }
 }
 
 impl<const MIN: i32, const MAX: i32> From<f32> for FloatOrInt<MIN, MAX> {
     fn from(value: f32) -> Self {
-        if value < MIN as f32 || value > MAX as f32 {
-            panic!("out of range");
-        }
+        assert!(value >= MIN as f32 && value <= MAX as f32, "out of range");
         FloatOrInt(value)
     }
 }
 
 impl<const MIN: i32, const MAX: i32> From<FloatOrInt<MIN, MAX>> for f32 {
     fn from(value: FloatOrInt<MIN, MAX>) -> Self {
-        value.0 as f32
+        value.0
     }
 }
 
@@ -88,7 +86,7 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
             knus::ast::Literal::Decimal(value) => match value.try_into() {
                 Ok(v) => {
                     if ((MIN as f32)..=(MAX as f32)).contains(&v) {
-                        Ok(FloatOrInt(v as f32))
+                        Ok(FloatOrInt(v))
                     } else {
                         ctx.emit_error(DecodeError::conversion(
                             val,
@@ -1048,14 +1046,14 @@ pub struct MouseBindsForMpris {
 impl From<RawMouseBindsForMpris> for MouseBindsForMpris {
     fn from(other: RawMouseBindsForMpris) -> Self {
         Self {
-            mouse_left: other.mouse_left.map(|x| x.into()),
-            double_click: other.double_click.map(|x| x.into()),
-            mouse_right: other.mouse_right.map(|x| x.into()),
-            mouse_middle: other.mouse_middle.map(|x| x.into()),
-            scroll_up: other.scroll_up.map(|x| x.into()),
-            scroll_down: other.scroll_down.map(|x| x.into()),
-            scroll_right: other.scroll_right.map(|x| x.into()),
-            scroll_left: other.scroll_left.map(|x| x.into()),
+            mouse_left: other.mouse_left.map(Into::into),
+            double_click: other.double_click.map(Into::into),
+            mouse_right: other.mouse_right.map(Into::into),
+            mouse_middle: other.mouse_middle.map(Into::into),
+            scroll_up: other.scroll_up.map(Into::into),
+            scroll_down: other.scroll_down.map(Into::into),
+            scroll_right: other.scroll_right.map(Into::into),
+            scroll_left: other.scroll_left.map(Into::into),
         }
     }
 }
@@ -1093,7 +1091,7 @@ impl RawContainerStyle {
                 }),
                 ..Default::default()
             },
-            padding: self.padding.map(|x| x.into()),
+            padding: self.padding.map(Into::into),
         }
     }
 }
@@ -1428,7 +1426,7 @@ impl RawConfig {
         let colors = {
             match ColorVars::load(&colors_path) {
                 Err(e) => {
-                    if let Err(e) = Notification::new()
+                    let _ = Notification::new()
                         .summary(BAR_NAMESPACE)
                         .body("Failed to parse colors file")
                         .show()
