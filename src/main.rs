@@ -607,7 +607,7 @@ impl Bar {
     }
 
     #[inline(always)]
-    fn view_tooltip(&self, tooltip_id: &TooltipId) -> Element<'_> {
+    fn view_tooltip<'a>(&'a self, tooltip_id: &'a TooltipId) -> Element<'a> {
         let content = self
             .modules
             .render_tooltip_for_id(&tooltip_id.id)
@@ -635,12 +635,18 @@ impl Bar {
             Anchor::Top | Anchor::Left => {}
         }
 
-        let pin = iced::widget::pin(container);
-        if self.config.layout.anchor.vertical() {
-            pin.y(bounds.y).into()
+        let pin = if self.config.layout.anchor.vertical() {
+            iced::widget::pin(container).y(bounds.y)
         } else {
-            pin.x(bounds.x).into()
-        }
+            iced::widget::pin(container).x(bounds.x)
+        };
+
+        MouseArea::new(
+            Container::new(pin).width(Length::Fill).height(Length::Fill),
+        )
+        .on_move(|_| Message::CloseTooltip(tooltip_id.id.clone()))
+        .on_press(Message::CloseTooltip(tooltip_id.id.clone()))
+        .into()
     }
 
     #[inline(always)]
