@@ -2,6 +2,7 @@ use crate::{
     BAR_NAMESPACE, CommandSpec, Message,
     file_watcher::ConfigPath,
     modules::{BarAlignment, BarPosition},
+    utils::log::notification,
 };
 use directories::ProjectDirs;
 use iced::{Background, Color, border, color, widget::container};
@@ -9,7 +10,7 @@ use knus::{
     Decode, DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError,
 };
 use miette::{Context, IntoDiagnostic};
-use notify_rust::Notification;
+use owo_colors::OwoColorize;
 use rustc_hash::FxHashMap;
 use std::{
     ffi::OsStr,
@@ -1415,6 +1416,32 @@ impl RawConfig {
         RawConfig::load(path)
     }
 
+    pub fn validate() {
+        let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
+            std::process::exit(1);
+        };
+
+        let config_dir = project_dir.config_dir().to_path_buf();
+
+        let colors_path = config_dir.join("colors.kdl");
+        print!("reading colors from \"{}\": ", colors_path.display());
+        match ColorVars::load(&colors_path) {
+            Err(e) => {
+                println!("\n{e:?}");
+            }
+            Ok(_) => println!("{}", "valid".green()),
+        }
+
+        let config_path = config_dir.join("config.kdl");
+        print!("reading config from \"{}\": ", config_path.display());
+        match RawConfig::load_or_create(&config_path) {
+            Err(e) => {
+                println!("\n{e:?}");
+            }
+            Ok(_) => println!("{}", "valid".green()),
+        }
+    }
+
     pub fn init() -> (Config, ColorVars, ConfigPath, PathBuf) {
         let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
             std::process::exit(1);
@@ -1426,10 +1453,9 @@ impl RawConfig {
         let colors = {
             match ColorVars::load(&colors_path) {
                 Err(e) => {
-                    let _ = Notification::new()
-                        .summary(BAR_NAMESPACE)
-                        .body("Failed to parse colors file")
-                        .show();
+                    notification(
+                        "Failed to parse colors file\nrun `frostbar validate` to see the errors",
+                    );
                     error!("Failed to parse colors file ");
                     error!("{e:?}");
                     ColorVars::default()
@@ -1442,15 +1468,9 @@ impl RawConfig {
         let raw_config = {
             match RawConfig::load_or_create(&config_path) {
                 Err(e) => {
-                    if let Err(e) = Notification::new()
-                        .summary(BAR_NAMESPACE)
-                        .body(
-                            "Failed to parse config file, using default config",
-                        )
-                        .show()
-                    {
-                        error!("config: {e}");
-                    }
+                    notification(
+                        "Failed to parse config file, using default config\nrun `frostbar validate` to see the errors",
+                    );
                     error!("Failed to parse config file, using default config");
                     error!("{e:?}");
                     RawConfig::default()

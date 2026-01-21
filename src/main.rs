@@ -1,4 +1,5 @@
 use crate::{
+    cli::{Cli, SubCommand},
     config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
@@ -14,6 +15,7 @@ use crate::{
     },
 };
 use chrono::Local;
+use clap::Parser;
 use iced::{
     Alignment, Background, Color, Event, Font, Length, Pixels, Rectangle,
     Settings, Size, Subscription, Task, Theme,
@@ -37,6 +39,7 @@ use tracing_subscriber::{
 };
 use zbus::Connection;
 
+mod cli;
 mod config;
 mod file_watcher;
 mod icon_cache;
@@ -67,6 +70,17 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 pub fn main() -> iced::Result {
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();
+
+    let cli = Cli::parse();
+
+    if let Some(sub) = cli.subcommand {
+        match sub {
+            SubCommand::Validate => {
+                RawConfig::validate();
+            }
+        }
+        return Ok(());
+    }
 
     iced::daemon(
         || {
@@ -363,7 +377,9 @@ impl Bar {
                             }
                             Err(e) => {
                                 error!("{:?}", e);
-                                notification("Failed to parse colors file");
+                                notification(
+                                    "Failed to parse colors file\nrun `frostbar validate` to see the errors",
+                                );
                             }
                         }
                     }
@@ -741,7 +757,9 @@ impl Bar {
             }
             Err(e) => {
                 error!("{:?}", e);
-                notification("Failed to parse config file");
+                notification(
+                    "Failed to parse config file\nrun `frostbar validate` to see the errors",
+                );
             }
         }
         Task::none()
