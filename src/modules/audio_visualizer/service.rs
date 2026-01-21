@@ -6,8 +6,8 @@ use iced::{
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     futures::{self, StreamExt as _},
 };
-use tracing::debug;
 use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
+use tracing::debug;
 
 use super::fft::{Fft, MILLIS_PER_FRAME};
 
