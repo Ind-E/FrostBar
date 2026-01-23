@@ -8,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
-use system_tray::item::IconPixmap;
 use tracing::warn;
 
 const ICON_SIZE: u16 = 48;
@@ -127,40 +126,40 @@ impl IconCache {
         Some(icon)
     }
 
-    pub fn get_tray_icon(
-        &self,
-        icon_name: Option<String>,
-        icon_pixmaps: Option<Vec<IconPixmap>>,
-    ) -> Option<Icon> {
-        if let Some(icon_name) = icon_name
-            && let Some(icon) = self.get_icon(&icon_name)
-        {
-            Some(icon)
-        } else if let Some(icon_pixmaps) = icon_pixmaps {
-            largest_icon_from_pixmaps(icon_pixmaps)
-        } else {
-            None
-        }
-    }
+    // pub fn get_tray_icon(
+    //     &self,
+    //     icon_name: Option<String>,
+    //     icon_pixmaps: Option<Vec<IconPixmap>>,
+    // ) -> Option<Icon> {
+    //     if let Some(icon_name) = icon_name
+    //         && let Some(icon) = self.get_icon(&icon_name)
+    //     {
+    //         Some(icon)
+    //     } else if let Some(icon_pixmaps) = icon_pixmaps {
+    //         largest_icon_from_pixmaps(icon_pixmaps)
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
-fn largest_icon_from_pixmaps(pixmaps: Vec<IconPixmap>) -> Option<Icon> {
-    pixmaps
-        .into_iter()
-        .max_by(
-            |IconPixmap {
-                 width: w1,
-                 height: h1,
-                 ..
-             },
-             IconPixmap {
-                 width: w2,
-                 height: h2,
-                 ..
-             }| { (w1 * h1).cmp(&(w2 * h2)) },
-        )
-        .map(|IconPixmap { pixels, .. }| {
-            let handle = image::Handle::from_bytes(pixels);
-            Icon::Raster(handle)
-        })
-}
+// fn largest_icon_from_pixmaps(pixmaps: Vec<IconPixmap>) -> Option<Icon> {
+//     pixmaps
+//         .into_iter()
+//         .max_by(
+//             |IconPixmap {
+//                  width: w1,
+//                  height: h1,
+//                  ..
+//              },
+//              IconPixmap {
+//                  width: w2,
+//                  height: h2,
+//                  ..
+//              }| { (w1 * h1).cmp(&(w2 * h2)) },
+//         )
+//         .map(|IconPixmap { pixels, .. }| {
+//             let handle = image::Handle::from_bytes(pixels);
+//             Icon::Raster(handle)
+//         })
+// }

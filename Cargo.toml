@@ -1,9 +1,23 @@
 [package]
 name = "frostbar"
-version = "0.0.1"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+tracy = ["tracy-client/default", "profiling/profile-with-tracy"]
+tracy-ondemand = [
+    "tracy",
+    "tracy-client/ondemand",
+    "tracy-client/manual-lifetime",
+]
+tracy-allocations = ["tracy"]
 
 [dependencies]
+frostbar_tray.workspace = true
 anyhow = "1.0.100"
 async-channel = "2.5.0"
 base64 = "0.22.1"
@@ -16,7 +30,7 @@ clap = { version = "4.5.54", features = ["derive"] }
 color-thief = "0.2.2"
 dashmap = "6.1.0"
 directories = "6.0.0"
-freedesktop-desktop-entry = { version = "0.7.19", default-features = false }
+freedesktop-desktop-entry = { version = "0.8.1", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntlet-0.13.1", default-features = false, features = [
     "advanced",
@@ -41,16 +55,41 @@ parking_lot = "0.12.5"
 pipewire = "0.9.2"
 profiling = { version = "1.0.17" }
 realfft = "3.5.0"
-reqwest = { version = "0.12.23", features = ["blocking"] }
+reqwest = { version = "0.13.1", features = ["blocking"] }
 rustc-hash = { version = "2.1.1" }
 serde = "1.0.228"
 serde_json = "1.0.145"
 spa = "0.5.1"
 starship-battery = { version = "0.10.2", default-features = false }
-system-tray = "0.8.4"
 tikv-jemallocator = "0.6.1"
 tokio = { version = "1.47.1", features = ["macros"] }
 tokio-stream = "0.1.17"
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+tracy-client = { version = "=0.17.3", default-features = false }
+zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
+
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+overflow-checks = false
+
+[workspace]
+resolver = "3"
+members = ["frostbar_tray"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "GPL-3.0"
+
+[workspace.dependencies]
+frostbar = { version = "*", path = "." }
+frostbar_tray = { version = "*", path = "frostbar_tray" }
+
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "=0.3.19", default-features = false, features = [
@@ -60,25 +99,8 @@ tracing-subscriber = { version = "=0.3.19", default-features = false, features =
     "env-filter",
     "ansi",
 ] }
-tracy-client = { version = "=0.17.3", default-features = false }
-zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 
-[features]
-tracy = ["tracy-client/default", "profiling/profile-with-tracy"]
-tracy-ondemand = [
-    "tracy",
-    "tracy-client/ondemand",
-    "tracy-client/manual-lifetime",
-]
-tracy-allocations = ["tracy"]
-
-[profile.dev.package."*"]
-opt-level = 3
-
-[profile.dev]
-overflow-checks = false
-
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }

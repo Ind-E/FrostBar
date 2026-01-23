@@ -7,7 +7,7 @@ use crate::{
         BarAlignment, CommandSpec, ModuleAction, ModuleMsg, Modules,
         mpris::{mpris_player::PlayerProxy, service::MprisService},
         niri::service::NiriService,
-        system_tray::service::SystemTrayService,
+        // system_tray::service::SystemTrayService,
     },
     utils::{
         log::{TIME_FORMAT_STRING, init_tracing, notification},
@@ -166,10 +166,10 @@ pub enum Message {
     TooltipPositionMeasured(TooltipId),
     CloseTooltip(container::Id),
 
-    OpenMenu(container::Id),
-    ActivateMenu(String),
-    MenuPositionMeasured(MenuId),
-    CloseMenu(container::Id),
+    // OpenMenu(container::Id),
+    // ActivateMenu(String),
+    // MenuPositionMeasured(MenuId),
+    // CloseMenu(container::Id),
 
     Module(ModuleMsg),
 }
@@ -245,7 +245,7 @@ impl Bar {
         subscriptions.push(MprisService::subscription());
         subscriptions.push(NiriService::subscription());
 
-        subscriptions.push(SystemTrayService::subscription());
+        // subscriptions.push(SystemTrayService::subscription());
 
         subscriptions.push(self.modules.audio_visualizer.subscription());
 
@@ -285,50 +285,51 @@ impl Bar {
                 //     debug!("window closed");
                 // }
             }
-            Message::ActivateMenu(address) => {
-                if let Some(task) = self.modules.systray.activate_menu(address)
-                {
-                    return task;
-                }
-            }
-            Message::OpenMenu(id) => {
-                return container::visible_bounds(id.clone()).map(
-                    move |bounds| {
-                        Message::MenuPositionMeasured(MenuId {
-                            id: id.clone(),
-                            bounds,
-                        })
-                    },
-                );
-            }
-            Message::MenuPositionMeasured(menu_id) => {
-                let old_id = self.menu_window_id.take();
-
-                let (win_id, open_task) = open_tooltip_window();
-                self.menu_window_id = Some(win_id);
-                self.active_menu_id = Some(menu_id);
-
-                if let Some(old_id) = old_id {
-                    debug!(
-                        "opening menu {}, closing menu {}",
-                        self.menu_window_id.unwrap(),
-                        old_id
-                    );
-                    return open_task.chain(iced::window::close(old_id));
-                }
-
-                debug!("opening menu {}", self.menu_window_id.unwrap());
-                return open_task;
-            }
-            Message::CloseMenu(id) => {
-                if self.active_menu_id.as_ref().is_some_and(|t| t.id == id)
-                    && let Some(window_id) = self.menu_window_id.take()
-                {
-                    debug!("closing menu {}", window_id);
-                    self.active_menu_id = None;
-                    return iced::window::close(window_id);
-                }
-            }
+            // Message::ActivateMenu(address) => {
+            //     debug!("Activating menu {address}");
+            //     if let Some(task) = self.modules.systray.activate_menu(address)
+            //     {
+            //         return task;
+            //     }
+            // }
+            // Message::OpenMenu(id) => {
+            //     return container::visible_bounds(id.clone()).map(
+            //         move |bounds| {
+            //             Message::MenuPositionMeasured(MenuId {
+            //                 id: id.clone(),
+            //                 bounds,
+            //             })
+            //         },
+            //     );
+            // }
+            // Message::MenuPositionMeasured(menu_id) => {
+            //     let old_id = self.menu_window_id.take();
+            //
+            //     let (win_id, open_task) = open_tooltip_window();
+            //     self.menu_window_id = Some(win_id);
+            //     self.active_menu_id = Some(menu_id);
+            //
+            //     if let Some(old_id) = old_id {
+            //         debug!(
+            //             "opening menu {}, closing menu {}",
+            //             self.menu_window_id.unwrap(),
+            //             old_id
+            //         );
+            //         return open_task.chain(iced::window::close(old_id));
+            //     }
+            //
+            //     debug!("opening menu {}", self.menu_window_id.unwrap());
+            //     return open_task;
+            // }
+            // Message::CloseMenu(id) => {
+            //     if self.active_menu_id.as_ref().is_some_and(|t| t.id == id)
+            //         && let Some(window_id) = self.menu_window_id.take()
+            //     {
+            //         debug!("closing menu {}", window_id);
+            //         self.active_menu_id = None;
+            //         return iced::window::close(window_id);
+            //     }
+            // }
             Message::OpenTooltip(id) => {
                 return container::visible_bounds(id.clone()).map(
                     move |bounds| {
@@ -665,47 +666,47 @@ impl Bar {
         .into()
     }
 
-    #[inline(always)]
-    fn view_menu(&self, menu_id: &MenuId) -> Element<'_> {
-        let content = self
-            .modules
-            .render_menu_for_id(&menu_id.id)
-            .unwrap_or_else(|| Column::new().into());
-
-        let bounds = menu_id.bounds.unwrap_or_default();
-        let mut container =
-            Container::new(content).padding(5).style(|_theme: &Theme| {
-                container::Style {
-                    background: Some(Background::Color(
-                        self.config.style.background,
-                    )),
-                    border: rounded(self.config.style.border_radius),
-                    ..Default::default()
-                }
-            });
-        match self.config.layout.anchor {
-            Anchor::Right => {
-                container = Container::new(container).align_right(Length::Fill);
-            }
-            Anchor::Bottom => {
-                container =
-                    Container::new(container).align_bottom(Length::Fill);
-            }
-            Anchor::Top | Anchor::Left => {}
-        }
-
-        let pin = if self.config.layout.anchor.vertical() {
-            iced::widget::pin(container).y(bounds.y)
-        } else {
-            iced::widget::pin(container).x(bounds.x)
-        };
-
-        MouseArea::new(
-            Container::new(pin).width(Length::Fill).height(Length::Fill),
-        )
-        .on_press(Message::CloseMenu(menu_id.id.clone()))
-        .into()
-    }
+    // #[inline(always)]
+    // fn view_menu(&self, menu_id: &MenuId) -> Element<'_> {
+    //     let content = self
+    //         .modules
+    //         .render_menu_for_id(&menu_id.id)
+    //         .unwrap_or_else(|| Column::new().into());
+    //
+    //     let bounds = menu_id.bounds.unwrap_or_default();
+    //     let mut container =
+    //         Container::new(content).padding(5).style(|_theme: &Theme| {
+    //             container::Style {
+    //                 background: Some(Background::Color(
+    //                     self.config.style.background,
+    //                 )),
+    //                 border: rounded(self.config.style.border_radius),
+    //                 ..Default::default()
+    //             }
+    //         });
+    //     match self.config.layout.anchor {
+    //         Anchor::Right => {
+    //             container = Container::new(container).align_right(Length::Fill);
+    //         }
+    //         Anchor::Bottom => {
+    //             container =
+    //                 Container::new(container).align_bottom(Length::Fill);
+    //         }
+    //         Anchor::Top | Anchor::Left => {}
+    //     }
+    //
+    //     let pin = if self.config.layout.anchor.vertical() {
+    //         iced::widget::pin(container).y(bounds.y)
+    //     } else {
+    //         iced::widget::pin(container).x(bounds.x)
+    //     };
+    //
+    //     MouseArea::new(
+    //         Container::new(pin).width(Length::Fill).height(Length::Fill),
+    //     )
+    //     .on_press(Message::CloseMenu(menu_id.id.clone()))
+    //     .into()
+    // }
 
     pub fn view(&self, id: Id) -> Element<'_> {
         if Some(id) == self.id {
@@ -714,11 +715,13 @@ impl Bar {
             && let Some(tooltip_id) = &self.active_tooltip_id
         {
             self.view_tooltip(tooltip_id)
-        } else if Some(id) == self.menu_window_id
-            && let Some(menu_id) = &self.active_menu_id
-        {
-            self.view_menu(menu_id)
-        } else {
+        }
+        // else if Some(id) == self.menu_window_id
+        //     && let Some(menu_id) = &self.active_menu_id
+        // {
+        //     self.view_menu(menu_id)
+        // }
+        else {
             Column::new().into()
         }
     }
