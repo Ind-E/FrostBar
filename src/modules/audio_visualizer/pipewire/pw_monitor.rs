@@ -17,7 +17,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, debug};
 
 const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
 const MONITOR_PREFERRED_CHANNELS: u32 = 2;
@@ -226,7 +226,7 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
     let _listener = stream
         .add_local_listener_with_user_data(audio_state)
         .state_changed(|_, _, previous, current| {
-            info!("pw monitor: state {previous:?} -> {current:?}");
+            debug!("pw monitor: state {previous:?} -> {current:?}");
         })
         .param_changed(|_, state, id, param| {
             if id != spa::param::ParamType::Format.as_raw() {

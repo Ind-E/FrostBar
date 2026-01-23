@@ -8,8 +8,8 @@ use iced::{
     Alignment,
     mouse::Interaction,
     widget::{
-        Column, Container, Image, MouseArea, Stack, Svg, Text, container,
-        opaque, row, text::Shaping,
+        Button, Column, Container, Image, MouseArea, Stack, Svg, Text,
+        container, opaque, row, text::Shaping,
     },
 };
 use itertools::Itertools;
@@ -254,24 +254,27 @@ impl TrayItemView {
 
     pub fn render_menu<'a>(
         &self,
-        (_item, menu): &'a (TrayItem, Option<TrayMenu>),
+        (item, menu): &'a (TrayItem, Option<TrayMenu>),
     ) -> Element<'a> {
         let Some(menu) = menu else {
             return Column::new().into();
         };
 
-        render_menu_inner(&menu.submenus)
+        render_menu_inner(&menu.submenus, item.address.clone())
     }
 }
 
-fn render_menu_inner(menu: &[MenuItem]) -> Element<'_> {
+fn render_menu_inner(menu: &[MenuItem], address: String) -> Element<'_> {
     let mut col = Column::new();
     for item in menu {
         if let Some(label) = &item.label {
-            col = col.push(Text::new(label).shaping(Shaping::Advanced));
+            col = col.push(
+                Button::new(Text::new(label).shaping(Shaping::Advanced))
+                    .on_press(Message::ActivateMenu(address.clone())),
+            );
         }
         if !item.submenu.is_empty() {
-            col = col.push(render_menu_inner(&item.submenu));
+            col = col.push(render_menu_inner(&item.submenu, address.clone()));
         }
     }
 

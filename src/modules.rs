@@ -23,7 +23,7 @@ use niri::{
     view::NiriView,
 };
 use std::any::Any;
-use system_tray::{service::SystemTrayService, view::SystemTrayView};
+// use system_tray::{service::SystemTrayService, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
 
 pub mod audio_visualizer;
@@ -31,7 +31,7 @@ pub mod battery;
 pub mod label;
 pub mod mpris;
 pub mod niri;
-pub mod system_tray;
+// pub mod system_tray;
 pub mod time;
 
 #[derive(Debug, Clone)]
@@ -43,7 +43,7 @@ pub enum ModuleMsg {
     AudioVisualizerTimer,
     PlayerArtUpdate(String, Option<(image::Handle, Option<Vec<Color>>)>),
     Mpris(MprisEvent),
-    Systray(system_tray::service::Event),
+    // Systray(system_tray::service::Event),
     SynchronizeAll,
     MouseEntered(MouseEvent),
     MouseExited(MouseEvent),
@@ -58,7 +58,7 @@ pub struct Modules {
     pub mpris: MprisService,
     pub time: TimeService,
     pub niri: NiriService,
-    pub systray: SystemTrayService,
+    // pub systray: SystemTrayService,
     pub views: Vec<View>,
 }
 
@@ -71,7 +71,7 @@ impl Modules {
             mpris: MprisService::new(),
             time: TimeService::new(),
             niri: NiriService::new(icon_cache.clone()),
-            systray: SystemTrayService::new(icon_cache),
+            // systray: SystemTrayService::new(icon_cache),
             views: Vec::new(),
         }
     }
@@ -100,8 +100,8 @@ impl Modules {
                 ConfigModule::Label(c) => {
                     self.views.push(Box::new(LabelView::new(c, position)));
                 }
-                ConfigModule::SystemTray(c) => {
-                    self.views.push(Box::new(SystemTrayView::new(c, position)));
+                ConfigModule::SystemTray(_c) => {
+                //     self.views.push(Box::new(SystemTrayView::new(c, position)));
                 }
             }
         }
@@ -127,7 +127,7 @@ impl Modules {
         &'a self,
         id: &container::Id,
     ) -> Option<Element<'a>> {
-        self.views.iter().find_map(|view| view.menu(self, id))
+        self.views.iter().find_map(|view| view._menu(self, id))
     }
 
     #[must_use]
@@ -182,12 +182,12 @@ impl Modules {
                     }
                 }
             }
-            ModuleMsg::Systray(event) => {
-                self.systray.update(event);
-                self.synchronize_views_filtered(|view| {
-                    view.as_any().is::<SystemTrayView>()
-                });
-            }
+            // ModuleMsg::Systray(event) => {
+            //     self.systray.update(event);
+            //     self.synchronize_views_filtered(|view| {
+            //         view.as_any().is::<SystemTrayView>()
+            //     });
+            // }
             ModuleMsg::SynchronizeAll => {
                 self.synchronize_views();
             }
@@ -253,7 +253,7 @@ pub trait ViewTrait<M>: Any {
         None
     }
 
-    fn menu<'a>(
+    fn _menu<'a>(
         &'a self,
         _modules: &'a M,
         _id: &container::Id,
