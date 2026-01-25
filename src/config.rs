@@ -20,8 +20,7 @@ use std::{
 };
 use tracing::{debug, error, info};
 
-const DEFAULT_CONFIG: &[u8] =
-    include_bytes!("../assets/default-config.kdl");
+const DEFAULT_CONFIG: &[u8] = include_bytes!("../assets/default-config.kdl");
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FloatOrPercent {
@@ -1523,7 +1522,7 @@ impl RawConfig {
         }
 
         print!("reading config from \"{}\": ", config_path.display());
-        match RawConfig::load_or_create(&config_path) {
+        match RawConfig::load(&config_path) {
             Err(e) => {
                 println!("\n{e:?}");
             }

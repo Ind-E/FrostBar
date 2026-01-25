@@ -21,5 +21,8 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum SubCommand {
     /// Validate the config file
-    Validate,
+    Validate {
+        #[arg(short, long)]
+        config_dir: Option<PathBuf>,
+    },
 }

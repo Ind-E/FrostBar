@@ -1,0 +1,71 @@
+// default config
+
+layout {
+    width 42
+    gaps 0
+    anchor "left"
+    layer "top"
+}
+
+style {
+    border-radius 0
+    background "#000"
+}
+
+start {
+
+    label {
+        text ""
+        size 28
+        mouse-left "notify-send" "Hello, World!"
+    }
+
+    battery {
+        charging-color "#73F5AB"
+    }
+
+    time {
+        format "%I\n%M"
+    }
+
+    audio-visualizer {
+        // scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
+        // scroll-down "wpctl" "set-volume" "@DEFAULT_SINK@" "3%-"
+        spacing "10%"
+        length 130
+    }
+
+    mpris {
+        placeholder "󰝚"
+        mouse-left "play-pause"
+        mouse-right "next"
+        mouse-middle "stop"
+        scroll-up "volume" 0.05
+        scroll-down "volume" -0.05
+    }
+
+}
+
+middle {
+
+    niri {
+        spacing 10
+        workspace-active-style {
+            text-color "#fff"
+            border {
+                color "$fg"
+                width 3.0
+                radius 0.0
+            }
+        }
+        workspace-hovered-style {
+            background "#aaa4"
+        }
+    }
+
+}
+
+end {
+
+}
+
