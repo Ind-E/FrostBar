@@ -1,10 +1,10 @@
 # Modules
 
-FrostBar comes with a variety of modules that you can make use of. Each module
-may be added any number of times to the bar with different configurations for
-each.
+FrostBar comes with a variety of modules that you can make use of. Each
+module may be added any number of times to the bar with different
+configurations for each.
 
-Here is a list of all currently avaialable modules (as of 11/13/25):
+Here is a list of all currently avaialable modules (as of 1/24/26):
 
 
 ```kdl
@@ -14,16 +14,16 @@ label
 mpris
 niri
 time
-system-tray
 ```
 
 ## Common Configuration Options
 
-There are a set of configurations that are common across (almost) all modules.
+These are the set of configuration options that are common across (almost) all modules.
 
 ### Mouse Binds
 
-This allows running commands when you interact with a widget with your mouse.
+Mouse binds allow running commands when you interact with a widget with your
+mouse by clicking or scrolling.
 Options include:
 
 ```kdl
@@ -39,20 +39,20 @@ scroll-right
 After the mouse bind, you can specify the command to be run in 2 ways.
 
 The first way will NOT run the command in a shell and requires separating
-arguments in different string literals, like so:
+arguments in different string literals.
 ```kdl
 scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
 ```
 
 The second way will run in a shell, allowing access to pipes and subshells.
 ```kdl
-scroll-up sh=true "wpctl set-volume @DEFAULT_SINK@ 3%+ && echo hi"
+scroll-up sh=true "wpctl set-volume @DEFAULT_SINK@ 3%+ && notify-send volume+"
 ```
 
 ### Container Style
 
-This allows customizing the style of the container surrounding a widget. Options
-include:
+This allows customizing the style of the container surrounding a widget.
+Options include:
 
 
 ```kdl
@@ -72,16 +72,16 @@ Colors may be specified as described by the [Colors
 Section](Introduction.md#colors).
 
 #### text-color
-Affects the color of text inside the widget.
+Color of text inside the widget.
 
 #### background
-Affects the background color of the widget.
+Background color of the widget.
 
 #### padding
 Inner margin for items inside the container
 
 #### border
-Affects the border around the widget.
+Color, radius, and width of the border around the widget.
 
 The border radius may also be specified per-corner like so:
 ```kdl
@@ -108,38 +108,50 @@ battery {
 ```
 
 #### icon-size
-Affects the size of the battery icon.
+Size of the battery icon.
 
 #### charging-color
-Affects the color of the battery while plugged in. Use `text-color` in the
-`style` section to affect the color while not plugged in.
+Color of the battery while plugged in. Use `text-color` in the
+`style` section to set the color while not plugged in.
 
 ### Audio Visualizer
 ```kdl
 audio-visualizer {
     spacing 0.1
+    length 130
     dynamic-color true
     color "#fff"
 }
 ```
 
 #### spacing
-Affects the spacing between bars in the audio visualizer, from 0.0 to 1.0.
+Spacing between bars in the audio visualizer. Can be specified
+either as a percentage, or in logical units.
+```kdl
+// 2 logical units
+spacing 2
+
+// 10% of widget length
+spacing "20%"
+```
+
+#### length
+Length of the audio visualizer widget.
 
 #### dynamic-color
-Whether or not to source colors from the currently-playing song's album art.
+Whether or not to source colors from the currently playing song's album art.
 Defaults to true if not included.
 
 #### color
-if `dynamic-color` is enabled, affects the color of the bars when no album art
-is available. Otherwise, affects the color of the bars at all times.
+if `dynamic-color` is enabled, sets the color of the bars when no album art
+is available. Otherwise, sets the color of the bars at all times.
 
 ### Label
 ```kdl
 label {
     text "text"
     size 22
-    tooltip "tooltip
+    tooltip "tooltip"
 }
 ```
 
@@ -153,17 +165,17 @@ Size of the label text.
 Text that appears in a tooltip when hovering over the label.
 
 ### Mpris
-The mpris module does not support the generic `style` or mouse binds settings.
 
-If an mpris compatible player is detected, its album art will be displayed. If
-no album art is availabl,  the placeholder will be shown instead.
+For every detected mpris compatible player, its album art will be displayed.
+If no album art is available, the placeholder will be shown instead.
 `placeholder-style` has the same options as the [Container
-Style](#container-style) section.
+Style](#container-style) section. The mpris module does not support the
+generic `style` options.
 
-If multiple players are active at the same time, one album art will be shown for
-each. Mouse binds can be specified to interact with individual players. Possible
-actions for mouse binds include:
+For the mpris module, instead of running commands with mouse binds, mpris
+specific actions can be specified.
 
+Available actions:
 ```kdl
 "play"
 "pause"
@@ -199,16 +211,13 @@ mpris {
 }
 ```
 
-
-
 ### Niri
 
-Displays information about windows and workspaces.
+Displays information about windows and workspaces from the niri compositor.
 
 ```kdl
 niri {
     spacing 10
-    workspace-offset -1
     workspace-active-style {
         text-color "#fff"
         border {
@@ -220,15 +229,14 @@ niri {
     workspace-hovered-style {
         background "#aaa4"
     }
+
+    workspace-offset -1
 }
 ```
 
 #### spacing
 Spacing between workspaces.
 
-#### workspace-offset
-Offset to apply to the index of each workspace. I use this with niri's
-`empty-workspace-above-first` option to start labeling workspaces at 0 instead of 1.
 
 #### styles
 There are 4 different styles for different parts of the niri widget:
@@ -236,9 +244,9 @@ There are 4 different styles for different parts of the niri widget:
 `workspace-hovered-style`, and `workspace-style`. All niri styles have the same
 options as the [Container Style](#container-style) section.
 
-Niri styles are merged according to their priority. FrostBar will use specific
-styling components from higher styles first, and fallback to lower ones if they
-are unset, eventually falling back to the default style.
+Niri styles are merged according to their priority. FrostBar will use
+available options from higher priority styles first and fallback to lower
+ones if they are unset, eventually falling back to the default style.
 
 Niri styles have the following priority:
 
@@ -247,6 +255,10 @@ Niri styles have the following priority:
 - `workspace-style`
 - `window-focused-style`
 - `window-style`
+
+#### workspace-offset
+Offset to apply to the index of each workspace. I use this with niri's
+`empty-workspace-above-first` option to start labeling workspaces at 0 instead of 1.
 
 
 ### Time
@@ -258,11 +270,11 @@ time {
 ```
 
 #### format
-Format string for displaying the time. See [the chrono
+Format string for displaying the time. See the [chrono
 documentation](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
 for information on format specifiers.
 
 #### tooltip-format
-Format string for displaying the tooltip. See [the chrono
+Format string for displaying the tooltip. See the [chrono
 documentation](https://docs.rs/chrono/latest/chrono/format/strftime/index.html)
 for information on format specifiers.

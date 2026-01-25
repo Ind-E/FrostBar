@@ -1,5 +1,6 @@
 use crate::{
-    Element, config,
+    Element,
+    config::{self, FloatOrPercent},
     modules::{BarPosition, Modules, ViewTrait, mouse_binds},
     utils::style::container_style,
 };
@@ -38,14 +39,14 @@ impl ViewTrait<Modules> for AudioVisualizerView {
                 vertical,
             ))
             .width(Length::Fill)
-            .height(130)
+            .height(self.config.length)
         } else {
             Canvas::new(AudioVisualizerCanvas::new(
                 audio,
                 &self.config,
                 vertical,
             ))
-            .width(130)
+            .width(self.config.length)
             .height(Length::Fill)
         };
 
@@ -117,7 +118,10 @@ impl<Message> canvas::Program<Message> for AudioVisualizerCanvas<'_> {
                 } else {
                     frame.width() / bars_per_channel as f32
                 };
-                let spacing = bar_thickness_total * self.config.spacing;
+                let spacing = match self.config.spacing {
+                    FloatOrPercent::Percent(x) => x * bar_thickness_total,
+                    FloatOrPercent::Float(x) => x,
+                };
                 let bar_thickness = bar_thickness_total - spacing;
 
                 for i in 0..bars_per_channel {
