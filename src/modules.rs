@@ -101,7 +101,7 @@ impl Modules {
                     self.views.push(Box::new(LabelView::new(c, position)));
                 }
                 ConfigModule::SystemTray(_c) => {
-                //     self.views.push(Box::new(SystemTrayView::new(c, position)));
+                    //     self.views.push(Box::new(SystemTrayView::new(c, position)));
                 }
             }
         }

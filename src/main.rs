@@ -4,7 +4,11 @@ use crate::{
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
     modules::{
-        BarAlignment, CommandSpec, ModuleAction, ModuleMsg, Modules,
+        BarAlignment,
+        CommandSpec,
+        ModuleAction,
+        ModuleMsg,
+        Modules,
         mpris::{mpris_player::PlayerProxy, service::MprisService},
         niri::service::NiriService,
         // system_tray::service::SystemTrayService,
@@ -170,7 +174,6 @@ pub enum Message {
     // ActivateMenu(String),
     // MenuPositionMeasured(MenuId),
     // CloseMenu(container::Id),
-
     Module(ModuleMsg),
 }
 

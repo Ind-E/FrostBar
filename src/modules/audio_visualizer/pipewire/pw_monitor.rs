@@ -17,7 +17,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 
 const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
 const MONITOR_PREFERRED_CHANNELS: u32 = 2;

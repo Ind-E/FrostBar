@@ -21,8 +21,93 @@ use std::{
 };
 use tracing::{debug, error, info};
 
-const DEFAULT_CONFIG: &[u8; 1054] =
+const DEFAULT_CONFIG: &[u8; 1096] =
     include_bytes!("../assets/default-config.kdl");
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FloatOrPercent {
+    Percent(f32),
+    Float(f32),
+}
+
+impl Default for FloatOrPercent {
+    fn default() -> Self {
+        FloatOrPercent::Float(0.0)
+    }
+}
+
+impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
+    fn type_check(
+        type_name: &Option<knus::span::Spanned<knus::ast::TypeName, S>>,
+        ctx: &mut knus::decode::Context<S>,
+    ) {
+        if let Some(type_name) = &type_name {
+            ctx.emit_error(DecodeError::unexpected(
+                type_name,
+                "type name",
+                "no type name expected for this node",
+            ));
+        }
+    }
+
+    fn raw_decode(
+        val: &knus::span::Spanned<knus::ast::Literal, S>,
+        ctx: &mut knus::decode::Context<S>,
+    ) -> Result<Self, DecodeError<S>> {
+        match &**val {
+            knus::ast::Literal::Int(value) => {
+                let v = value.try_into().unwrap_or_else(|e| {
+                    ctx.emit_error(DecodeError::conversion(val, e));
+                    i32::default()
+                });
+                Ok(FloatOrPercent::Float(v as f32))
+            }
+            knus::ast::Literal::Decimal(value) => {
+                let v = value.try_into().unwrap_or_else(|e| {
+                    ctx.emit_error(DecodeError::conversion(val, e));
+                    f32::default()
+                });
+                Ok(FloatOrPercent::Float(v))
+            }
+            knus::ast::Literal::String(value) => {
+                if !value.ends_with('%') {
+                    ctx.emit_error(DecodeError::conversion(
+                        val,
+                        "expected string to end with `%`",
+                    ));
+                    Ok(FloatOrPercent::default())
+                } else {
+                    match value.trim_end_matches('%').parse::<f32>() {
+                        Ok(v) => {
+                            if (0.0..=100.0).contains(&v) {
+                                Ok(FloatOrPercent::Percent(v / 100.0))
+                            } else {
+                                ctx.emit_error(DecodeError::conversion(
+                                    val,
+                                    format!(
+                                        "percent must be between 0 and 100"
+                                    ),
+                                ));
+                                Ok(FloatOrPercent::default())
+                            }
+                        }
+                        Err(e) => {
+                            ctx.emit_error(DecodeError::conversion(val, e));
+                            Ok(FloatOrPercent::default())
+                        }
+                    }
+                }
+            }
+            _ => {
+                ctx.emit_error(DecodeError::unsupported(
+                    val,
+                    "Unsupported value, only numbers are recognized",
+                ));
+                Ok(FloatOrPercent::default())
+            }
+        }
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct FloatOrInt<const MIN: i32, const MAX: i32>(pub f32);
@@ -358,8 +443,11 @@ impl std::ops::DerefMut for ConfigModules {
 
 #[derive(knus::Decode, Debug)]
 pub struct RawAudioVisualizer {
+    #[knus(child, unwrap(argument), default = Self::default().length)]
+    pub length: u32,
+
     #[knus(child, unwrap(argument), default = Self::default().spacing)]
-    pub spacing: FloatOrInt<0, { i32::MAX }>,
+    pub spacing: FloatOrPercent,
 
     #[knus(child, unwrap(argument), default = Self::default().color)]
     pub color: ConfigColor,
@@ -377,7 +465,8 @@ pub struct RawAudioVisualizer {
 impl Default for RawAudioVisualizer {
     fn default() -> Self {
         Self {
-            spacing: 0.1.into(),
+            length: 130,
+            spacing: FloatOrPercent::Percent(0.1),
             dynamic_color: true,
             color: Color::WHITE.into(),
             binds: RawMouseBinds::default(),
@@ -389,7 +478,8 @@ impl Default for RawAudioVisualizer {
 impl RawAudioVisualizer {
     fn hydrate(self, colors: &ColorVars) -> ConfigModule {
         let audio_visualizer = AudioVisualizer {
-            spacing: self.spacing.into(),
+            length: self.length,
+            spacing: self.spacing,
             color: self.color.resolve(colors),
             dynamic_color: self.dynamic_color,
             binds: self.binds.hydrate(),
@@ -401,7 +491,8 @@ impl RawAudioVisualizer {
 
 #[derive(Debug, Clone)]
 pub struct AudioVisualizer {
-    pub spacing: f32,
+    pub length: u32,
+    pub spacing: FloatOrPercent,
     pub color: Color,
     pub dynamic_color: bool,
     pub binds: MouseBinds,

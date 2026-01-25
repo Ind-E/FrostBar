@@ -31,6 +31,8 @@ start {
     audio-visualizer {
         // scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
         // scroll-down "wpctl" "set-volume" "@DEFAULT_SINK@" "3%-"
+        spacing "0.1%"
+        length 130
     }
 
     mpris {
