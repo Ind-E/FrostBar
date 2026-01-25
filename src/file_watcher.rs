@@ -43,6 +43,7 @@ impl Default for CheckResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckType {
     Changed,
+    Disappeared,
     Missing,
     Unchanged,
 }
@@ -76,7 +77,10 @@ impl FileWatcherInner {
                 self.props.colors = Some(new_props);
                 result.colors = CheckType::Changed;
             }
-            // unchanged
+            // defaults to unchanged
+        } else if self.props.colors.is_some() {
+            result.colors = CheckType::Disappeared;
+            self.props.colors = None;
         } else {
             result.colors = CheckType::Missing;
         }
@@ -86,7 +90,10 @@ impl FileWatcherInner {
                 self.props.config = Some(new_props);
                 result.config = CheckType::Changed;
             }
-            // unchanged
+            // defaults to unchanged
+        } else if self.props.config.is_some() {
+            result.config = CheckType::Disappeared;
+            self.props.config = None;
         } else {
             result.config = CheckType::Missing;
         }

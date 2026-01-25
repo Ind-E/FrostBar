@@ -1460,7 +1460,7 @@ impl RawConfig {
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
         match knus::parse::<RawConfig>(filename, text) {
             Ok(config) => {
-                info!("Successfully parsed config");
+                debug!("Successfully parsed config");
                 Ok(config)
             }
             Err(e) => Err(miette::Report::new(e)),
@@ -1494,6 +1494,11 @@ impl RawConfig {
         .with_context(|| {
             format!("error opening config file at {}", path.display())
         })?;
+
+        info!(
+            "No config file detected, writing default config file to {}",
+            path.display()
+        );
 
         new_file
             .write_all(DEFAULT_CONFIG)
@@ -1539,11 +1544,8 @@ impl RawConfig {
         let colors = {
             match ColorVars::load(&colors_path) {
                 Err(e) => {
-                    notification(
-                        "Failed to parse colors file\nrun `frostbar validate` to see the errors",
-                    );
-                    error!("Failed to parse colors file ");
-                    error!("{e:?}");
+                    debug!("Failed to parse colors file ");
+                    debug!("{e:?}");
                     ColorVars::default()
                 }
                 Ok(colors) => colors,
@@ -1610,6 +1612,10 @@ impl ConfigColor {
                         "Color variable '{}' not found, using red as default",
                         name
                     );
+                    notification(&format!(
+                        "Color variable '{}' not found, using red as default",
+                        name
+                    ));
                     Color::from_rgb(1.0, 0.0, 0.0)
                 })
             }
@@ -1619,10 +1625,9 @@ impl ConfigColor {
     pub fn parse(&self) -> Color {
         match self {
             ConfigColor::Literal(c) => *c,
-            ConfigColor::Variable(name) => {
+            ConfigColor::Variable(_) => {
                 error!(
-                    "Color variable '{}' not found, using red as default",
-                    name
+                    "Color variables not allowed in colors file, using red as default"
                 );
                 Color::from_rgb(1.0, 0.0, 0.0)
             }

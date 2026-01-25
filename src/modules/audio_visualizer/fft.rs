@@ -278,7 +278,7 @@ impl Fft {
         }
 
         if overshoot {
-            self.sens *= 0.98;
+            self.sens *= 0.975;
             self.sens_init = false;
         } else if !silence {
             self.sens *= 1.001;

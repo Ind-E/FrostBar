@@ -387,24 +387,26 @@ impl Bar {
                             }
                         }
                     }
-                    CheckType::Missing => {
+                    CheckType::Disappeared => {
                         notification(&format!(
                             "Colors file not found at {}",
-                            self.path.config.display()
+                            self.path.colors.display()
                         ));
                     }
+                    CheckType::Missing => {}
                     CheckType::Unchanged => {}
                 }
                 match event.config {
                     CheckType::Changed => {
                         return self.reload_config();
                     }
-                    CheckType::Missing => {
+                    CheckType::Disappeared => {
                         notification(&format!(
                             "Config file not found at {}",
                             self.path.config.display()
                         ));
                     }
+                    CheckType::Missing => {}
                     CheckType::Unchanged => {}
                 }
             }
