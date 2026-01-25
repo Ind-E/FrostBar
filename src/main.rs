@@ -81,8 +81,8 @@ pub fn main() -> iced::Result {
 
             if let Some(sub) = cli.subcommand {
                 match sub {
-                    SubCommand::Validate => {
-                        RawConfig::validate(cli.config_dir);
+                    SubCommand::Validate { config_dir } => {
+                        RawConfig::validate(config_dir);
                     }
                 }
                 exit(0);
