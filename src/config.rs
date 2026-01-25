@@ -1,10 +1,9 @@
 use crate::{
-    BAR_NAMESPACE, CommandSpec, Message,
+    CommandSpec, Message,
     file_watcher::ConfigPath,
     modules::{BarAlignment, BarPosition},
     utils::log::notification,
 };
-use directories::ProjectDirs;
 use iced::{Background, Color, border, color, widget::container};
 use knus::{
     Decode, DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError,
@@ -84,9 +83,8 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
                             } else {
                                 ctx.emit_error(DecodeError::conversion(
                                     val,
-                                    format!(
-                                        "percent must be between 0 and 100"
-                                    ),
+                                    "percent must be between 0 and 100"
+                                        .to_string(),
                                 ));
                                 Ok(FloatOrPercent::default())
                             }
@@ -197,7 +195,7 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
     }
 }
 
-#[derive(knus::Decode, Default, Debug)]
+#[derive(knus::Decode, Debug)]
 pub struct RawConfig {
     #[knus(child, default)]
     layout: Layout,
@@ -209,6 +207,12 @@ pub struct RawConfig {
     pub middle: Middle,
     #[knus(child, default)]
     pub end: End,
+}
+
+impl Default for RawConfig {
+    fn default() -> Self {
+        RawConfig::parse("", str::from_utf8(DEFAULT_CONFIG).unwrap()).unwrap()
+    }
 }
 
 pub struct Config {
@@ -1507,14 +1511,9 @@ impl RawConfig {
         RawConfig::load(path)
     }
 
-    pub fn validate() {
-        let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
-            std::process::exit(1);
-        };
+    pub fn validate(config_dir: Option<PathBuf>) {
+        let (_, config_path, colors_path) = get_config_paths(config_dir);
 
-        let config_dir = project_dir.config_dir().to_path_buf();
-
-        let colors_path = config_dir.join("colors.kdl");
         print!("reading colors from \"{}\": ", colors_path.display());
         match ColorVars::load(&colors_path) {
             Err(e) => {
@@ -1523,7 +1522,6 @@ impl RawConfig {
             Ok(_) => println!("{}", "valid".green()),
         }
 
-        let config_path = config_dir.join("config.kdl");
         print!("reading config from \"{}\": ", config_path.display());
         match RawConfig::load_or_create(&config_path) {
             Err(e) => {
@@ -1533,14 +1531,12 @@ impl RawConfig {
         }
     }
 
-    pub fn init() -> (Config, ColorVars, ConfigPath, PathBuf) {
-        let Some(project_dir) = ProjectDirs::from("", "", BAR_NAMESPACE) else {
-            std::process::exit(1);
-        };
+    pub fn init(
+        config_dir: Option<PathBuf>,
+    ) -> (Config, ColorVars, ConfigPath, PathBuf) {
+        let (config_dir, config_path, colors_path) =
+            get_config_paths(config_dir);
 
-        let config_dir = project_dir.config_dir().to_path_buf();
-
-        let colors_path = config_dir.join("colors.kdl");
         let colors = {
             match ColorVars::load(&colors_path) {
                 Err(e) => {
@@ -1555,7 +1551,6 @@ impl RawConfig {
             }
         };
 
-        let config_path = config_dir.join("config.kdl");
         let raw_config = {
             match RawConfig::load_or_create(&config_path) {
                 Err(e) => {
@@ -1579,6 +1574,25 @@ impl RawConfig {
 
         (config, colors, path, config_dir)
     }
+}
+
+fn get_config_paths(
+    config_dir: Option<PathBuf>,
+) -> (PathBuf, PathBuf, PathBuf) {
+    let config_dir = config_dir.unwrap_or_else(|| {
+        let home = if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME")
+        {
+            PathBuf::from(xdg_config_home)
+        } else {
+            std::env::home_dir().unwrap()
+        };
+        home.join(".config").join("frostbar")
+    });
+
+    let config_path = config_dir.join("config.kdl");
+    let colors_path = config_dir.join("colors.kdl");
+
+    (config_dir, config_path, colors_path)
 }
 
 #[derive(Debug, Clone, PartialEq)]

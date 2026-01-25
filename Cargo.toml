@@ -29,7 +29,6 @@ chrono = { version = "0.4.41", default-features = false, features = [
 clap = { version = "4.5.54", features = ["derive"] }
 color-thief = "0.2.2"
 dashmap = "6.1.0"
-directories = "6.0.0"
 freedesktop-desktop-entry = { version = "0.8.1", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntlet-0.13.1", default-features = false, features = [
@@ -87,7 +86,6 @@ edition = "2024"
 license = "GPL-3.0"
 
 [workspace.dependencies]
-frostbar = { version = "*", path = "." }
 frostbar_tray = { version = "*", path = "frostbar_tray" }
 
 tracing = "0.1.41"
