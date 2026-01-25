@@ -31,7 +31,7 @@ start {
     audio-visualizer {
         // scroll-up "wpctl" "set-volume" "@DEFAULT_SINK@" "3%+"
         // scroll-down "wpctl" "set-volume" "@DEFAULT_SINK@" "3%-"
-        spacing "0.1%"
+        spacing "10%"
         length 130
     }
 
@@ -66,6 +66,6 @@ middle {
 }
 
 end {
-    system-tray
+
 }
 
