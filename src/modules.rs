@@ -167,8 +167,12 @@ impl Modules {
                 });
                 return task;
             }
-            ModuleMsg::PlayerArtUpdate(name, art) => {
-                if let Some(player) = self.mpris.players.get_mut(&name)
+            ModuleMsg::PlayerArtUpdate(player_name, art) => {
+                if let Some((_, player)) = self
+                    .mpris
+                    .players
+                    .iter_mut()
+                    .find(|(name, _)| *name == player_name)
                     && let Some((art, gradient)) = art
                 {
                     player.art = Some(art);

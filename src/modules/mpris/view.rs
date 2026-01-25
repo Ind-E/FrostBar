@@ -79,12 +79,13 @@ impl ViewTrait<Modules> for MprisView {
         id: &container::Id,
     ) -> Option<Element<'a>> {
         let service = &service.mpris;
-        self.player_views.iter().find_map(|(name, view)| {
+        self.player_views.iter().find_map(|(player_name, view)| {
             if view.id == *id {
                 service
                     .players
-                    .get(name)
-                    .and_then(|p| view.render_tooltip(p))
+                    .iter()
+                    .find(|(name, _)| name == player_name)
+                    .and_then(|(_, player)| view.render_tooltip(player))
             } else {
                 None
             }
@@ -93,10 +94,15 @@ impl ViewTrait<Modules> for MprisView {
 
     fn synchronize(&mut self, modules: &Modules) {
         let service = &modules.mpris;
+        let player_names: Vec<&String> = service
+            .players
+            .iter()
+            .map(|(player_name, _)| player_name)
+            .collect();
         self.player_views
-            .retain(|name, _| service.players.contains_key(name));
+            .retain(|name, _| player_names.contains(&name));
 
-        for name in service.players.keys() {
+        for name in player_names {
             self.player_views
                 .entry(name.clone())
                 .or_insert_with(MprisPlayerView::new);
