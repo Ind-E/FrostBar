@@ -17,7 +17,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
 const MONITOR_PREFERRED_CHANNELS: u32 = 2;
@@ -186,7 +186,7 @@ impl MonitorState {
                 self.format
             );
         }
-        info!(
+        debug!(
             "pw monitor: negotiated format: {:?}, rate {} Hz, channels {}",
             info.format(),
             self.sample_rate,
@@ -296,9 +296,9 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
         &mut params,
     )?;
 
-    info!("pw monitor: PipeWire monitor active");
+    debug!("pw monitor: PipeWire monitor active");
     mainloop.run();
-    info!("pw monitor: main loop exited");
+    warn!("pw monitor: main loop exited");
 
     Ok(())
 }

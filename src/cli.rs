@@ -11,7 +11,7 @@ pub struct Cli {
     /// Path to config directory (default: `$XDG_CONFIG_HOME/frostbar/`)
     ///
     /// Directory should contain a file named `config.kdl` and optionally a file named `colors.kdl`
-    #[arg(short, long = "config", value_name = "FILE")]
+    #[arg(short, long = "config", value_name = "DIRECTORY")]
     pub config_dir: Option<PathBuf>,
 
     #[command(subcommand)]
