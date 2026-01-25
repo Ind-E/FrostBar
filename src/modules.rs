@@ -182,7 +182,7 @@ impl Modules {
         &'a self,
         id: &widget::Id,
     ) -> Option<Element<'a>> {
-        self.views.iter().find_map(|view| view._menu(self, id))
+        self.views.iter().find_map(|view| view.menu(self, id))
     }
 
     #[must_use]
@@ -344,7 +344,7 @@ pub trait ViewTrait<M>: Any {
         None
     }
 
-    fn _menu<'a>(
+    fn menu<'a>(
         &'a self,
         _modules: &'a M,
         _id: &widget::Id,

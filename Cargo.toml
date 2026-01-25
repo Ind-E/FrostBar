@@ -16,6 +16,7 @@ tracy-ondemand = [
 ]
 tracy-allocations = ["tracy"]
 console = ["console-subscriber"]
+comet = ["iced/debug"]
 
 [dependencies]
 frostbar_tray.workspace = true
@@ -54,24 +55,26 @@ notify-rust = "4.11.7"
 owo-colors = "4.2.2"
 parking_lot = "0.12.5"
 pipewire = "0.9.2"
-profiling = { version = "1.0.17" }
 realfft = "3.5.0"
-reqwest = { version = "0.13.1", features = ["blocking"] }
+reqwest = { version = "0.13.1", default-features = false, features = [
+    "native-tls",
+] }
 rustc-hash = { version = "2.1.1" }
-serde = "1.0.228"
 serde_json = "1.0.145"
 starship-battery = { version = "0.10.2", default-features = false }
 tikv-jemallocator = "0.6.1"
-tokio = { version = "1.47.1", features = ["macros"] }
+tokio.workspace = true
 tokio-stream = "0.1.17"
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-tracy-client = { version = "0.18.4" }
-zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
-console-subscriber = { version = "0.5.0", optional = true }
 tokio-util = { version = "0.7.18", features = ["codec"] }
 image = { version = "0.25.9", default-features = false, features = ["png"] }
+zbus.workspace = true
+
+profiling = { version = "1.0.17" }
+console-subscriber = { version = "0.5.0", optional = true }
+tracy-client = { version = "0.18.4" }
 
 
 [profile.dev.package."*"]
@@ -92,7 +95,9 @@ license = "GPL-3.0"
 [workspace.dependencies]
 frostbar_tray = { version = "*", path = "frostbar_tray" }
 
-tracing = "0.1.41"
+tracing = "0.1.44"
+serde = "1.0.228"
+tokio = { version = "1.49.0", features = ["macros"] }
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "=0.3.19", default-features = false, features = [
     "fmt",
@@ -101,6 +106,7 @@ tracing-subscriber = { version = "=0.3.19", default-features = false, features =
     "env-filter",
     "ansi",
 ] }
+zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

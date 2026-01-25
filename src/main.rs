@@ -30,13 +30,8 @@ use crate::{
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
     modules::{
-        BarAlignment,
-        CommandSpec,
-        ModuleAction,
-        ModuleMsg,
-        Modules,
+        BarAlignment, CommandSpec, ModuleAction, ModuleMsg, Modules,
         mpris::mpris_player::PlayerProxy,
-        // system_tray::service::SystemTrayService,
     },
     utils::{
         log::{LogManager, get_default_filter, notification},

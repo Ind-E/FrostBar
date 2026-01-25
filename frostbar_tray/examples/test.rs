@@ -1,0 +1,19 @@
+use frostbar_tray::client::Client;
+use tracing::info;
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt().init();
+
+    let client = Client::new().await.unwrap();
+    let mut tray_rx = client.subscribe();
+
+    // let initial_items = client.items();
+    //
+    // // do something with initial items...
+    // drop(initial_items);
+
+    while let Ok(ev) = tray_rx.recv().await {
+        info!("Tray Event: {ev:?}");
+    }
+}

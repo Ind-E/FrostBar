@@ -1,14 +1,23 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod proxy;
+mod watcher;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod data;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+/// Client for listening to item and menu events,
+/// and associated types.
+pub mod client;
+
+/// Error and result types.
+pub mod error;
+
+/// `StatusNotifierItem` item representation.
+pub mod item;
+
+/// `DBusMenu` menu representation.
+pub mod menu;
+
+pub(crate) mod names {
+    pub const WATCHER_BUS: &str = "org.kde.StatusNotifierWatcher";
+    pub const WATCHER_OBJECT: &str = "/StatusNotifierWatcher";
+    pub const ITEM_OBJECT: &str = "/StatusNotifierItem";
 }
