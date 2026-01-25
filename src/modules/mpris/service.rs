@@ -13,7 +13,6 @@ use iced::{
     },
     widget::image,
 };
-use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
@@ -21,14 +20,14 @@ use tracing::{debug, error};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 pub struct MprisService {
-    pub players: FxHashMap<String, MprisPlayer>,
+    pub players: Vec<(String, MprisPlayer)>,
 }
 
 #[profiling::all_functions]
 impl MprisService {
     pub fn new() -> Self {
         Self {
-            players: FxHashMap::default(),
+            players: Vec::new(),
         }
     }
 
@@ -77,20 +76,20 @@ impl MprisService {
                 tokio::select! {
                     signal = name_owner_stream.next() => {
                         if let Some(signal) = signal
-                            && let Ok((name, old, new)) = signal.body().deserialize::<(String, String, String)>()
-                            && name.starts_with(MPRIS_PREFIX)
+                            && let Ok((player_name, old, new)) = signal.body().deserialize::<(String, String, String)>()
+                            && player_name.starts_with(MPRIS_PREFIX)
                         {
                             if !new.is_empty() && old.is_empty() {
-                                if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
+                                if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &player_name).await) {
                                     error!( "mpris: {e}");
                                 }
 
-                                let name1 = name.clone();
-                                if let Ok(stream) = create_player_stream(&connection, name).await {
+                                let name1 = player_name.clone();
+                                if let Ok(stream) = create_player_stream(&connection, player_name).await {
                                     player_streams.insert(name1, stream.fuse());
                                 }
                             } else if new.is_empty() && !old.is_empty()
-                                && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { name }) {
+                                && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { player_name }) {
                                     error!( "mpris: {e}");
                                 }
                         }
@@ -98,8 +97,8 @@ impl MprisService {
 
                     event_result = player_streams.next(), if !player_streams.is_empty() => {
                         if let Some((pname, Ok(event))) = event_result {
-                            if let MprisEvent::PlayerVanished {ref name} = event
-                                &&  *name == pname {
+                            if let MprisEvent::PlayerVanished {ref player_name} = event
+                                &&  *player_name == pname {
                                     player_streams.remove(&pname);
                                 }
                             if let Err(e) = yield_tx.send(event) {
@@ -121,19 +120,19 @@ impl MprisService {
     pub fn update(&mut self, event: MprisEvent) -> ModuleAction {
         match event {
             MprisEvent::PlayerAppeared {
-                name,
+                player_name,
                 status,
                 metadata,
             } => {
-                debug!("mpris player appeared: {name}");
-                let mut player = MprisPlayer::new(name.clone(), status);
+                debug!("mpris player appeared: {player_name}");
+                let mut player = MprisPlayer::new(player_name.clone(), status);
                 let action = player.update_metadata(&metadata);
-                self.players.insert(name, player);
+                self.players.push((player_name, player));
                 return action;
             }
-            MprisEvent::PlayerVanished { name } => {
-                debug!("mpris player vanished: {name}");
-                self.players.remove(&name);
+            MprisEvent::PlayerVanished { player_name } => {
+                debug!("mpris player vanished: {player_name}");
+                self.players.retain(|(name, _)| *name != player_name);
                 let players_with_colors = self
                     .players
                     .iter()
@@ -154,7 +153,11 @@ impl MprisService {
                 status,
             } => {
                 debug!("{player_name} status changed: {status}");
-                if let Some(player) = self.players.get_mut(&player_name) {
+                if let Some((_, player)) = self
+                    .players
+                    .iter_mut()
+                    .find(|(name, _)| *name == player_name)
+                {
                     if status == "Playing" {
                         player.status = status;
                         let colors = player.colors.clone();
@@ -189,7 +192,11 @@ impl MprisService {
                 metadata,
             } => {
                 debug!("{player_name} metadata changed: {metadata:?}");
-                if let Some(player) = self.players.get_mut(&player_name) {
+                if let Some((_, player)) = self
+                    .players
+                    .iter_mut()
+                    .find(|(name, _)| *name == player_name)
+                {
                     return player.update_metadata(&metadata);
                 }
             }
@@ -203,12 +210,12 @@ const MPRIS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 #[derive(Clone, Debug)]
 pub enum MprisEvent {
     PlayerAppeared {
-        name: String,
+        player_name: String,
         status: String,
         metadata: HashMap<String, OwnedValue>,
     },
     PlayerVanished {
-        name: String,
+        player_name: String,
     },
     PlaybackStatusChanged {
         player_name: String,
@@ -358,7 +365,7 @@ async fn get_initial_player_state(
     let status = proxy.playback_status().await.unwrap();
     let metadata = proxy.metadata().await.unwrap();
     MprisEvent::PlayerAppeared {
-        name: name.to_string(),
+        player_name: name.to_string(),
         status,
         metadata,
     }
