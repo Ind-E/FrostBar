@@ -31,7 +31,7 @@ use iced::{
     window::Id,
 };
 use itertools::Itertools;
-use std::time::Duration;
+use std::{process::exit, time::Duration};
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, error, info};
 use tracing_subscriber::{
@@ -75,19 +75,19 @@ pub fn main() -> iced::Result {
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();
 
-    let cli = Cli::parse();
-
-    if let Some(sub) = cli.subcommand {
-        match sub {
-            SubCommand::Validate => {
-                RawConfig::validate();
-            }
-        }
-        return Ok(());
-    }
-
     iced::daemon(
         || {
+            let cli = Cli::parse();
+
+            if let Some(sub) = cli.subcommand {
+                match sub {
+                    SubCommand::Validate => {
+                        RawConfig::validate(cli.config_dir);
+                    }
+                }
+                exit(0);
+            }
+
             let debug = cfg!(debug_assertions);
 
             let filter =
@@ -113,7 +113,7 @@ pub fn main() -> iced::Result {
                 .init();
 
             let (config, color_vars, config_path, config_dir) =
-                RawConfig::init();
+                RawConfig::init(cli.config_dir);
 
             let logfile_path = init_tracing(&config_dir, &handle);
 
