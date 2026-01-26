@@ -191,7 +191,6 @@ impl MprisService {
                 player_name,
                 metadata,
             } => {
-                debug!("{player_name} metadata changed: {metadata:?}");
                 if let Some((_, player)) = self
                     .players
                     .iter_mut()

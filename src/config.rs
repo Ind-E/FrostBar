@@ -55,21 +55,27 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
         match &**val {
             knus::ast::Literal::Int(value) => {
                 let v = value.try_into().unwrap_or_else(|e| {
-                    ctx.emit_error(DecodeError::conversion(val, e));
+                    ctx.emit_error(DecodeError::unsupported(
+                        val,
+                        format!("{e}"),
+                    ));
                     i32::default()
                 });
                 Ok(FloatOrPercent::Float(v as f32))
             }
             knus::ast::Literal::Decimal(value) => {
                 let v = value.try_into().unwrap_or_else(|e| {
-                    ctx.emit_error(DecodeError::conversion(val, e));
+                    ctx.emit_error(DecodeError::unsupported(
+                        val,
+                        format!("{e}"),
+                    ));
                     f32::default()
                 });
                 Ok(FloatOrPercent::Float(v))
             }
             knus::ast::Literal::String(value) => {
                 if !value.ends_with('%') {
-                    ctx.emit_error(DecodeError::conversion(
+                    ctx.emit_error(DecodeError::unsupported(
                         val,
                         "expected string to end with `%`",
                     ));
@@ -80,16 +86,18 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
                             if (0.0..=100.0).contains(&v) {
                                 Ok(FloatOrPercent::Percent(v / 100.0))
                             } else {
-                                ctx.emit_error(DecodeError::conversion(
+                                ctx.emit_error(DecodeError::unsupported(
                                     val,
-                                    "percent must be between 0 and 100"
-                                        .to_string(),
+                                    "percent must be between 0 and 100",
                                 ));
                                 Ok(FloatOrPercent::default())
                             }
                         }
                         Err(e) => {
-                            ctx.emit_error(DecodeError::conversion(val, e));
+                            ctx.emit_error(DecodeError::unsupported(
+                                val,
+                                format!("{e}"),
+                            ));
                             Ok(FloatOrPercent::default())
                         }
                     }
@@ -154,7 +162,7 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
                     if (MIN..=MAX).contains(&v) {
                         Ok(FloatOrInt(v as f32))
                     } else {
-                        ctx.emit_error(DecodeError::conversion(
+                        ctx.emit_error(DecodeError::unsupported(
                             val,
                             format!("value must be between {MIN} and {MAX}"),
                         ));
@@ -162,7 +170,10 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
                     }
                 }
                 Err(e) => {
-                    ctx.emit_error(DecodeError::conversion(val, e));
+                    ctx.emit_error(DecodeError::unsupported(
+                        val,
+                        format!("{e}"),
+                    ));
                     Ok(FloatOrInt::default())
                 }
             },
@@ -171,7 +182,7 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
                     if ((MIN as f32)..=(MAX as f32)).contains(&v) {
                         Ok(FloatOrInt(v))
                     } else {
-                        ctx.emit_error(DecodeError::conversion(
+                        ctx.emit_error(DecodeError::unsupported(
                             val,
                             format!("value must be between {MIN} and {MAX}"),
                         ));
@@ -179,7 +190,10 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
                     }
                 }
                 Err(e) => {
-                    ctx.emit_error(DecodeError::conversion(val, e));
+                    ctx.emit_error(DecodeError::unsupported(
+                        val,
+                        format!("{e}"),
+                    ));
                     Ok(FloatOrInt::default())
                 }
             },
@@ -1047,10 +1061,10 @@ where
                         Literal::Int(seek_amount) => {
                             match i64::try_from(seek_amount) {
                                 Ok(seek_amount) => Ok(RawMediaControl::Seek(
-                                    // convert from microseconds to millseconds
+                                    // convert from milliseconds to microseconds
                                     seek_amount * 1000,
                                 )),
-                                Err(e) => Err(DecodeError::conversion(
+                                Err(e) => Err(DecodeError::unsupported(
                                     &second_arg.literal,
                                     format!("{e}"),
                                 )),
@@ -1088,8 +1102,8 @@ where
                         Err(e) => Err(e),
                     }
                 }
-                _other => Err(DecodeError::conversion(
-                    &node.node_name,
+                _other => Err(DecodeError::unsupported(
+                    &first_arg.literal,
                     "expected `play`, `pause`, `play-pause`, `stop`, `next`, `previous`, `seek`, `volume`, or `set-volume`",
                 )),
             },
@@ -1674,12 +1688,12 @@ where
                     Ok(ConfigColor::Variable(s.to_string()))
                 } else {
                     let color = Color::parse(s).ok_or_else(|| {
-                        DecodeError::conversion(value, "invalid hex literal")
+                        DecodeError::unsupported(value, "invalid hex literal, should be in the form \"#rrggbb[aa]\" or \"#rgb[a]\"")
                     })?;
                     Ok(ConfigColor::Literal(color))
                 }
             }
-            _ => Err(DecodeError::conversion(value, "invalid hex literal")),
+            _ => Err(DecodeError::scalar_kind(Kind::String, value)),
         }
     }
 }
