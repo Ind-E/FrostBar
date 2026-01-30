@@ -47,18 +47,20 @@ impl ViewTrait<Modules> for NiriView {
         modules: &'a Modules,
         layout: &config::Layout,
     ) -> Element<'a> {
-        let niri = &modules.niri;
+        let service = modules.niri.as_ref().expect("niri should not be None");
         if layout.anchor.vertical() {
-            niri.workspaces
+            service
+                .workspaces
                 .iter()
                 .sorted_unstable_by_key(|(_, ws)| ws.idx)
                 .fold(Column::new(), |col, (_, ws)| {
                     if let Some(ws_view) = self.workspace_views.get(&ws.id) {
                         col.push(
                             ws_view.view(
-                                niri,
+                                service,
                                 ws,
-                                niri.hovered_workspace_id
+                                service
+                                    .hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
                                 &self.config,
                                 layout,
@@ -72,16 +74,18 @@ impl ViewTrait<Modules> for NiriView {
                 .spacing(self.config.spacing)
                 .into()
         } else {
-            niri.workspaces
+            service
+                .workspaces
                 .iter()
                 .sorted_unstable_by_key(|(_, ws)| ws.idx)
                 .fold(Row::new(), |row, (_, ws)| {
                     if let Some(ws_view) = self.workspace_views.get(&ws.id) {
                         row.push(
                             ws_view.view(
-                                niri,
+                                service,
                                 ws,
-                                niri.hovered_workspace_id
+                                service
+                                    .hovered_workspace_id
                                     .is_some_and(|id| id == ws.id),
                                 &self.config,
                                 layout,
@@ -103,10 +107,10 @@ impl ViewTrait<Modules> for NiriView {
 
     fn tooltip<'a>(
         &'a self,
-        service: &'a Modules,
+        modules: &'a Modules,
         id: &container::Id,
     ) -> Option<Element<'a>> {
-        let service = &service.niri;
+        let service = modules.niri.as_ref().expect("niri should not be None");
         for (ws_id, ws_view) in &self.workspace_views {
             for (win_id, win_view) in &ws_view.window_views {
                 if win_view.id == *id
@@ -123,7 +127,7 @@ impl ViewTrait<Modules> for NiriView {
     }
 
     fn synchronize(&mut self, modules: &Modules) {
-        let service = &modules.niri;
+        let service = modules.niri.as_ref().expect("niri should not be None");
         self.workspace_views
             .retain(|id, _| service.workspaces.contains_key(id));
 

@@ -53,14 +53,12 @@ impl ViewTrait<Modules> for TimeView {
     }
 
     fn synchronize(&mut self, modules: &Modules) {
+        let service = modules.time.as_ref().expect("time should not be None");
         self.current_time =
-            modules.time.time.format(&self.config.format).to_string();
+            service.time.format(&self.config.format).to_string();
 
-        self.current_tooltip = modules
-            .time
-            .time
-            .format(&self.config.tooltip_format)
-            .to_string();
+        self.current_tooltip =
+            service.time.format(&self.config.tooltip_format).to_string();
     }
 
     fn as_any(&self) -> &dyn Any {

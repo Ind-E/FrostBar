@@ -5,14 +5,14 @@ use crate::{
 };
 use iced::{
     Subscription,
-    futures::{self, FutureExt},
+    futures::{SinkExt as _, StreamExt as _, channel::mpsc::Sender as IcedSender},
 };
-use niri_ipc::{Action, Event, Request, WindowLayout, socket::Socket};
+use niri_ipc::{Action, Event, Request, WindowLayout };
 use rustc_hash::FxHashMap;
+use tokio_util::codec::{Framed, LinesCodec};
 use std::{cmp::Ordering, io};
-use tokio::sync::mpsc::{self};
-use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::error;
+use tokio::{net::UnixStream, sync::mpsc::{self}};
+use tracing::{error, info};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Layout {
@@ -121,59 +121,107 @@ impl NiriService {
 
     pub fn subscription() -> Subscription<Message> {
         Subscription::run(|| {
-            let (yield_tx, yield_rx) = mpsc::unbounded_channel();
+            iced::stream::channel(100, |mut output: IcedSender<NiriEvent>| async move {
+                let (request_tx, mut request_rx) = mpsc::channel(32);
 
-            let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-            std::thread::spawn(move || {
-                profiling::register_thread!("niri event listener");
-                run_event_listener(&event_tx);
-            });
+                let socket_path = match std::env::var("NIRI_SOCKET") {
+                    Ok(path) => path,
+                    Err(e) => {
+                        error!("NIRI_SOCKET environment variable not set: {e}");
+                        return;
+                    }
+                };
 
-            let (request_tx, mut request_rx) = mpsc::channel(32);
+                let mut ui_socket = match setup_async_socket(&socket_path).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("failed to connect to niri ui socket: {e}");
+                        return;
+                    }
+                };
 
-            let mut socket = Socket::connect().unwrap();
+                let mut event_stream_socket = match setup_async_socket(&socket_path).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("failed to connect to niri event stream socket: {e}");
+                        return;
+                    }
+                };
 
-            tokio::spawn(async move {
-                if let Err(e) = yield_tx.send(NiriEvent::Ready(request_tx)) {
+                let event_stream_request = serde_json::to_string(&Request::EventStream).unwrap();
+                if let Err(e) = event_stream_socket.send(event_stream_request).await {
+                    error!("failed to start niri event stream: {e}");
+                    return;
+                }
+
+                match event_stream_socket.next().await {
+                    Some(Ok(line)) => {
+                        match serde_json::from_str::<niri_ipc::Reply>(&line) {
+                            Ok(Ok(niri_ipc::Response::Handled)) => {
+                                info!("niri event stream handshake successful");
+                            }
+                            Ok(Err(e)) => {
+                                error!("niri rejected event stream request: {e}");
+                                return;
+                            }
+                            Ok(Ok(other)) => {
+                                error!("niri sent unexpected response: {other:?}");
+                                return;
+                            }
+                            Err(e) => {
+                                error!("Failed to parse niri response: {e} (Raw: {line})");
+                                return;
+                            }
+                        }
+                    }
+                    _ => return,
+                }
+
+                if let Err(e) = output.try_send(NiriEvent::Ready(request_tx)) {
                     error!("niri: {e}");
                 }
+
                 loop {
-                    futures::select! {
-                        event = event_rx.recv().fuse() => {
-                            if let Some(event) = event {
-                                let send_result = yield_tx.send(NiriEvent::Event(
-                                    event.map_err(|e| e.kind().to_string()),
-                                ));
-
-                                if let Err(e) = send_result {
-                                    error!( "niri: {e}");
+                    tokio::select! {
+                        maybe_line = event_stream_socket.next() => {
+                            match maybe_line {
+                                Some(Ok(line)) => {
+                                    let event: Result<Event, _> = serde_json::from_str(&line);
+                                    let send_result = output.try_send(NiriEvent::Event(
+                                        event.map_err(|e| e.to_string()),
+                                    ));
+                                    if let Err(e) = send_result {
+                                        error!("niri: {e}");
+                                    }
                                 }
-                            } else {
-                                error!("failed to receive niri event");
-                                break;
-                            }
-                        },
-
-                        request = request_rx.recv().fuse() => {
-                            if let Some(request) = request {
-                                if let Err(e) = socket.send(request) {
-                                    error!("failed to send request to niri socket: {e}");
+                                Some(Err(e)) => {
+                                    error!("niri event socket error: {e}");
+                                    break;
                                 }
-                            } else {
-                                error!("failed to receive niri request");
-                                break;
+                                None => {
+                                    info!("niri event socket closed");
+                                    break;
+                                }
                             }
-                        },
+                        }
 
-                        complete => break
-
+                        Some(request) = request_rx.recv() => {
+                            match serde_json::to_string(&request) {
+                                Ok(json) => {
+                                    if let Err(e) = ui_socket.send(json).await {
+                                        error!("failed to send request to niri: {e}");
+                                    } else if let Some(Err(e)) = ui_socket.next().await {
+                                        error!("niri: {e}");
+                                    }
+                                }
+                                Err(e) => error!("failed to serialize request: {e}"),
+                            }
+                        }
                     }
                 }
-            });
 
-            UnboundedReceiverStream::new(yield_rx)
-        })
-        .map(|f| Message::Module(modules::ModuleMsg::Niri(f)))
+            })}) .map(|f| Message::Module(modules::ModuleMsg::Niri(f)))
+
     }
 
     pub fn update(&mut self, event: NiriEvent) -> ModuleAction {
@@ -192,10 +240,10 @@ impl NiriService {
                 {
                     let sender = sender.clone();
                     ModuleAction::Task(iced::Task::perform(
-                        async move { sender.try_send(request) },
+                        async move { sender.send(request).await },
                         |result| {
                             if let Err(e) = result {
-                                error!("niri: {e}");
+                                error!("niri: failed to send request {e}");
                             }
                             modules::ModuleMsg::NoOp
                         },
@@ -237,10 +285,7 @@ impl NiriService {
                     .collect();
             }
             Event::WindowsChanged { windows } => {
-                let focused_window_id = windows
-                    .iter()
-                    .find_map(|w| if w.is_focused { Some(w.id) } else { None });
-                self.focused_window_id = focused_window_id;
+                self.focused_window_id = windows.iter().find_map(|w| w.is_focused.then_some(w.id));
                 self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
 
                 self.workspaces.values_mut().for_each(|ws| {
@@ -337,34 +382,8 @@ impl NiriService {
     }
 }
 
-fn run_event_listener(tx: &mpsc::UnboundedSender<io::Result<Event>>) {
-    let mut sock = match Socket::connect() {
-        Ok(s) => s,
-        Err(e) => {
-            return error!("niri: failed to connect to socket: {e}");
-        }
-    };
-
-    match sock.send(Request::EventStream) {
-        Ok(sent) => match sent {
-            Ok(niri_ipc::Response::Handled) => {}
-            Ok(other) => {
-                return error!("niri responded unexpectedly {other:?}");
-            }
-            Err(e) => {
-                return error!("niri handshake failed: {e}");
-            }
-        },
-        Err(e) => {
-            return error!("niri: failed to send {e}");
-        }
-    }
-
-    let mut read_event = sock.read_events();
-
-    loop {
-        if let Err(e) = tx.send(read_event()) {
-            return error!("niri: {e}");
-        }
-    }
+async fn setup_async_socket(path: &str) -> io::Result<Framed<UnixStream, LinesCodec>> {
+    let stream = UnixStream::connect(path).await?;
+    Ok(Framed::new(stream, LinesCodec::new()))
 }
+

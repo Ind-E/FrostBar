@@ -30,7 +30,10 @@ impl ViewTrait<Modules> for AudioVisualizerView {
         modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a> {
-        let audio = &modules.audio_visualizer;
+        let audio = modules
+            .audio_visualizer
+            .as_ref()
+            .expect("audio_visualizer should not be None");
         let vertical = layout.anchor.vertical();
         let canvas = if vertical {
             Canvas::new(AudioVisualizerCanvas::new(

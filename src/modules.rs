@@ -9,7 +9,7 @@ use crate::{
 use battery::{service::BatteryService, view::BatteryView};
 use chrono::{DateTime, Local};
 use iced::{
-    Color, Task,
+    Color, Subscription, Task,
     mouse::ScrollDelta,
     widget::{MouseArea, container, image},
 };
@@ -22,7 +22,7 @@ use niri::{
     service::{NiriEvent, NiriService},
     view::NiriView,
 };
-use std::any::Any;
+use std::{any::Any};
 // use system_tray::{service::SystemTrayService, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
 
@@ -53,48 +53,62 @@ pub enum ModuleMsg {
 pub type View = Box<dyn ViewTrait<Modules>>;
 
 pub struct Modules {
-    pub battery: BatteryService,
-    pub audio_visualizer: AudioVisualizerService,
-    pub mpris: MprisService,
-    pub time: TimeService,
-    pub niri: NiriService,
+    pub battery: Option<BatteryService>,
+    pub audio_visualizer: Option<AudioVisualizerService>,
+    pub mpris: Option<MprisService>,
+    pub time: Option<TimeService>,
+    pub niri: Option<NiriService>,
     // pub systray: SystemTrayService,
     pub views: Vec<View>,
 }
 
 #[profiling::all_functions]
 impl Modules {
-    pub fn new(icon_cache: IconCache) -> Self {
+    pub fn new() -> Self {
         Self {
-            battery: BatteryService::new(),
-            audio_visualizer: AudioVisualizerService::new(),
-            mpris: MprisService::new(),
-            time: TimeService::new(),
-            niri: NiriService::new(icon_cache.clone()),
+            battery: None,
+            audio_visualizer: None,
+            mpris: None,
+            time: None,
+            niri: None,
             // systray: SystemTrayService::new(icon_cache),
             views: Vec::new(),
         }
     }
 
-    pub fn update_from_config(&mut self, config: &mut Config) {
+    pub fn update_from_config(
+        &mut self,
+        config: &mut Config,
+        icon_cache: &IconCache,
+    ) {
         self.views.clear();
+        let mut battery_needed = false;
+        let mut audio_visualizer_needed = false;
+        let mut mpris_needed = false;
+        let mut time_needed = false;
+        let mut niri_needed = false;
 
         for (module, position) in config.modules.drain(..) {
             match module {
                 ConfigModule::Battery(c) => {
+                    battery_needed = true;
                     self.views.push(Box::new(BatteryView::new(c, position)));
                 }
                 ConfigModule::AudioVisualizer(c) => {
+                    audio_visualizer_needed = true;
                     self.views
                         .push(Box::new(AudioVisualizerView::new(c, position)));
                 }
                 ConfigModule::Time(c) => {
+                    time_needed = true;
                     self.views.push(Box::new(TimeView::new(c, position)));
                 }
                 ConfigModule::Mpris(c) => {
+                    mpris_needed = true;
                     self.views.push(Box::new(MprisView::new(c, position)));
                 }
                 ConfigModule::Niri(c) => {
+                    niri_needed = true;
                     self.views.push(Box::new(NiriView::new(*c, position)));
                 }
                 ConfigModule::Label(c) => {
@@ -105,6 +119,44 @@ impl Modules {
                 }
             }
         }
+        if !battery_needed {
+            self.battery = None;
+        } else if self.battery.is_none() {
+            self.battery = Some(BatteryService::new());
+        }
+        if !audio_visualizer_needed {
+            self.audio_visualizer = None;
+        } else if self.audio_visualizer.is_none() {
+            self.audio_visualizer = Some(AudioVisualizerService::new());
+        }
+        if !mpris_needed {
+            self.mpris = None;
+        } else if self.mpris.is_none() {
+            self.mpris = Some(MprisService::new());
+        }
+        if !time_needed {
+            self.time = None;
+        } else if self.time.is_none() {
+            self.time = Some(TimeService::new());
+        }
+        if !niri_needed {
+            self.niri = None;
+        } else if self.niri.is_none() {
+            self.niri = Some(NiriService::new(icon_cache.clone()));
+        }
+    }
+
+    pub fn subscriptions(&self) -> iced::Subscription<Message> {
+    Subscription::batch(
+        [
+            self.mpris.as_ref().map(|_| MprisService::subscription()),
+            self.niri.as_ref().map(|_| NiriService::subscription()),
+            (self.battery.is_some() || self.time.is_some()).then(TimeService::subscription),
+            self.audio_visualizer.as_ref().map(|v| v.subscription()),
+        ]
+        .into_iter()
+        .flatten()
+    )
     }
 
     pub fn render_views<'a>(
@@ -132,73 +184,105 @@ impl Modules {
 
     #[must_use]
     pub fn update(&mut self, message: ModuleMsg) -> ModuleAction {
-        match message {
-            ModuleMsg::MouseEntered(event) => {
-                let MouseEvent::Workspace(id) = event;
-                self.niri.hovered_workspace_id = Some(id);
-            }
-            ModuleMsg::MouseExited(_event) => {
-                self.niri.hovered_workspace_id = None;
-            }
-            ModuleMsg::Tick(time) => {
-                self.time.update(time);
-                self.battery.fetch_battery_info();
-                self.synchronize_views_filtered(|view| {
-                    view.as_any().is::<TimeView>()
-                });
-            }
-            ModuleMsg::Niri(event) => {
-                let task = self.niri.update(event);
-                self.synchronize_views_filtered(|view| {
-                    view.as_any().is::<NiriView>()
-                });
-                return task;
-            }
-            ModuleMsg::AudioSample(sample) => {
-                self.audio_visualizer.update(sample);
-            }
-            ModuleMsg::AudioVisualizerGradientUpdate(gradient) => {
-                self.audio_visualizer.update_gradient(gradient);
-            }
-            ModuleMsg::Mpris(event) => {
-                let task = self.mpris.update(event);
-                self.synchronize_views_filtered(|view| {
-                    view.as_any().is::<MprisView>()
-                });
-                return task;
-            }
-            ModuleMsg::PlayerArtUpdate(player_name, art) => {
-                if let Some((_, player)) = self
-                    .mpris
-                    .players
-                    .iter_mut()
-                    .find(|(name, _)| *name == player_name)
-                    && let Some((art, gradient)) = art
-                {
-                    player.art = Some(art);
-                    player.colors.clone_from(&gradient);
-                    if player.status == "Playing" {
-                        let captured_colors = gradient;
-                        return ModuleAction::Task(iced::Task::perform(
-                            async move { captured_colors },
-                            ModuleMsg::AudioVisualizerGradientUpdate,
-                        ));
+        'msg: {
+            match message {
+                ModuleMsg::MouseEntered(event) => {
+                    let Some(ref mut niri) = self.niri else {
+                        break 'msg;
+                    };
+                    let MouseEvent::Workspace(id) = event;
+                    niri.hovered_workspace_id = Some(id);
+                }
+                ModuleMsg::MouseExited(_event) => {
+                    let Some(ref mut niri) = self.niri else {
+                        break 'msg;
+                    };
+                    niri.hovered_workspace_id = None;
+                }
+                ModuleMsg::Tick(date_time) => {
+                    if let Some(ref mut time) = self.time {
+                        time.update(date_time);
+                        self.synchronize_views_filtered(|view| {
+                            view.as_any().is::<TimeView>()
+                        });
+                    }
+                    if let Some(ref mut battery) = self.battery {
+                        battery.fetch_battery_info();
                     }
                 }
+                ModuleMsg::Niri(event) => {
+                    let Some(ref mut niri) = self.niri else {
+                        break 'msg;
+                    };
+                    let task = niri.update(event);
+                    self.synchronize_views_filtered(|view| {
+                        view.as_any().is::<NiriView>()
+                    });
+                    return task;
+                }
+                ModuleMsg::AudioSample(sample) => {
+                    let Some(ref mut audio_visualizer) = self.audio_visualizer
+                    else {
+                        break 'msg;
+                    };
+                    audio_visualizer.update(sample);
+                }
+                ModuleMsg::AudioVisualizerGradientUpdate(gradient) => {
+                    let Some(ref mut audio_visualizer) = self.audio_visualizer
+                    else {
+                        break 'msg;
+                    };
+                    audio_visualizer.update_gradient(gradient);
+                }
+                ModuleMsg::Mpris(event) => {
+                    let Some(ref mut mpris) = self.mpris else {
+                        break 'msg;
+                    };
+                    let task = mpris.update(event);
+                    self.synchronize_views_filtered(|view| {
+                        view.as_any().is::<MprisView>()
+                    });
+                    return task;
+                }
+                ModuleMsg::PlayerArtUpdate(player_name, art) => {
+                    let Some(ref mut mpris) = self.mpris else {
+                        break 'msg;
+                    };
+                    if let Some((_, player)) = mpris
+                        .players
+                        .iter_mut()
+                        .find(|(name, _)| *name == player_name)
+                        && let Some((art, gradient)) = art
+                    {
+                        player.art = Some(art);
+                        player.colors.clone_from(&gradient);
+                        if player.status == "Playing" {
+                            let captured_colors = gradient;
+                            return ModuleAction::Task(iced::Task::perform(
+                                async move { captured_colors },
+                                ModuleMsg::AudioVisualizerGradientUpdate,
+                            ));
+                        }
+                    }
+                }
+                // ModuleMsg::Systray(event) => {
+                //     self.systray.update(event);
+                //     self.synchronize_views_filtered(|view| {
+                //         view.as_any().is::<SystemTrayView>()
+                //     });
+                // }
+                ModuleMsg::SynchronizeAll => {
+                    self.synchronize_views();
+                }
+                ModuleMsg::AudioVisualizerTimer => {
+                    let Some(ref mut audio_visualizer) = self.audio_visualizer
+                    else {
+                        break 'msg;
+                    };
+                    audio_visualizer.timer_update();
+                }
+                ModuleMsg::NoOp => {}
             }
-            // ModuleMsg::Systray(event) => {
-            //     self.systray.update(event);
-            //     self.synchronize_views_filtered(|view| {
-            //         view.as_any().is::<SystemTrayView>()
-            //     });
-            // }
-            ModuleMsg::SynchronizeAll => {
-                self.synchronize_views();
-            }
-            ModuleMsg::AudioVisualizerTimer => {
-                self.audio_visualizer.timer_update();
-            }
-            ModuleMsg::NoOp => {}
         }
         ModuleAction::None
     }

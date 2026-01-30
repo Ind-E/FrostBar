@@ -3,23 +3,20 @@
 //
 // niri is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
-use crate::Message;
-use iced::{
-    Subscription,
-    advanced::subscription::{EventStream, Recipe, from_recipe},
-};
 use std::{
     hash::Hash,
     io,
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::UnboundedReceiverStream;
+
+use iced::{futures::channel::mpsc::Sender, Subscription};
+
+use crate::Message;
 
 const POLLING_INTERVAL: Duration = Duration::from_millis(500);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ConfigPath {
     pub config: PathBuf,
     pub colors: PathBuf,
@@ -48,19 +45,20 @@ pub enum CheckType {
     Unchanged,
 }
 
+#[derive(Hash)]
 struct FileWatcherProps {
     config: Option<(SystemTime, PathBuf)>,
     colors: Option<(SystemTime, PathBuf)>,
 }
 
-struct FileWatcherInner {
-    path: ConfigPath,
+struct FileWatcher<'a> {
+    path: &'a ConfigPath,
     props: FileWatcherProps,
 }
 
 #[profiling::all_functions]
-impl FileWatcherInner {
-    pub fn new(path: ConfigPath) -> Self {
+impl<'a> FileWatcher<'a> {
+    pub fn new(path: &'a ConfigPath) -> Self {
         Self {
             props: FileWatcherProps {
                 config: see_path(&path.config).ok(),
@@ -70,82 +68,62 @@ impl FileWatcherInner {
         }
     }
 
-    pub fn check(&mut self) -> CheckResult {
-        let mut result = CheckResult::default();
-        if let Ok(new_props) = see_path(&self.path.colors) {
-            if self.props.colors.as_ref() != Some(&new_props) {
-                self.props.colors = Some(new_props);
-                result.colors = CheckType::Changed;
-            }
-            // defaults to unchanged
-        } else if self.props.colors.is_some() {
-            result.colors = CheckType::Disappeared;
-            self.props.colors = None;
-        } else {
-            result.colors = CheckType::Missing;
-        }
-
-        if let Ok(new_props) = see_path(&self.path.config) {
-            if self.props.config.as_ref() != Some(&new_props) {
-                self.props.config = Some(new_props);
-                result.config = CheckType::Changed;
-            }
-            // defaults to unchanged
-        } else if self.props.config.is_some() {
-            result.config = CheckType::Disappeared;
-            self.props.config = None;
-        } else {
-            result.config = CheckType::Missing;
-        }
-
-        result
-    }
-}
-
-struct FileWatcher {
-    path: ConfigPath,
-}
-
-impl FileWatcher {
-    fn new(path: ConfigPath) -> Self {
-        Self { path }
-    }
-}
-
-#[profiling::all_functions]
-impl Recipe for FileWatcher {
-    type Output = CheckResult;
-
-    fn hash(&self, state: &mut iced::advanced::subscription::Hasher) {
-        std::any::TypeId::of::<Self>().hash(state);
-    }
-
-    fn stream(
-        self: Box<Self>,
-        _input: EventStream,
-    ) -> iced::futures::stream::BoxStream<'static, Self::Output> {
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        tokio::spawn(async move {
-            profiling::register_thread!("file watcher");
-            let mut watcher = FileWatcherInner::new(self.path);
-            loop {
-                tokio::time::sleep(POLLING_INTERVAL).await;
-
-                let event = watcher.check();
-
-                if tx.send(event).is_err() {
-                    break;
+    fn check_file(
+        path: &Path,
+        state: &mut Option<(SystemTime, PathBuf)>,
+    ) -> CheckType {
+        match see_path(path) {
+            Ok(new_props) => {
+                if state.as_ref() != Some(&new_props) {
+                    *state = Some(new_props);
+                    CheckType::Changed
+                } else {
+                    CheckType::Unchanged
                 }
             }
-        });
+            Err(_) => {
+                if state.is_some() {
+                    *state = None;
+                    CheckType::Disappeared
+                } else {
+                    CheckType::Missing
+                }
+            }
+        }
+    }
 
-        Box::pin(UnboundedReceiverStream::new(rx))
+    pub fn check(&mut self) -> CheckResult {
+        CheckResult {
+            config: Self::check_file(&self.path.config, &mut self.props.config),
+            colors: Self::check_file(&self.path.colors, &mut self.props.colors),
+        }
     }
 }
 
 pub fn watch_config(path: ConfigPath) -> Subscription<Message> {
-    from_recipe(FileWatcher::new(path)).map(Message::FileWatcherEvent)
+    Subscription::run_with(path, move |path| {
+        let path = path.clone();
+        iced::stream::channel(
+            100,
+            |mut output: Sender<CheckResult>| async move {
+                let mut watcher = FileWatcher::new(&path);
+                loop {
+                    tokio::time::sleep(POLLING_INTERVAL).await;
+
+                    let event = watcher.check();
+
+                    if event.config != CheckType::Unchanged
+                        || event.colors != CheckType::Unchanged
+                    {
+                        if output.try_send(event).is_err() {
+                            break;
+                        }
+                    }
+                }
+            },
+        )
+    })
+    .map(Message::FileWatcherEvent)
 }
 
 fn see_path(path: &Path) -> io::Result<(SystemTime, PathBuf)> {

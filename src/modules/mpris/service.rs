@@ -8,15 +8,13 @@ use iced::{
     Color, Subscription, Task,
     advanced::graphics::image::image_rs,
     futures::{
-        StreamExt,
-        stream::{BoxStream, select_all},
+        StreamExt, channel::mpsc::Sender as IcedSender, stream::{BoxStream, select_all}
     },
     widget::image,
 };
 use std::collections::HashMap;
-use tokio::sync::mpsc;
-use tokio_stream::{StreamMap, wrappers::UnboundedReceiverStream};
-use tracing::{debug, error};
+use tokio_stream::{StreamMap};
+use tracing::{debug, error, };
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 pub struct MprisService {
@@ -33,9 +31,7 @@ impl MprisService {
 
     pub fn subscription() -> iced::Subscription<Message> {
         Subscription::run(|| {
-        let (yield_tx, yield_rx) = mpsc::unbounded_channel();
-
-        tokio::spawn(async move {
+            iced::stream::channel(100, |mut output: IcedSender<MprisEvent>| async move {
             profiling::register_thread!("mpris watcher");
             let connection = match Connection::session().await {
                 Ok(c) => c,
@@ -59,7 +55,7 @@ impl MprisService {
                 for name in names {
                     let name1 = name.clone();
                     if name.starts_with(MPRIS_PREFIX) {
-                        if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &name).await) {
+                        if let Err(e) = output.try_send(get_initial_player_state(&connection, &name).await) {
                             error!("mpris: {e}");
                         }
 
@@ -80,7 +76,7 @@ impl MprisService {
                             && player_name.starts_with(MPRIS_PREFIX)
                         {
                             if !new.is_empty() && old.is_empty() {
-                                if let Err(e) = yield_tx.send(get_initial_player_state(&connection, &player_name).await) {
+                                if let Err(e) = output.try_send(get_initial_player_state(&connection, &player_name).await) {
                                     error!( "mpris: {e}");
                                 }
 
@@ -89,7 +85,7 @@ impl MprisService {
                                     player_streams.insert(name1, stream.fuse());
                                 }
                             } else if new.is_empty() && !old.is_empty()
-                                && let Err(e) = yield_tx.send( MprisEvent::PlayerVanished { player_name }) {
+                                && let Err(e) = output.try_send( MprisEvent::PlayerVanished { player_name }) {
                                     error!( "mpris: {e}");
                                 }
                         }
@@ -101,7 +97,7 @@ impl MprisService {
                                 &&  *player_name == pname {
                                     player_streams.remove(&pname);
                                 }
-                            if let Err(e) = yield_tx.send(event) {
+                            if let Err(e) = output.try_send(event) {
                                 error!("mpris: {e}");
                             }
                         }
@@ -109,11 +105,9 @@ impl MprisService {
                 }
             }
 
-        });
+        }
 
-        UnboundedReceiverStream::new(yield_rx)
-
-
+            )
         }).map(|f| Message::Module(modules::ModuleMsg::Mpris(f)))
     }
 

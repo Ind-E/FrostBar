@@ -24,7 +24,10 @@ impl ViewTrait<Modules> for BatteryView {
         service: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a> {
-        let service = &service.battery;
+        let service = service
+            .battery
+            .as_ref()
+            .expect("battery should not be None");
         if service.is_empty {
             return Column::new().into();
         }
@@ -64,10 +67,13 @@ impl ViewTrait<Modules> for BatteryView {
         if *id != self.id {
             return None;
         }
-        let battery = &modules.battery;
+        let service = modules
+            .battery
+            .as_ref()
+            .expect("battery should not be None");
         Some(
             Text::new(
-                battery
+                service
                     .batteries
                     .iter()
                     .enumerate()

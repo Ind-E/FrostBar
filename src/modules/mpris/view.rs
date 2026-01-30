@@ -24,10 +24,10 @@ pub struct MprisView {
 impl ViewTrait<Modules> for MprisView {
     fn view<'a>(
         &'a self,
-        service: &'a Modules,
+        modules: &'a Modules,
         layout: &'a config::Layout,
     ) -> Element<'a> {
-        let service = &service.mpris;
+        let service = modules.mpris.as_ref().expect("mpris should not be None");
         if layout.anchor.vertical() {
             service
                 .players
@@ -75,10 +75,10 @@ impl ViewTrait<Modules> for MprisView {
 
     fn tooltip<'a>(
         &'a self,
-        service: &'a Modules,
+        modules: &'a Modules,
         id: &container::Id,
     ) -> Option<Element<'a>> {
-        let service = &service.mpris;
+        let service = modules.mpris.as_ref().expect("mpris should not be None");
         self.player_views.iter().find_map(|(player_name, view)| {
             if view.id == *id {
                 service
@@ -93,7 +93,7 @@ impl ViewTrait<Modules> for MprisView {
     }
 
     fn synchronize(&mut self, modules: &Modules) {
-        let service = &modules.mpris;
+        let service = modules.mpris.as_ref().expect("mpris should not be None");
         let player_names: Vec<&String> = service
             .players
             .iter()

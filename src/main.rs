@@ -9,8 +9,7 @@ use crate::{
         ModuleAction,
         ModuleMsg,
         Modules,
-        mpris::{mpris_player::PlayerProxy, service::MprisService},
-        niri::service::NiriService,
+        mpris::mpris_player::PlayerProxy,
         // system_tray::service::SystemTrayService,
     },
     utils::{
@@ -18,7 +17,6 @@ use crate::{
         window::{open_dummy_window, open_tooltip_window, open_window},
     },
 };
-use chrono::Local;
 use clap::Parser;
 use iced::{
     Alignment, Background, Color, Event, Font, Length, Pixels, Rectangle,
@@ -31,7 +29,7 @@ use iced::{
     window::Id,
 };
 use itertools::Itertools;
-use std::{process::exit, time::Duration};
+use std::process::exit;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, error, info};
 #[cfg(feature = "console")]
@@ -186,6 +184,7 @@ pub struct Bar {
     path: ConfigPath,
 
     modules: Modules,
+    icon_cache: IconCache,
 
     tooltip_window_id: Option<Id>,
     active_tooltip_id: Option<TooltipId>,
@@ -203,8 +202,8 @@ impl Bar {
     ) -> (Self, Task<Message>) {
         let icon_cache = IconCache::new();
 
-        let mut modules = Modules::new(icon_cache);
-        modules.update_from_config(&mut config);
+        let mut modules = Modules::new();
+        modules.update_from_config(&mut config, &icon_cache);
 
         let (dummy_id, open_dummy) = open_dummy_window();
 
@@ -213,6 +212,7 @@ impl Bar {
             monitor_size: None,
             dummy_id,
             modules,
+            icon_cache,
             config,
             color_vars,
             path,
@@ -234,25 +234,12 @@ impl Bar {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let mut subscriptions: Vec<Subscription<Message>> =
-            Vec::with_capacity(8);
-
-        subscriptions.push(iced::event::listen().map(Message::IcedEvent));
-        subscriptions.push(watch_config(self.path.clone()));
-
-        subscriptions.push(
-            iced::time::every(Duration::from_secs(1))
-                .map(|_| Message::Module(ModuleMsg::Tick(Local::now()))),
-        );
-
-        subscriptions.push(MprisService::subscription());
-        subscriptions.push(NiriService::subscription());
-
-        // subscriptions.push(SystemTrayService::subscription());
-
-        subscriptions.push(self.modules.audio_visualizer.subscription());
-
-        Subscription::batch(subscriptions)
+        let iced_event_sub = iced::event::listen().map(Message::IcedEvent);
+        let watch_config_sub = watch_config(self.path.clone());
+        let modules_sub = self.modules.subscriptions();
+        Subscription::batch(
+            [iced_event_sub, watch_config_sub, modules_sub]
+        )
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -744,7 +731,8 @@ impl Bar {
         match RawConfig::load(&self.path.config) {
             Ok(new_config) => {
                 let mut new_config = new_config.hydrate(&self.color_vars);
-                self.modules.update_from_config(&mut new_config);
+                self.modules
+                    .update_from_config(&mut new_config, &self.icon_cache);
 
                 if self.config.layout == new_config.layout {
                     self.config = new_config;
