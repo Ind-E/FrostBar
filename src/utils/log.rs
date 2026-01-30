@@ -1,95 +1,72 @@
 use crate::BAR_NAMESPACE;
 use notify_rust::Notification;
 use std::path::{Path, PathBuf};
-use tracing::{Level, error, warn};
+use tracing::warn;
+use tracing_subscriber::{EnvFilter, Layer};
 use tracing_subscriber::{
-    fmt::{self, time::ChronoLocal, writer::MakeWriterExt},
+    fmt::{self},
     registry::LookupSpan,
     reload,
 };
 
-pub const TIME_FORMAT_STRING: &str = "%m-%d %H:%M:%S%.3f";
-
 type BoxedLayer<S> =
     Box<dyn tracing_subscriber::layer::Layer<S> + Send + Sync + 'static>;
+pub type LogHandle<S> = reload::Handle<Option<BoxedLayer<S>>, S>;
 
 const MAX_LOG_FILES: usize = 10;
-pub fn init_tracing<S: tracing::Subscriber + for<'a> LookupSpan<'a>>(
-    config_dir: &Path,
-    handle: &reload::Handle<Option<BoxedLayer<S>>, S>,
-) -> PathBuf {
-    let log_dir = config_dir.join("logs/");
-    let mut nlog = 0;
-    let mut min_log = u64::MAX;
 
-    match read_log_dir(&log_dir) {
-        Ok(log_files) => {
-            let mut num_files = 0;
-            for filename in log_files {
-                num_files += 1;
-                let trailing = filename
-                    .rsplit_once(|c: char| !c.is_ascii_digit())
-                    .map_or(filename.as_str(), |(_head, digits)| digits);
+pub fn init_tracing<S>(config_dir: &Path, handle: &LogHandle<S>) -> PathBuf
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+{
+    let log_dir = config_dir.join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
 
-                if let Ok(trailing_digits) = trailing.parse::<u64>() {
-                    if trailing_digits > nlog {
-                        nlog = trailing_digits;
-                    }
-                    if trailing_digits < min_log {
-                        min_log = trailing_digits;
-                    }
-                }
-            }
-            if num_files >= MAX_LOG_FILES
-                && let Err(e) = std::fs::remove_file(
-                    log_dir.join(format!("frostbar.log-{min_log}")),
-                )
-            {
-                error!("failed to remove old log file: {e}");
-            }
-            nlog += 1;
-        }
-        Err(e) => {
-            error!("failed to read log directory: {e}");
-        }
+    let mut log_indices: Vec<u64> = std::fs::read_dir(&log_dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|entry| {
+                    entry.file_name().to_str()?.split('-').last()?.parse().ok()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    log_indices.sort_unstable();
+
+    if log_indices.len() >= MAX_LOG_FILES {
+        let old_idx = log_indices.remove(0);
+        let _ = std::fs::remove_file(
+            log_dir.join(format!("frostbar.log-{old_idx}")),
+        );
     }
 
-    let logfile_path = log_dir.join(format!("frostbar.log-{nlog}"));
+    let next_idx = log_indices.last().map(|n| n + 1).unwrap_or(0);
+    let logfile_name = format!("frostbar.log-{next_idx}");
+    let logfile_path = log_dir.join(&logfile_name);
 
-    let logfile = tracing_appender::rolling::never(
-        &log_dir,
-        logfile_path.file_name().unwrap(),
-    )
-    .with_max_level(Level::INFO);
+    let logfile = tracing_appender::rolling::never(&log_dir, &logfile_name);
 
-    let logfile_layer = fmt::layer()
+    let layer = fmt::layer()
         .compact()
-        .with_writer(logfile)
         .with_ansi(false)
-        .with_timer(ChronoLocal::new(TIME_FORMAT_STRING.to_string()));
+        .with_writer(logfile)
+        .boxed();
 
-    let boxed_layer: BoxedLayer<S> = Box::new(logfile_layer);
-
-    if let Err(e) = handle.modify(|layer| *layer = Some(boxed_layer)) {
-        tracing::error!("Failed to reload file logging layer: {}", e);
+    if let Err(e) = handle.modify(|l| *l = Some(layer)) {
+        eprintln!("failed to reload file logger: {e}");
     }
 
     logfile_path
 }
 
-fn read_log_dir(path: &Path) -> std::io::Result<Vec<String>> {
-    let mut filenames = Vec::new();
-    for entry in std::fs::read_dir(path)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_file()
-            && let Some(name) = path.file_name().and_then(|n| n.to_str())
-        {
-            filenames.push(name.to_string());
+pub fn get_default_filter() -> EnvFilter {
+    EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if cfg!(debug_assertions) {
+            "info,frostbar=debug".into()
+        } else {
+            "error,frostbar=info".into()
         }
-    }
-    Ok(filenames)
+    })
 }
 
 pub fn notification(msg: &str) {

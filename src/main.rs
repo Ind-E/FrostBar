@@ -14,7 +14,7 @@ use crate::{
         // system_tray::service::SystemTrayService,
     },
     utils::{
-        log::{TIME_FORMAT_STRING, init_tracing, notification},
+        log::{get_default_filter, init_tracing, notification},
         window::{open_dummy_window, open_tooltip_window, open_window},
     },
 };
@@ -34,13 +34,16 @@ use itertools::Itertools;
 use std::{process::exit, time::Duration};
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, error, info};
+#[cfg(feature = "console")]
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer;
 use tracing_subscriber::{
-    EnvFilter,
-    fmt::{self, time::ChronoLocal},
+    fmt::{self},
     layer::SubscriberExt,
     reload,
     util::SubscriberInitExt,
 };
+
 use zbus::Connection;
 
 mod cli;
@@ -88,29 +91,26 @@ pub fn main() -> iced::Result {
                 exit(0);
             }
 
-            let debug = cfg!(debug_assertions);
-
-            let filter =
-                EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                    if debug {
-                        EnvFilter::new("info,frostbar=debug")
-                    } else {
-                        EnvFilter::new("error,frostbar=info")
-                    }
-                });
-
             let stderr_layer = fmt::layer()
                 .compact()
                 .with_writer(std::io::stderr)
-                .with_timer(ChronoLocal::new(TIME_FORMAT_STRING.to_string()));
+                .with_line_number(true)
+                .with_filter(get_default_filter());
 
             let (file_layer, handle) = reload::Layer::new(None);
+            let file_layer = file_layer.with_filter(get_default_filter());
 
-            tracing_subscriber::registry()
-                .with(filter)
+            let registry = tracing_subscriber::registry()
                 .with(stderr_layer)
-                .with(file_layer)
-                .init();
+                .with(file_layer);
+
+            #[cfg(feature = "console")]
+            let registry =
+                registry.with(console_subscriber::spawn().with_filter(
+                    EnvFilter::new("trace,tokio=trace,runtime=trace"),
+                ));
+
+            registry.init();
 
             let (config, color_vars, config_path, config_dir) =
                 RawConfig::init(cli.config_dir);

@@ -73,7 +73,8 @@
           wayland
         ];
 
-      RUSTFLAGS = pkgs: "-C link-arg=-Wl,-rpath,${lib.makeLibraryPath (dlopenLibraries pkgs)}";
+      RUSTFLAGS =
+        pkgs: "--cfg tokio_unstable -C link-arg=-Wl,-rpath,${lib.makeLibraryPath (dlopenLibraries pkgs)}";
 
       eachSystem = lib.genAttrs (import systems);
       pkgsFor = nixpkgs.legacyPackages;
@@ -102,6 +103,10 @@
             buildInputs = with pkgs; [
               openssl
               pipewire
+            ];
+
+            packages = with pkgs; [
+              tokio-console
             ];
 
             env.RUSTFLAGS = RUSTFLAGS pkgs;
