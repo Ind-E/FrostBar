@@ -88,7 +88,7 @@
         {
           default = pkgs.mkShell {
             nativeBuildInputs = with pkgs; [
-              (rust-bin.beta.latest.default.override {
+              (rust-bin.nightly.latest.default.override {
                 extensions = [
                   "rust-src"
                   "rust-analyzer"
