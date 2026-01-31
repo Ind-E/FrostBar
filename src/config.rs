@@ -1530,7 +1530,7 @@ impl RawConfig {
     }
 
     pub fn validate(config_dir: Option<PathBuf>) {
-        let (_, config_path, colors_path) = get_config_paths(config_dir);
+        let (config_path, colors_path) = get_config_paths(config_dir);
 
         print!("reading colors from \"{}\": ", colors_path.display());
         match ColorVars::load(&colors_path) {
@@ -1551,8 +1551,8 @@ impl RawConfig {
 
     pub fn init(
         config_dir: Option<PathBuf>,
-    ) -> (Config, ColorVars, ConfigPath, PathBuf) {
-        let (config_dir, config_path, colors_path) =
+    ) -> (Config, ColorVars, ConfigPath ) {
+        let (config_path, colors_path) =
             get_config_paths(config_dir);
 
         let colors = {
@@ -1587,13 +1587,13 @@ impl RawConfig {
             colors: colors_path,
         };
 
-        (config, colors, path, config_dir)
+        (config, colors, path )
     }
 }
 
 fn get_config_paths(
     config_dir: Option<PathBuf>,
-) -> (PathBuf, PathBuf, PathBuf) {
+) -> (PathBuf, PathBuf) {
     let config_dir = config_dir.unwrap_or_else(|| {
         let home = if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME")
         {
@@ -1607,7 +1607,7 @@ fn get_config_paths(
     let config_path = config_dir.join("config.kdl");
     let colors_path = config_dir.join("colors.kdl");
 
-    (config_dir, config_path, colors_path)
+    (config_path, colors_path)
 }
 
 #[derive(Debug, Clone, PartialEq)]

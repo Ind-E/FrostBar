@@ -1,6 +1,9 @@
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::{Parser, Subcommand};
+
+use crate::{config::RawConfig, utils::log::LogManager};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -25,4 +28,40 @@ pub enum SubCommand {
         #[arg(short, long)]
         config_dir: Option<PathBuf>,
     },
+    Logs {
+        #[arg(short, long)]
+        pid: Option<u32>,
+    },
+}
+
+#[derive(Subcommand, Default)]
+pub enum LogSubCommand {
+    Pid {
+        pid: u32,
+    },
+    #[default]
+    Latest,
+}
+
+pub fn handle_subcommand(sub: SubCommand, log_manager: &LogManager) {
+    match sub {
+        SubCommand::Validate { config_dir } => {
+            RawConfig::validate(config_dir);
+        }
+        SubCommand::Logs { pid } => {
+            if let Some(ref path) = log_manager.find_log(pid) {
+                if let Err(_) = std::process::Command::new("less")
+                    .arg("+G") // jump to end
+                    .arg("-RX") // color, don't clear screen on exit
+                    .arg(path)
+                    .status()
+                {
+                    println!("{}", path.display());
+                }
+            } else {
+                println!("no log files found");
+            }
+        }
+    }
+    exit(0);
 }

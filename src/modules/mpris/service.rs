@@ -14,7 +14,7 @@ use iced::{
 };
 use std::collections::HashMap;
 use tokio_stream::{StreamMap};
-use tracing::{debug, error, };
+use tracing::{debug, error};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
 
 pub struct MprisService {

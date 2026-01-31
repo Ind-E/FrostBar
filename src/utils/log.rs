@@ -1,62 +1,122 @@
-use crate::BAR_NAMESPACE;
+use std::{fs, path::PathBuf};
+
+use chrono::{DateTime, Duration, Utc};
 use notify_rust::Notification;
-use std::path::{Path, PathBuf};
 use tracing::warn;
-use tracing_subscriber::{EnvFilter, Layer};
 use tracing_subscriber::{
     fmt::{self},
     registry::LookupSpan,
     reload,
 };
+use tracing_subscriber::{EnvFilter, Layer};
+
+use crate::BAR_NAMESPACE;
 
 type BoxedLayer<S> =
     Box<dyn tracing_subscriber::layer::Layer<S> + Send + Sync + 'static>;
 pub type LogHandle<S> = reload::Handle<Option<BoxedLayer<S>>, S>;
 
-const MAX_LOG_FILES: usize = 10;
+const MAX_LOG_FILES: usize = 15;
+const MAX_LOG_AGE_DAYS: i64 = 7;
 
-pub fn init_tracing<S>(config_dir: &Path, handle: &LogHandle<S>) -> PathBuf
-where
-    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
-{
-    let log_dir = config_dir.join("logs");
-    let _ = std::fs::create_dir_all(&log_dir);
+pub struct LogManager {
+    pub state_dir: PathBuf,
+}
 
-    let mut log_indices: Vec<u64> = std::fs::read_dir(&log_dir)
-        .map(|rd| {
-            rd.flatten()
-                .filter_map(|entry| {
-                    entry.file_name().to_str()?.split('-').last()?.parse().ok()
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    log_indices.sort_unstable();
+impl LogManager {
+    pub fn init() -> Self {
+        let state_dir = std::env::var("XDG_STATE_HOME")
+            .map(|state| PathBuf::from(state))
+            .unwrap_or_else(|_| {
+                let home = std::env::var("HOME").expect("$HOME should be set");
+                PathBuf::from(home).join(".local/state").join(BAR_NAMESPACE)
+            });
 
-    if log_indices.len() >= MAX_LOG_FILES {
-        let old_idx = log_indices.remove(0);
-        let _ = std::fs::remove_file(
-            log_dir.join(format!("frostbar.log-{old_idx}")),
-        );
+        let _ = fs::create_dir_all(&state_dir);
+        Self { state_dir }
     }
 
-    let next_idx = log_indices.last().map(|n| n + 1).unwrap_or(0);
-    let logfile_name = format!("frostbar.log-{next_idx}");
-    let logfile_path = log_dir.join(&logfile_name);
-
-    let logfile = tracing_appender::rolling::never(&log_dir, &logfile_name);
-
-    let layer = fmt::layer()
-        .compact()
-        .with_ansi(false)
-        .with_writer(logfile)
-        .boxed();
-
-    if let Err(e) = handle.modify(|l| *l = Some(layer)) {
-        eprintln!("failed to reload file logger: {e}");
+    pub fn generate_log_name() -> String {
+        let pid = std::process::id();
+        let now = Utc::now().format("%Y%M%d-%H%M%S");
+        format!("{}.{}.{}.log", BAR_NAMESPACE, pid, now)
     }
 
-    logfile_path
+    pub fn setup_logging<S>(&self, handle: &LogHandle<S>) -> PathBuf
+    where
+        S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+    {
+        self.cleanup_old_logs();
+        let log_name = Self::generate_log_name();
+        let log_path = self.state_dir.join(&log_name);
+
+        let file_appender =
+            tracing_appender::rolling::never(&self.state_dir, &log_name);
+
+        let layer = fmt::layer().compact().with_writer(file_appender).boxed();
+
+        let _ = handle.modify(|l| *l = Some(layer));
+        log_path
+    }
+
+    fn cleanup_old_logs(&self) {
+        let Ok(entries) = fs::read_dir(&self.state_dir) else {
+            return;
+        };
+        let now = Utc::now();
+        let expiration = Duration::days(MAX_LOG_AGE_DAYS);
+
+        let mut log_files: Vec<(PathBuf, DateTime<Utc>)> = entries
+            .flatten()
+            .filter(|e| {
+                e.file_name().to_string_lossy().starts_with(BAR_NAMESPACE)
+            })
+            .filter_map(|e| {
+                let path = e.path();
+                let meta = e.metadata().ok()?;
+                let modified = meta.modified().ok()?.into();
+                Some((path, modified))
+            })
+            .collect();
+
+        log_files.retain(|(path, modified)| {
+            if now.signed_duration_since(*modified) > expiration {
+                let _ = fs::remove_file(path);
+                false
+            } else {
+                true
+            }
+        });
+
+        if log_files.len() > MAX_LOG_FILES {
+            log_files.sort_by_key(|&(_, modified)| modified);
+            let to_remove = log_files.len() - MAX_LOG_FILES;
+            for i in 0..to_remove {
+                let _ = fs::remove_file(&log_files[i].0);
+            }
+        }
+    }
+
+    pub fn find_log(&self, pid: Option<u32>) -> Option<PathBuf> {
+        let entries = fs::read_dir(&self.state_dir).ok()?;
+        let mut files: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().map_or(false, |ext| ext == "log"))
+            .collect();
+
+        if let Some(target_pid) = pid {
+            let pid_str = format!(".{}.", target_pid);
+            files
+                .into_iter()
+                .find(|p| p.to_string_lossy().contains(&pid_str))
+        } else {
+            files.sort_by_key(|p| {
+                fs::metadata(p).and_then(|m| m.modified()).ok()
+            });
+            files.last().cloned()
+        }
+    }
 }
 
 pub fn get_default_filter() -> EnvFilter {

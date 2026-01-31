@@ -1,5 +1,5 @@
 use crate::{
-    cli::{Cli, SubCommand},
+    cli::{Cli, handle_subcommand},
     config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
@@ -13,7 +13,7 @@ use crate::{
         // system_tray::service::SystemTrayService,
     },
     utils::{
-        log::{get_default_filter, init_tracing, notification},
+        log::{LogManager, get_default_filter, notification},
         window::{open_dummy_window, open_tooltip_window, open_window},
     },
 };
@@ -29,7 +29,6 @@ use iced::{
     window::Id,
 };
 use itertools::Itertools;
-use std::process::exit;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, error, info};
 #[cfg(feature = "console")]
@@ -80,13 +79,10 @@ pub fn main() -> iced::Result {
         || {
             let cli = Cli::parse();
 
+            let log_manager = LogManager::init();
+
             if let Some(sub) = cli.subcommand {
-                match sub {
-                    SubCommand::Validate { config_dir } => {
-                        RawConfig::validate(config_dir);
-                    }
-                }
-                exit(0);
+                handle_subcommand(sub, &log_manager);
             }
 
             let stderr_layer = fmt::layer()
@@ -110,10 +106,9 @@ pub fn main() -> iced::Result {
 
             registry.init();
 
-            let (config, color_vars, config_path, config_dir) =
-                RawConfig::init(cli.config_dir);
+            let (config, color_vars, config_path) = RawConfig::init(cli.config_dir);
 
-            let logfile_path = init_tracing(&config_dir, &handle);
+            let logfile_path = log_manager.setup_logging(&handle);
 
             info!("starting version {}", env!("CARGO_PKG_VERSION"));
             info!("saving logs to {:?}", logfile_path);
