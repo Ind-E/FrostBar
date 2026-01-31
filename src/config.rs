@@ -74,13 +74,7 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
                 Ok(FloatOrPercent::Float(v))
             }
             knus::ast::Literal::String(value) => {
-                if !value.ends_with('%') {
-                    ctx.emit_error(DecodeError::unsupported(
-                        val,
-                        "expected string to end with `%`",
-                    ));
-                    Ok(FloatOrPercent::default())
-                } else {
+                if value.ends_with('%') {
                     match value.trim_end_matches('%').parse::<f32>() {
                         Ok(v) => {
                             if (0.0..=100.0).contains(&v) {
@@ -101,6 +95,12 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
                             Ok(FloatOrPercent::default())
                         }
                     }
+                } else {
+                    ctx.emit_error(DecodeError::unsupported(
+                        val,
+                        "expected string to end with `%`",
+                    ));
+                    Ok(FloatOrPercent::default())
                 }
             }
             _ => {
@@ -1627,8 +1627,7 @@ impl ConfigColor {
                         name
                     );
                     notification(&format!(
-                        "Color variable '{}' not found, using red as default",
-                        name
+                        "Color variable '{name}' not found, using red as default"
                     ));
                     Color::from_rgb(1.0, 0.0, 0.0)
                 })

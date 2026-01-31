@@ -393,8 +393,7 @@ impl Bar {
                             self.path.colors.display()
                         ));
                     }
-                    CheckType::Missing => {}
-                    CheckType::Unchanged => {}
+                    CheckType::Missing | CheckType::Unchanged => {}
                 }
                 match event.config {
                     CheckType::Changed => {
@@ -406,8 +405,7 @@ impl Bar {
                             self.path.config.display()
                         ));
                     }
-                    CheckType::Missing => {}
-                    CheckType::Unchanged => {}
+                    CheckType::Missing | CheckType::Unchanged => {}
                 }
             }
             Message::Module(module_msg) => {
