@@ -28,6 +28,7 @@ pub enum SubCommand {
         #[arg(short, long)]
         config_dir: Option<PathBuf>,
     },
+    /// Display logs
     Logs {
         #[arg(short, long)]
         pid: Option<u32>,
