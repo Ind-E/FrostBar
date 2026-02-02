@@ -1,13 +1,5 @@
-use super::service::{NiriEvent, Window, Workspace};
-use crate::{
-    Element, Message, MouseEvent,
-    config::{self, NiriWindowStyle},
-    icon_cache::Icon,
-    modules::{
-        BarPosition, ModuleMsg, Modules, ViewTrait, niri::service::NiriService,
-    },
-    utils::style::{window_style, workspace_style},
-};
+use std::any::Any;
+
 use iced::{
     Alignment, Length,
     mouse::Interaction,
@@ -21,7 +13,17 @@ use iced::{
 use itertools::Itertools;
 use niri_ipc::{Action, WorkspaceReferenceArg};
 use rustc_hash::FxHashMap;
-use std::any::Any;
+
+use super::service::{NiriEvent, Window, Workspace};
+use crate::{
+    Element, Message, MouseEvent,
+    config::{self, NiriWindowStyle},
+    icon_cache::Icon,
+    modules::{
+        BarPosition, ModuleMsg, Modules, ViewTrait, niri::service::NiriService,
+    },
+    utils::style::{window_style, workspace_style},
+};
 
 pub struct NiriView {
     config: config::Niri,

@@ -1,21 +1,25 @@
-use super::mpris_player::PlayerProxy;
-use crate::{
-    Message,
-    modules::{self, ModuleAction},
-};
+use std::collections::HashMap;
+
 use base64::Engine;
 use iced::{
     Color, Subscription, Task,
     advanced::graphics::image::image_rs,
     futures::{
-        StreamExt, channel::mpsc::Sender as IcedSender, stream::{BoxStream, select_all}
+        StreamExt,
+        channel::mpsc::Sender as IcedSender,
+        stream::{BoxStream, select_all},
     },
     widget::image,
 };
-use std::collections::HashMap;
-use tokio_stream::{StreamMap};
+use tokio_stream::StreamMap;
 use tracing::{debug, error};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
+
+use super::mpris_player::PlayerProxy;
+use crate::{
+    Message,
+    modules::{self, ModuleAction},
+};
 
 pub struct MprisService {
     pub players: Vec<(String, MprisPlayer)>,

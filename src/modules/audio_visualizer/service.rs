@@ -1,15 +1,16 @@
-use super::pipewire::{meter_tap, pw_monitor};
-use crate::{Message, modules::ModuleMsg};
+use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
+
 use async_channel::Receiver as AsyncChannel;
 use iced::{
     Color, Subscription,
     advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
     futures::{self, StreamExt as _},
 };
-use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
 use tracing::debug;
 
 use super::fft::{Fft, MILLIS_PER_FRAME};
+use super::pipewire::{meter_tap, pw_monitor};
+use crate::{Message, modules::ModuleMsg};
 
 pub struct AudioVisualizerService {
     audio_stream: Arc<AsyncChannel<Vec<f32>>>,

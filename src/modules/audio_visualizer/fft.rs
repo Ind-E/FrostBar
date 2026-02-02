@@ -1,6 +1,8 @@
-use super::pipewire::meter_tap::MeterFormat;
-use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
 use std::{f32::consts::PI, sync::Arc};
+
+use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
+
+use super::pipewire::meter_tap::MeterFormat;
 
 const LOW_CUT_OFF: u32 = 50;
 const HIGH_CUT_OFF: u32 = 10000;

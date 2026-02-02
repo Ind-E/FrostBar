@@ -1,12 +1,13 @@
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, LazyLock},
+};
+
 use dashmap::DashMap;
 use freedesktop_desktop_entry::{DesktopEntry, default_paths};
 use iced::widget::{
     image::{self},
     svg,
-};
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, LazyLock},
 };
 use tracing::warn;
 

@@ -1,11 +1,12 @@
-use crate::{
-    Message,
-    config::{self, NiriWindowStyle, NiriWorkspaceStyle},
-};
 use iced::{
     Theme,
     padding::{left, top},
     widget::{Container, container},
+};
+
+use crate::{
+    Message,
+    config::{self, NiriWindowStyle, NiriWorkspaceStyle},
 };
 
 pub fn workspace_style(

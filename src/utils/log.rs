@@ -3,12 +3,12 @@ use std::{fs, path::PathBuf};
 use chrono::{DateTime, Duration, Utc};
 use notify_rust::Notification;
 use tracing::warn;
+use tracing_subscriber::{EnvFilter, Layer};
 use tracing_subscriber::{
     fmt::{self},
     registry::LookupSpan,
     reload,
 };
-use tracing_subscriber::{EnvFilter, Layer};
 
 use crate::BAR_NAMESPACE;
 

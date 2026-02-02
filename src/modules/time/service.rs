@@ -1,9 +1,10 @@
-use crate::{Message, modules};
 use chrono::{DateTime, Local};
 use iced::{
     Subscription,
     time::{self, Duration},
 };
+
+use crate::{Message, modules};
 
 pub struct TimeService {
     pub time: DateTime<Local>,

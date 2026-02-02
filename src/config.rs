@@ -1,16 +1,3 @@
-use crate::{
-    CommandSpec, Message,
-    file_watcher::ConfigPath,
-    modules::{BarAlignment, BarPosition},
-    utils::log::notification,
-};
-use iced::{Background, Color, border, color, widget::container};
-use knus::{
-    Decode, DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError,
-};
-use miette::{Context, IntoDiagnostic};
-use owo_colors::OwoColorize;
-use rustc_hash::FxHashMap;
 use std::{
     ffi::OsStr,
     fs::{self, File},
@@ -18,7 +5,22 @@ use std::{
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
 };
+
+use iced::{Background, Color, border, color, widget::container};
+use knus::{
+    Decode, DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError,
+};
+use miette::{Context, IntoDiagnostic};
+use owo_colors::OwoColorize;
+use rustc_hash::FxHashMap;
 use tracing::{debug, error, info};
+
+use crate::{
+    CommandSpec, Message,
+    file_watcher::ConfigPath,
+    modules::{BarAlignment, BarPosition},
+    utils::log::notification,
+};
 
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../assets/default-config.kdl");
 
@@ -1551,9 +1553,8 @@ impl RawConfig {
 
     pub fn init(
         config_dir: Option<PathBuf>,
-    ) -> (Config, ColorVars, ConfigPath ) {
-        let (config_path, colors_path) =
-            get_config_paths(config_dir);
+    ) -> (Config, ColorVars, ConfigPath) {
+        let (config_path, colors_path) = get_config_paths(config_dir);
 
         let colors = {
             match ColorVars::load(&colors_path) {
@@ -1587,13 +1588,11 @@ impl RawConfig {
             colors: colors_path,
         };
 
-        (config, colors, path )
+        (config, colors, path)
     }
 }
 
-fn get_config_paths(
-    config_dir: Option<PathBuf>,
-) -> (PathBuf, PathBuf) {
+fn get_config_paths(config_dir: Option<PathBuf>) -> (PathBuf, PathBuf) {
     let config_dir = config_dir.unwrap_or_else(|| {
         let home = if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME")
         {

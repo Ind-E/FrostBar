@@ -1,4 +1,3 @@
-use crate::{BAR_NAMESPACE, Message, config};
 use iced::{
     Size,
     window::settings::{
@@ -6,6 +5,8 @@ use iced::{
         PlatformSpecific,
     },
 };
+
+use crate::{BAR_NAMESPACE, Message, config};
 
 pub fn open_dummy_window() -> (iced::window::Id, iced::Task<Message>) {
     let (id, open_task) = iced::window::open(iced::window::Settings {

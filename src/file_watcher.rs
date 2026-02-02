@@ -10,7 +10,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use iced::{futures::channel::mpsc::Sender, Subscription};
+use iced::{Subscription, futures::channel::mpsc::Sender};
 
 use crate::Message;
 

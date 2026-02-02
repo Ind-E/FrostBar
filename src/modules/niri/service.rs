@@ -1,18 +1,25 @@
+use std::{cmp::Ordering, io};
+
+use iced::{
+    Subscription,
+    futures::{
+        SinkExt as _, StreamExt as _, channel::mpsc::Sender as IcedSender,
+    },
+};
+use niri_ipc::{Action, Event, Request, WindowLayout};
+use rustc_hash::FxHashMap;
+use tokio::{
+    net::UnixStream,
+    sync::mpsc::{self},
+};
+use tokio_util::codec::{Framed, LinesCodec};
+use tracing::{error, info};
+
 use crate::{
     Message,
     icon_cache::{Icon, IconCache},
     modules::{self, ModuleAction},
 };
-use iced::{
-    Subscription,
-    futures::{SinkExt as _, StreamExt as _, channel::mpsc::Sender as IcedSender},
-};
-use niri_ipc::{Action, Event, Request, WindowLayout };
-use rustc_hash::FxHashMap;
-use tokio_util::codec::{Framed, LinesCodec};
-use std::{cmp::Ordering, io};
-use tokio::{net::UnixStream, sync::mpsc::{self}};
-use tracing::{error, info};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Layout {
@@ -221,7 +228,6 @@ impl NiriService {
                 }
 
             })}) .map(|f| Message::Module(modules::ModuleMsg::Niri(f)))
-
     }
 
     pub fn update(&mut self, event: NiriEvent) -> ModuleAction {
@@ -285,7 +291,8 @@ impl NiriService {
                     .collect();
             }
             Event::WindowsChanged { windows } => {
-                self.focused_window_id = windows.iter().find_map(|w| w.is_focused.then_some(w.id));
+                self.focused_window_id =
+                    windows.iter().find_map(|w| w.is_focused.then_some(w.id));
                 self.windows = windows.into_iter().map(|w| (w.id, w)).collect();
 
                 self.workspaces.values_mut().for_each(|ws| {
@@ -382,8 +389,9 @@ impl NiriService {
     }
 }
 
-async fn setup_async_socket(path: &str) -> io::Result<Framed<UnixStream, LinesCodec>> {
+async fn setup_async_socket(
+    path: &str,
+) -> io::Result<Framed<UnixStream, LinesCodec>> {
     let stream = UnixStream::connect(path).await?;
     Ok(Framed::new(stream, LinesCodec::new()))
 }
-

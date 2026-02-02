@@ -1,12 +1,5 @@
 //! PipeWire virtual sink integration.
 
-use super::{
-    ring_buffer::RingBuffer,
-    util::{DEFAULT_SAMPLE_RATE, bytes_per_sample, convert_samples_to_f32},
-};
-use pipewire as pw;
-use pw::{properties::properties, spa};
-use spa::pod::Pod;
 use std::{
     error::Error,
     io::Cursor,
@@ -17,7 +10,16 @@ use std::{
     thread,
     time::Duration,
 };
+
+use pipewire as pw;
+use pw::{properties::properties, spa};
+use spa::pod::Pod;
 use tracing::{debug, error, warn};
+
+use super::{
+    ring_buffer::RingBuffer,
+    util::{DEFAULT_SAMPLE_RATE, bytes_per_sample, convert_samples_to_f32},
+};
 
 const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
 const MONITOR_PREFERRED_CHANNELS: u32 = 2;

@@ -1,5 +1,6 @@
-use pipewire::spa;
 use std::convert::TryInto;
+
+use pipewire::spa;
 use tracing::warn;
 
 /// Default sample rate (Hz) used throughout the audio pipeline.

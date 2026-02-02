@@ -1,14 +1,16 @@
+use std::any::Any;
+
+use iced::{
+    Length,
+    widget::{Column, Container, Text, container},
+};
+use tracing::warn;
+
 use crate::{
     Element, config,
     modules::{BarPosition, Modules, ViewTrait, mouse_binds},
     utils::style::container_style,
 };
-use iced::{
-    Length,
-    widget::{Column, Container, Text, container},
-};
-use std::any::Any;
-use tracing::warn;
 extern crate starship_battery as battery;
 
 pub struct BatteryView {

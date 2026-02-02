@@ -1,16 +1,18 @@
-use super::{
-    batcher::SampleBatcher,
-    pw_monitor::{self, CaptureBuffer, CapturedAudio},
-    util::DEFAULT_SAMPLE_RATE,
-};
-use async_channel::{Receiver as AsyncReceiver, Sender as AsyncSender};
-use parking_lot::RwLock;
 use std::{
     sync::{Arc, OnceLock},
     thread,
     time::{Duration, Instant},
 };
+
+use async_channel::{Receiver as AsyncReceiver, Sender as AsyncSender};
+use parking_lot::RwLock;
 use tracing::{error, info, warn};
+
+use super::{
+    batcher::SampleBatcher,
+    pw_monitor::{self, CaptureBuffer, CapturedAudio},
+    util::DEFAULT_SAMPLE_RATE,
+};
 
 const CHANNEL_CAPACITY: usize = 64;
 const POLL_BACKOFF: Duration = Duration::from_millis(50);

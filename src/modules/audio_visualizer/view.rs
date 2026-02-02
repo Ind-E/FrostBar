@@ -1,16 +1,17 @@
+use std::any::Any;
+
+use iced::{
+    Length, Point, Renderer, Size,
+    widget::{Canvas, Container, canvas},
+};
+
+use super::service::AudioVisualizerService;
 use crate::{
     Element,
     config::{self, FloatOrPercent},
     modules::{BarPosition, Modules, ViewTrait, mouse_binds},
     utils::style::container_style,
 };
-use iced::{
-    Length, Point, Renderer, Size,
-    widget::{Canvas, Container, canvas},
-};
-use std::any::Any;
-
-use super::service::AudioVisualizerService;
 
 pub struct AudioVisualizerView {
     config: config::AudioVisualizer,

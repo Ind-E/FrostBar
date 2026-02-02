@@ -1,22 +1,3 @@
-use crate::{
-    cli::{Cli, handle_subcommand},
-    config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
-    file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
-    icon_cache::IconCache,
-    modules::{
-        BarAlignment,
-        CommandSpec,
-        ModuleAction,
-        ModuleMsg,
-        Modules,
-        mpris::mpris_player::PlayerProxy,
-        // system_tray::service::SystemTrayService,
-    },
-    utils::{
-        log::{LogManager, get_default_filter, notification},
-        window::{open_dummy_window, open_tooltip_window, open_window},
-    },
-};
 use clap::Parser;
 use iced::{
     Alignment, Background, Color, Event, Font, Length, Pixels, Rectangle,
@@ -40,8 +21,27 @@ use tracing_subscriber::{
     reload,
     util::SubscriberInitExt,
 };
-
 use zbus::Connection;
+
+use crate::{
+    cli::{Cli, handle_subcommand},
+    config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
+    file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
+    icon_cache::IconCache,
+    modules::{
+        BarAlignment,
+        CommandSpec,
+        ModuleAction,
+        ModuleMsg,
+        Modules,
+        mpris::mpris_player::PlayerProxy,
+        // system_tray::service::SystemTrayService,
+    },
+    utils::{
+        log::{LogManager, get_default_filter, notification},
+        window::{open_dummy_window, open_tooltip_window, open_window},
+    },
+};
 
 mod cli;
 mod config;
@@ -106,7 +106,8 @@ pub fn main() -> iced::Result {
 
             registry.init();
 
-            let (config, color_vars, config_path) = RawConfig::init(cli.config_dir);
+            let (config, color_vars, config_path) =
+                RawConfig::init(cli.config_dir);
 
             let logfile_path = log_manager.setup_logging(&handle);
 
@@ -232,9 +233,7 @@ impl Bar {
         let iced_event_sub = iced::event::listen().map(Message::IcedEvent);
         let watch_config_sub = watch_config(self.path.clone());
         let modules_sub = self.modules.subscriptions();
-        Subscription::batch(
-            [iced_event_sub, watch_config_sub, modules_sub]
-        )
+        Subscription::batch([iced_event_sub, watch_config_sub, modules_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {

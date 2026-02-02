@@ -1,11 +1,5 @@
-use crate::{
-    Element, Message, MouseEvent,
-    config::{self, Config, ConfigModule, MouseBinds},
-    icon_cache::IconCache,
-    modules::audio_visualizer::{
-        service::AudioVisualizerService, view::AudioVisualizerView,
-    },
-};
+use std::any::Any;
+
 use battery::{service::BatteryService, view::BatteryView};
 use chrono::{DateTime, Local};
 use iced::{
@@ -22,9 +16,17 @@ use niri::{
     service::{NiriEvent, NiriService},
     view::NiriView,
 };
-use std::{any::Any};
 // use system_tray::{service::SystemTrayService, view::SystemTrayView};
 use time::{service::TimeService, view::TimeView};
+
+use crate::{
+    Element, Message, MouseEvent,
+    config::{self, Config, ConfigModule, MouseBinds},
+    icon_cache::IconCache,
+    modules::audio_visualizer::{
+        service::AudioVisualizerService, view::AudioVisualizerView,
+    },
+};
 
 pub mod audio_visualizer;
 pub mod battery;
@@ -147,16 +149,17 @@ impl Modules {
     }
 
     pub fn subscriptions(&self) -> iced::Subscription<Message> {
-    Subscription::batch(
-        [
-            self.mpris.as_ref().map(|_| MprisService::subscription()),
-            self.niri.as_ref().map(|_| NiriService::subscription()),
-            (self.battery.is_some() || self.time.is_some()).then(TimeService::subscription),
-            self.audio_visualizer.as_ref().map(|v| v.subscription()),
-        ]
-        .into_iter()
-        .flatten()
-    )
+        Subscription::batch(
+            [
+                self.mpris.as_ref().map(|_| MprisService::subscription()),
+                self.niri.as_ref().map(|_| NiriService::subscription()),
+                (self.battery.is_some() || self.time.is_some())
+                    .then(TimeService::subscription),
+                self.audio_visualizer.as_ref().map(|v| v.subscription()),
+            ]
+            .into_iter()
+            .flatten(),
+        )
     }
 
     pub fn render_views<'a>(
