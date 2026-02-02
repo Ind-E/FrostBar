@@ -72,3 +72,13 @@ background: "$color1"
 If a color name cannot be found in the `colors.kdl` file, it will default to red.
 
 The ability to specift a config file with a command line argument is planned.
+
+### CLI
+
+There are a couple of useful cli arguments
+
+- `frostbar validate` - try to parse the config file(s), printing any errors found
+
+- `frostbar logs` - open the latest log in a pager. There's an optional
+`-p|--pid` argument that will find the latest log with a specified pid. To
+see other logs, look in `$XDG_STATE_HOME/FrostBar`.
