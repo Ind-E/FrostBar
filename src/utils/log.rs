@@ -25,12 +25,13 @@ pub struct LogManager {
 
 impl LogManager {
     pub fn init() -> Self {
-        let state_dir = std::env::var("XDG_STATE_HOME")
-            .map(|state| PathBuf::from(state))
-            .unwrap_or_else(|_| {
+        let state_dir = std::env::var("XDG_STATE_HOME").map_or_else(
+            |_| {
                 let home = std::env::var("HOME").expect("$HOME should be set");
                 PathBuf::from(home).join(".local/state").join(BAR_NAMESPACE)
-            });
+            },
+            PathBuf::from,
+        );
 
         let _ = fs::create_dir_all(&state_dir);
         Self { state_dir }
@@ -39,7 +40,7 @@ impl LogManager {
     pub fn generate_log_name() -> String {
         let pid = std::process::id();
         let now = Utc::now().format("%Y%M%d-%H%M%S");
-        format!("{}.{}.{}.log", BAR_NAMESPACE, pid, now)
+        format!("{BAR_NAMESPACE}.{pid}.{now}.log")
     }
 
     pub fn setup_logging<S>(&self, handle: &LogHandle<S>) -> PathBuf
@@ -91,8 +92,8 @@ impl LogManager {
         if log_files.len() > MAX_LOG_FILES {
             log_files.sort_by_key(|&(_, modified)| modified);
             let to_remove = log_files.len() - MAX_LOG_FILES;
-            for i in 0..to_remove {
-                let _ = fs::remove_file(&log_files[i].0);
+            for item in log_files.iter().take(to_remove) {
+                let _ = fs::remove_file(&item.0);
             }
         }
     }
@@ -102,11 +103,11 @@ impl LogManager {
         let mut files: Vec<PathBuf> = entries
             .flatten()
             .map(|e| e.path())
-            .filter(|p| p.extension().map_or(false, |ext| ext == "log"))
+            .filter(|p| p.extension().is_some_and(|ext| ext == "log"))
             .collect();
 
         if let Some(target_pid) = pid {
-            let pid_str = format!(".{}.", target_pid);
+            let pid_str = format!(".{target_pid}.");
             files
                 .into_iter()
                 .find(|p| p.to_string_lossy().contains(&pid_str))

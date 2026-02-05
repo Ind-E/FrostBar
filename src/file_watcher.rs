@@ -74,11 +74,11 @@ impl<'a> FileWatcher<'a> {
     ) -> CheckType {
         match see_path(path) {
             Ok(new_props) => {
-                if state.as_ref() != Some(&new_props) {
+                if state.as_ref() == Some(&new_props) {
+                    CheckType::Unchanged
+                } else {
                     *state = Some(new_props);
                     CheckType::Changed
-                } else {
-                    CheckType::Unchanged
                 }
             }
             Err(_) => {
@@ -112,12 +112,11 @@ pub fn watch_config(path: ConfigPath) -> Subscription<Message> {
 
                     let event = watcher.check();
 
-                    if event.config != CheckType::Unchanged
-                        || event.colors != CheckType::Unchanged
+                    if (event.config != CheckType::Unchanged
+                        || event.colors != CheckType::Unchanged)
+                        && output.try_send(event).is_err()
                     {
-                        if output.try_send(event).is_err() {
-                            break;
-                        }
+                        break;
                     }
                 }
             },

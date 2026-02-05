@@ -155,7 +155,9 @@ impl Modules {
                 self.niri.as_ref().map(|_| NiriService::subscription()),
                 (self.battery.is_some() || self.time.is_some())
                     .then(TimeService::subscription),
-                self.audio_visualizer.as_ref().map(|v| v.subscription()),
+                self.audio_visualizer
+                    .as_ref()
+                    .map(AudioVisualizerService::subscription),
             ]
             .into_iter()
             .flatten(),
@@ -418,25 +420,6 @@ pub fn mouse_binds<'a>(
     }
 
     mouse_area.into()
-}
-
-#[profiling::function]
-pub fn process_command(cmd: &config::Command) -> Message {
-    if cmd.args.is_empty() {
-        Message::NoOp
-    } else if let Some(sh) = cmd.sh
-        && sh
-    {
-        Message::Command(CommandSpec {
-            command: String::from("sh"),
-            args: Some(vec![String::from("-c"), cmd.args[0].clone()]),
-        })
-    } else {
-        Message::Command(CommandSpec {
-            command: cmd.args[0].clone(),
-            args: cmd.args.get(1..).map(<[String]>::to_vec),
-        })
-    }
 }
 
 #[derive(Debug, Clone)]
