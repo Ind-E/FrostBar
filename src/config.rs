@@ -654,6 +654,9 @@ pub struct RawNiri {
 
     #[knus(child, default)]
     workspace_style: RawContainerStyle,
+
+    #[knus(flatten(child), default)]
+    pub binds: RawMouseBinds,
 }
 
 impl RawNiri {
@@ -792,6 +795,7 @@ impl RawNiri {
                 focused: window_focused_style,
                 base: window_base_style,
             },
+            binds: self.binds.hydrate(),
         };
 
         ConfigModule::Niri(Box::new(niri))
@@ -804,6 +808,7 @@ pub struct Niri {
     pub style: ContainerStyle,
     pub workspace_style: NiriWorkspaceStyle,
     pub window_style: NiriWindowStyle,
+    pub binds: MouseBinds,
 }
 
 pub struct NiriWorkspaceStyle {

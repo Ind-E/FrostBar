@@ -20,7 +20,8 @@ use crate::{
     config::{self, NiriWindowStyle},
     icon_cache::Icon,
     modules::{
-        BarPosition, ModuleMsg, Modules, ViewTrait, niri::service::NiriService,
+        BarPosition, ModuleMsg, Modules, ViewTrait, mouse_binds,
+        niri::service::NiriService,
     },
     utils::style::{window_style, workspace_style},
 };
@@ -50,7 +51,8 @@ impl ViewTrait<Modules> for NiriView {
         layout: &config::Layout,
     ) -> Element<'a> {
         let service = modules.niri.as_ref().expect("niri should not be None");
-        if layout.anchor.vertical() {
+
+        let content: Element<'a> = if layout.anchor.vertical() {
             service
                 .workspaces
                 .iter()
@@ -100,7 +102,9 @@ impl ViewTrait<Modules> for NiriView {
                 .align_y(Alignment::Center)
                 .spacing(self.config.spacing)
                 .into()
-        }
+        };
+
+        mouse_binds(content, &self.config.binds, None)
     }
 
     fn position(&self) -> BarPosition {
