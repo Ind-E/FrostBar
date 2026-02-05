@@ -100,7 +100,9 @@ impl From<WindowLayout> for Layout {
 #[derive(Debug, Clone)]
 pub enum NiriEvent {
     Ready(mpsc::Sender<Request>),
+    /// There was a change to niri's state
     Event(Result<Event, String>),
+    /// The ui wants to send a message to niri
     Action(Action),
 }
 
@@ -375,15 +377,7 @@ impl NiriService {
             Event::WindowFocusChanged { id } => {
                 self.focused_window_id = id;
             }
-            Event::WorkspaceUrgencyChanged { .. }
-            | Event::WorkspaceActiveWindowChanged { .. }
-            | Event::WindowUrgencyChanged { .. }
-            | Event::KeyboardLayoutsChanged { .. }
-            | Event::KeyboardLayoutSwitched { .. }
-            | Event::OverviewOpenedOrClosed { .. }
-            | Event::ConfigLoaded { .. }
-            | Event::WindowFocusTimestampChanged { .. }
-            | Event::ScreenshotCaptured { .. } => {}
+            _ => {}
         }
         ModuleAction::None
     }

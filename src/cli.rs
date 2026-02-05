@@ -51,11 +51,12 @@ pub fn handle_subcommand(sub: SubCommand, log_manager: &LogManager) {
         }
         SubCommand::Logs { pid } => {
             if let Some(ref path) = log_manager.find_log(pid) {
-                if let Err(_) = std::process::Command::new("less")
+                if std::process::Command::new("less")
                     .arg("+G") // jump to end
                     .arg("-RX") // color, don't clear screen on exit
                     .arg(path)
                     .status()
+                    .is_err()
                 {
                     println!("{}", path.display());
                 }
