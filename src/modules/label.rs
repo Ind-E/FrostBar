@@ -2,7 +2,7 @@ use std::any::Any;
 
 use iced::{
     Length,
-    widget::{Container, Text, container, text},
+    widget::{self, Container, Text, text},
 };
 
 use super::mouse_binds;
@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct LabelView {
-    pub id: container::Id,
+    pub id: widget::Id,
     config: config::Label,
     pub position: BarPosition,
 }
@@ -49,7 +49,7 @@ impl ViewTrait<Modules> for LabelView {
     fn tooltip<'a>(
         &'a self,
         _service: &'a Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         if *id != self.id {
             return None;
@@ -69,7 +69,7 @@ impl ViewTrait<Modules> for LabelView {
 impl LabelView {
     pub fn new(config: config::Label, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
             config,
             position,
         }

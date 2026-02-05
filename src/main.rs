@@ -6,7 +6,10 @@ use iced::{
     font::{Family, Weight},
     padding::{left, top},
     theme,
-    widget::{Column, Container, MouseArea, Row, container, stack},
+    widget::{
+        self, Column, Container, MouseArea, Row, container, selector::Target,
+        stack,
+    },
     window::Id,
 };
 use itertools::Itertools;
@@ -141,13 +144,13 @@ pub enum MouseEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TooltipId {
-    pub id: container::Id,
+    pub id: widget::Id,
     pub bounds: Option<Rectangle>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MenuId {
-    pub id: container::Id,
+    pub id: widget::Id,
     pub bounds: Option<Rectangle>,
 }
 
@@ -160,14 +163,14 @@ pub enum Message {
     Command(CommandSpec),
     NoOp,
 
-    OpenTooltip(container::Id),
+    OpenTooltip(widget::Id),
     TooltipPositionMeasured(TooltipId),
-    CloseTooltip(container::Id),
+    CloseTooltip(widget::Id),
 
-    // OpenMenu(container::Id),
+    // OpenMenu(widget::Id),
     // ActivateMenu(String),
     // MenuPositionMeasured(MenuId),
-    // CloseMenu(container::Id),
+    // CloseMenu(widget::Id),
     Module(ModuleMsg),
 }
 
@@ -315,14 +318,19 @@ impl Bar {
             //     }
             // }
             Message::OpenTooltip(id) => {
-                return container::visible_bounds(id.clone()).map(
-                    move |bounds| {
+                return widget::selector::find(id.clone()).map(move |target| {
+                    if let Some(Target::Container { visible_bounds, .. }) =
+                        target
+                    {
                         Message::TooltipPositionMeasured(TooltipId {
                             id: id.clone(),
-                            bounds,
+                            bounds: visible_bounds,
                         })
-                    },
-                );
+                    } else {
+                        error!("failed to find tooltip");
+                        Message::NoOp
+                    }
+                });
             }
             Message::TooltipPositionMeasured(tooltip_id) => {
                 let old_id = self.tooltip_window_id.take();

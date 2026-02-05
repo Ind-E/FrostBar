@@ -31,15 +31,19 @@ color-thief = "0.2.2"
 dashmap = "6.1.0"
 freedesktop-desktop-entry = { version = "0.8.1", default-features = false }
 freedesktop-icons = "0.4.0"
-iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntlet-0.13.1", default-features = false, features = [
+iced = { git = "https://github.com/Ind-E/iced", branch = "frostbar", default-features = false, features = [
     "advanced",
     "canvas",
     "image",
     "lazy",
+    "selector",
     "svg",
     "tokio",
     "wgpu",
-    "web-colors",
+    "wayland",
+] }
+winit = { version = "0.31.0-beta.2", path = "../winit/winit", default-features = false, features = [
+    "wayland",
 ] }
 itertools = { version = "0.14.0", default-features = false, features = [
     "use_alloc",
@@ -70,7 +74,11 @@ tracy-client = { version = "0.18.4", default-features = false }
 zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 console-subscriber = { version = "0.5.0", optional = true }
 tokio-util = { version = "0.7.18", features = ["codec"] }
-knuffel = { version = "3.2.0", default-features = false, features = ["derive", "line-numbers"] }
+knuffel = { version = "3.2.0", default-features = false, features = [
+    "derive",
+    "line-numbers",
+] }
+image = { version = "0.25", default-features = false }
 
 
 [profile.dev.package."*"]
