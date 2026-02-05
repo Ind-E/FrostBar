@@ -44,9 +44,9 @@ iced = { git = "https://github.com/project-gauntlet/iced.git", branch = "gauntle
 itertools = { version = "0.14.0", default-features = false, features = [
     "use_alloc",
 ] }
-knus = "3.3.1"
 linicon = "2.3.0"
-miette = { version = "7.6.0", features = ["fancy-no-backtrace"] }
+miette = { version = "5.10.0", features = ["fancy-no-backtrace"] }
+niri-config = { git = "https://github.com/YaLTeR/niri/", version = "=25.11.0" }
 niri-ipc = { git = "https://github.com/YaLTeR/niri/", version = "=25.11.0" }
 notify-rust = "4.11.7"
 owo-colors = "4.2.2"
@@ -66,10 +66,11 @@ tokio-stream = "0.1.17"
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
-tracy-client = { version = "=0.17.3", default-features = false }
+tracy-client = { version = "0.18.4", default-features = false }
 zbus = { version = "5.10.0", default-features = false, features = ["tokio"] }
 console-subscriber = { version = "0.5.0", optional = true }
 tokio-util = { version = "0.7.18", features = ["codec"] }
+knuffel = { version = "3.2.0", default-features = false, features = ["derive", "line-numbers"] }
 
 
 [profile.dev.package."*"]
@@ -90,7 +91,7 @@ license = "GPL-3.0"
 [workspace.dependencies]
 frostbar_tray = { version = "*", path = "frostbar_tray" }
 
-tracing = "0.1.41"
+tracing = "0.1.44"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "=0.3.19", default-features = false, features = [
     "fmt",

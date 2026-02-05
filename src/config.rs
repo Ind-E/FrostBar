@@ -7,7 +7,7 @@ use std::{
 };
 
 use iced::{Background, Color, border, color, widget::container};
-use knus::{
+use knuffel::{
     Decode, DecodeScalar, ast::Literal, decode::Kind, errors::DecodeError,
 };
 use miette::{Context, IntoDiagnostic};
@@ -18,8 +18,8 @@ use tracing::{debug, error, info};
 use crate::{
     CommandSpec, Message,
     file_watcher::ConfigPath,
-    modules::{BarAlignment, BarPosition},
-    utils::log::notification,
+    modules::{BarAlignment, BarPosition, ModuleMsg, niri::service::NiriEvent},
+    utils::{log::notification, niri::config_to_ipc_action},
 };
 
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../assets/default-config.kdl");
@@ -36,10 +36,12 @@ impl Default for FloatOrPercent {
     }
 }
 
-impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
+impl<S: knuffel::traits::ErrorSpan> knuffel::DecodeScalar<S>
+    for FloatOrPercent
+{
     fn type_check(
-        type_name: &Option<knus::span::Spanned<knus::ast::TypeName, S>>,
-        ctx: &mut knus::decode::Context<S>,
+        type_name: &Option<knuffel::span::Spanned<knuffel::ast::TypeName, S>>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) {
         if let Some(type_name) = &type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -51,11 +53,11 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
     }
 
     fn raw_decode(
-        val: &knus::span::Spanned<knus::ast::Literal, S>,
-        ctx: &mut knus::decode::Context<S>,
+        val: &knuffel::span::Spanned<knuffel::ast::Literal, S>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         match &**val {
-            knus::ast::Literal::Int(value) => {
+            knuffel::ast::Literal::Int(value) => {
                 let v = value.try_into().unwrap_or_else(|e| {
                     ctx.emit_error(DecodeError::unsupported(
                         val,
@@ -65,7 +67,7 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
                 });
                 Ok(FloatOrPercent::Float(v as f32))
             }
-            knus::ast::Literal::Decimal(value) => {
+            knuffel::ast::Literal::Decimal(value) => {
                 let v = value.try_into().unwrap_or_else(|e| {
                     ctx.emit_error(DecodeError::unsupported(
                         val,
@@ -75,7 +77,7 @@ impl<S: knus::traits::ErrorSpan> knus::DecodeScalar<S> for FloatOrPercent {
                 });
                 Ok(FloatOrPercent::Float(v))
             }
-            knus::ast::Literal::String(value) => {
+            knuffel::ast::Literal::String(value) => {
                 if value.ends_with('%') {
                     match value.trim_end_matches('%').parse::<f32>() {
                         Ok(v) => {
@@ -138,12 +140,12 @@ impl<const MIN: i32, const MAX: i32> From<FloatOrInt<MIN, MAX>> for f32 {
     }
 }
 
-impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
-    knus::DecodeScalar<S> for FloatOrInt<MIN, MAX>
+impl<S: knuffel::traits::ErrorSpan, const MIN: i32, const MAX: i32>
+    knuffel::DecodeScalar<S> for FloatOrInt<MIN, MAX>
 {
     fn type_check(
-        type_name: &Option<knus::span::Spanned<knus::ast::TypeName, S>>,
-        ctx: &mut knus::decode::Context<S>,
+        type_name: &Option<knuffel::span::Spanned<knuffel::ast::TypeName, S>>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) {
         if let Some(type_name) = &type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -155,11 +157,11 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
     }
 
     fn raw_decode(
-        val: &knus::span::Spanned<knus::ast::Literal, S>,
-        ctx: &mut knus::decode::Context<S>,
+        val: &knuffel::span::Spanned<knuffel::ast::Literal, S>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         match &**val {
-            knus::ast::Literal::Int(value) => match value.try_into() {
+            knuffel::ast::Literal::Int(value) => match value.try_into() {
                 Ok(v) => {
                     if (MIN..=MAX).contains(&v) {
                         Ok(FloatOrInt(v as f32))
@@ -179,7 +181,7 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
                     Ok(FloatOrInt::default())
                 }
             },
-            knus::ast::Literal::Decimal(value) => match value.try_into() {
+            knuffel::ast::Literal::Decimal(value) => match value.try_into() {
                 Ok(v) => {
                     if ((MIN as f32)..=(MAX as f32)).contains(&v) {
                         Ok(FloatOrInt(v))
@@ -210,17 +212,17 @@ impl<S: knus::traits::ErrorSpan, const MIN: i32, const MAX: i32>
     }
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub struct RawConfig {
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     layout: Layout,
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub style: RawTopLevelStyle,
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub start: Start,
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub middle: Middle,
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub end: End,
 }
 
@@ -292,37 +294,37 @@ fn hydrate_modules(
     ConfigModules { inner: modules }
 }
 
-#[derive(knus::Decode, Debug, Default)]
+#[derive(knuffel::Decode, Debug, Default)]
 pub struct Start {
-    #[knus(children, default)]
+    #[knuffel(children, default)]
     pub modules: Vec<RawConfigModule>,
 }
 
-#[derive(knus::Decode, Debug, Default)]
+#[derive(knuffel::Decode, Debug, Default)]
 pub struct Middle {
-    #[knus(children, default)]
+    #[knuffel(children, default)]
     pub modules: Vec<RawConfigModule>,
 }
 
-#[derive(knus::Decode, Debug, Default)]
+#[derive(knuffel::Decode, Debug, Default)]
 pub struct End {
-    #[knus(children, default)]
+    #[knuffel(children, default)]
     pub modules: Vec<RawConfigModule>,
 }
 
-#[derive(knus::Decode, Debug, Clone, PartialEq)]
+#[derive(knuffel::Decode, Debug, Clone, PartialEq)]
 pub struct Layout {
-    #[knus(child, unwrap(argument), default = 42)]
+    #[knuffel(child, unwrap(argument), default = 42)]
     pub width: u32,
-    #[knus(child, unwrap(argument), default = 0)]
+    #[knuffel(child, unwrap(argument), default = 0)]
     pub gaps: i32,
-    #[knus(child, unwrap(argument), default = Self::default().anchor)]
+    #[knuffel(child, unwrap(argument), default = Self::default().anchor)]
     pub anchor: Anchor,
-    #[knus(child, unwrap(argument), default = Self::default().layer)]
+    #[knuffel(child, unwrap(argument), default = Self::default().layer)]
     pub layer: Layer,
 }
 
-#[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
+#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
 pub enum Anchor {
     Left,
     Right,
@@ -340,7 +342,7 @@ impl Anchor {
     }
 }
 
-#[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
+#[derive(knuffel::DecodeScalar, Debug, Clone, Copy, PartialEq)]
 pub enum Layer {
     Background,
     Bottom,
@@ -359,11 +361,11 @@ impl Default for Layout {
     }
 }
 
-#[derive(knus::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug, Clone)]
 pub struct RawTopLevelStyle {
-    #[knus(child, default = Self::default().border_radius)]
+    #[knuffel(child, default = Self::default().border_radius)]
     pub border_radius: RawConfigRadius,
-    #[knus(child, unwrap(argument), default = Self::default().background)]
+    #[knuffel(child, unwrap(argument), default = Self::default().background)]
     pub background: ConfigColor,
 }
 
@@ -390,11 +392,11 @@ impl RawTopLevelStyle {
     }
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 struct ColorVariable {
-    #[knus(node_name)]
+    #[knuffel(node_name)]
     pub name: String,
-    #[knus(argument)]
+    #[knuffel(argument)]
     pub color: ConfigColor,
 }
 
@@ -403,13 +405,13 @@ pub struct ColorVars {
     vars: FxHashMap<String, Color>,
 }
 
-impl<S> knus::DecodeChildren<S> for ColorVars
+impl<S> knuffel::DecodeChildren<S> for ColorVars
 where
-    S: knus::traits::ErrorSpan,
+    S: knuffel::traits::ErrorSpan,
 {
     fn decode_children(
-        nodes: &[knus::ast::SpannedNode<S>],
-        ctx: &mut knus::decode::Context<S>,
+        nodes: &[knuffel::ast::SpannedNode<S>],
+        ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         let mut vars = FxHashMap::default();
         for node in nodes {
@@ -421,7 +423,7 @@ where
     }
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub enum RawConfigModule {
     AudioVisualizer(RawAudioVisualizer),
     Battery(RawBattery),
@@ -460,24 +462,24 @@ impl std::ops::DerefMut for ConfigModules {
     }
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub struct RawAudioVisualizer {
-    #[knus(child, unwrap(argument), default = Self::default().length)]
+    #[knuffel(child, unwrap(argument), default = Self::default().length)]
     pub length: u32,
 
-    #[knus(child, unwrap(argument), default = Self::default().spacing)]
+    #[knuffel(child, unwrap(argument), default = Self::default().spacing)]
     pub spacing: FloatOrPercent,
 
-    #[knus(child, unwrap(argument), default = Self::default().color)]
+    #[knuffel(child, unwrap(argument), default = Self::default().color)]
     pub color: ConfigColor,
 
-    #[knus(child, unwrap(argument), default = Self::default().dynamic_color)]
+    #[knuffel(child, unwrap(argument), default = Self::default().dynamic_color)]
     pub dynamic_color: bool,
 
-    #[knus(flatten(child), default)]
+    #[knuffel(flatten(child), default)]
     pub binds: RawMouseBinds,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub style: RawContainerStyle,
 }
 
@@ -518,18 +520,18 @@ pub struct AudioVisualizer {
     pub style: ContainerStyle,
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub struct RawBattery {
-    #[knus(child, unwrap(argument), default = Self::default().icon_size)]
+    #[knuffel(child, unwrap(argument), default = Self::default().icon_size)]
     pub icon_size: u32,
 
-    #[knus(child, unwrap(argument), default = Self::default().charging_color)]
+    #[knuffel(child, unwrap(argument), default = Self::default().charging_color)]
     pub charging_color: ConfigColor,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub style: RawContainerStyle,
 
-    #[knus(flatten(child), default)]
+    #[knuffel(flatten(child), default)]
     pub binds: RawMouseBinds,
 }
 
@@ -564,18 +566,18 @@ pub struct Battery {
     pub binds: MouseBinds,
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub struct RawTime {
-    #[knus(child, unwrap(argument), default = "%I\n%M".to_string())]
+    #[knuffel(child, unwrap(argument), default = "%I\n%M".to_string())]
     pub format: String,
 
-    #[knus(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
+    #[knuffel(child, unwrap(argument), default = "%a %b %-d\n%-m/%-d/%y".to_string())]
     pub tooltip_format: String,
 
-    #[knus(flatten(child), default)]
+    #[knuffel(flatten(child), default)]
     pub binds: RawMouseBinds,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub style: RawContainerStyle,
 }
 
@@ -599,15 +601,15 @@ pub struct Time {
     pub style: ContainerStyle,
 }
 
-#[derive(knus::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug, Clone)]
 pub struct RawMpris {
-    #[knus(child, unwrap(argument), default = "󰝚".to_string())]
+    #[knuffel(child, unwrap(argument), default = "󰝚".to_string())]
     pub placeholder: String,
 
-    #[knus(flatten(child), default)]
+    #[knuffel(flatten(child), default)]
     pub binds: RawMouseBindsForMpris,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub placeholder_style: RawContainerStyle,
 }
 
@@ -629,33 +631,33 @@ pub struct Mpris {
     pub placeholder_style: ContainerStyle,
 }
 
-#[derive(knus::Decode, Debug, Clone)]
+#[derive(knuffel::Decode, Debug, Clone)]
 pub struct RawNiri {
-    #[knus(child, unwrap(argument), default = 10)]
+    #[knuffel(child, unwrap(argument), default = 10)]
     spacing: u32,
 
-    #[knus(child, unwrap(argument), default = 0)]
+    #[knuffel(child, unwrap(argument), default = 0)]
     workspace_offset: i8,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     style: RawContainerStyle,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     window_focused_style: RawContainerStyle,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     window_style: RawContainerStyle,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     workspace_active_style: RawContainerStyle,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     workspace_hovered_style: RawContainerStyle,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     workspace_style: RawContainerStyle,
 
-    #[knus(flatten(child), default)]
+    #[knuffel(flatten(child), default)]
     pub binds: RawMouseBinds,
 }
 
@@ -823,21 +825,21 @@ pub struct NiriWindowStyle {
     pub base: ContainerStyle,
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub struct RawLabel {
-    #[knus(child, unwrap(argument), default = String::new())]
+    #[knuffel(child, unwrap(argument), default = String::new())]
     pub text: String,
 
-    #[knus(child, unwrap(argument), default = 18)]
+    #[knuffel(child, unwrap(argument), default = 18)]
     pub size: u32,
 
-    #[knus(child, unwrap(argument), default = None)]
+    #[knuffel(child, unwrap(argument), default = None)]
     pub tooltip: Option<String>,
 
-    #[knus(flatten(child), default)]
+    #[knuffel(flatten(child), default)]
     pub binds: RawMouseBinds,
 
-    #[knus(child, default)]
+    #[knuffel(child, default)]
     pub style: RawContainerStyle,
 }
 
@@ -863,7 +865,7 @@ pub struct Label {
     pub style: ContainerStyle,
 }
 
-#[derive(knus::Decode, Debug)]
+#[derive(knuffel::Decode, Debug)]
 pub struct RawSystemTray {}
 
 impl RawSystemTray {
@@ -874,30 +876,30 @@ impl RawSystemTray {
 
 pub struct SystemTray {}
 
-#[derive(knus::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Clone, Default)]
 pub struct RawMouseBinds {
-    #[knus(child)]
+    #[knuffel(child)]
     pub mouse_left: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub double_click: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub mouse_right: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub mouse_middle: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_up: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_down: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_right: Option<Command>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_left: Option<Command>,
 }
 
@@ -905,20 +907,24 @@ impl RawMouseBinds {
     fn hydrate(self) -> MouseBinds {
         fn process_command(cmd: Option<Command>) -> Option<Message> {
             let cmd = cmd?;
-            if cmd.args.is_empty() {
-                None
-            } else if let Some(sh) = cmd.sh
-                && sh
+            if let Command::Normal(ref args) | Command::Sh(ref args) = cmd
+                && args.is_empty()
             {
-                Some(Message::Command(CommandSpec {
+                return None;
+            }
+            match cmd {
+                Command::Normal(args) => Some(Message::Command(CommandSpec {
+                    command: args[0].clone(),
+                    args: args.get(1..).map(<[String]>::to_vec),
+                })),
+                Command::Sh(args) => Some(Message::Command(CommandSpec {
                     command: String::from("sh"),
-                    args: Some(vec![String::from("-c"), cmd.args[0].clone()]),
-                }))
-            } else {
-                Some(Message::Command(CommandSpec {
-                    command: cmd.args[0].clone(),
-                    args: cmd.args.get(1..).map(<[String]>::to_vec),
-                }))
+                    args: Some(vec![String::from("-c"), args[0].clone()]),
+                })),
+                Command::Niri(action) => Some(Message::Module(
+                    ModuleMsg::Niri(NiriEvent::Action(action)),
+                )),
+                Command::None => None,
             }
         }
 
@@ -1004,13 +1010,13 @@ impl From<RawMediaControl> for MediaControl {
     }
 }
 
-impl<S> knus::Decode<S> for RawMediaControl
+impl<S> knuffel::Decode<S> for RawMediaControl
 where
-    S: knus::traits::ErrorSpan,
+    S: knuffel::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &knus::ast::SpannedNode<S>,
-        ctx: &mut knus::decode::Context<S>,
+        node: &knuffel::ast::SpannedNode<S>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         if let Some(type_name) = &node.type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -1121,30 +1127,30 @@ where
     }
 }
 
-#[derive(knus::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Clone, Default)]
 pub struct RawMouseBindsForMpris {
-    #[knus(child)]
+    #[knuffel(child)]
     pub mouse_left: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub double_click: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub mouse_right: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub mouse_middle: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_up: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_down: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_right: Option<RawMediaControl>,
 
-    #[knus(child)]
+    #[knuffel(child)]
     pub scroll_left: Option<RawMediaControl>,
 }
 
@@ -1175,21 +1181,31 @@ impl From<RawMouseBindsForMpris> for MouseBindsForMpris {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Command {
-    pub sh: Option<bool>,
-
-    pub args: Vec<String>,
+enum CommandType {
+    #[default]
+    Normal,
+    Sh,
+    Niri,
 }
 
-#[derive(knus::Decode, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
+pub enum Command {
+    Normal(Vec<String>),
+    Sh(Vec<String>),
+    Niri(niri_ipc::Action),
+    #[default]
+    None,
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Default)]
 pub struct RawContainerStyle {
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     pub text_color: Option<ConfigColor>,
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     pub background: Option<ConfigColor>,
-    #[knus(child)]
+    #[knuffel(child)]
     pub border: Option<ConfigBorder>,
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     pub padding: Option<FloatOrInt<0, { i32::MAX }>>,
 }
 
@@ -1232,13 +1248,13 @@ impl DerefMut for ContainerStyle {
     }
 }
 
-#[derive(knus::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Clone, Default)]
 pub struct ConfigBorder {
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     pub color: Option<ConfigColor>,
-    #[knus(child, unwrap(argument), default)]
+    #[knuffel(child, unwrap(argument), default)]
     pub width: Option<FloatOrInt<0, { i32::MAX }>>,
-    #[knus(child)]
+    #[knuffel(child)]
     pub radius: Option<RawConfigRadius>,
 }
 
@@ -1294,25 +1310,25 @@ impl From<RawConfigRadius> for iced::border::Radius {
     }
 }
 
-#[derive(knus::Decode, Debug, Clone, Default)]
+#[derive(knuffel::Decode, Debug, Clone, Default)]
 pub struct PerCorner {
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     top_left: FloatOrInt<0, { i32::MAX }>,
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     top_right: FloatOrInt<0, { i32::MAX }>,
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     bottom_left: FloatOrInt<0, { i32::MAX }>,
-    #[knus(child, unwrap(argument))]
+    #[knuffel(child, unwrap(argument))]
     bottom_right: FloatOrInt<0, { i32::MAX }>,
 }
 
-impl<S> knus::Decode<S> for RawConfigRadius
+impl<S> knuffel::Decode<S> for RawConfigRadius
 where
-    S: knus::traits::ErrorSpan,
+    S: knuffel::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &knus::ast::SpannedNode<S>,
-        ctx: &mut knus::decode::Context<S>,
+        node: &knuffel::ast::SpannedNode<S>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         if let Some(type_name) = &node.type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -1367,13 +1383,13 @@ where
     }
 }
 
-impl<S> knus::Decode<S> for Command
+impl<S> knuffel::Decode<S> for Command
 where
-    S: knus::traits::ErrorSpan,
+    S: knuffel::traits::ErrorSpan,
 {
     fn decode_node(
-        node: &knus::ast::SpannedNode<S>,
-        ctx: &mut knus::decode::Context<S>,
+        node: &knuffel::ast::SpannedNode<S>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         if let Some(type_name) = &node.type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -1383,11 +1399,22 @@ where
             ));
         }
 
-        let mut sh = None;
+        let mut cmd_type = CommandType::default();
         for (name, val) in &node.properties {
             match &***name {
                 "sh" => {
-                    sh = knus::traits::DecodeScalar::decode(val, ctx)?;
+                    if let Some(true) =
+                        knuffel::traits::DecodeScalar::decode(val, ctx)?
+                    {
+                        cmd_type = CommandType::Sh;
+                    }
+                }
+                "niri" => {
+                    if let Some(true) =
+                        knuffel::traits::DecodeScalar::decode(val, ctx)?
+                    {
+                        cmd_type = CommandType::Niri;
+                    }
                 }
                 name_str => {
                     return Err(DecodeError::unexpected(
@@ -1403,29 +1430,69 @@ where
         }
 
         let mut iter_args = node.arguments.iter();
-        if iter_args.len() > 1
-            && let Some(sh) = sh
-            && sh
-        {
+        if iter_args.len() > 1 && cmd_type == CommandType::Sh {
             return Err(DecodeError::unexpected(
                 &iter_args.nth(1).unwrap().literal,
                 "argument",
                 "when sh=true, only 1 argument is allowed",
             ));
         }
+        if cmd_type == CommandType::Niri
+            && let Some(arg) = node.arguments.first()
+        {
+            return Err(DecodeError::unexpected(
+                &arg.literal,
+                "argument",
+                "when niri=true, no arguments are allowed",
+            ));
+        }
+
         let args = iter_args
-            .map(|val| knus::traits::DecodeScalar::decode(val, ctx))
+            .map(|val| knuffel::traits::DecodeScalar::decode(val, ctx))
             .collect::<Result<_, _>>()?;
-        let children = node.children.as_ref().map_or(&[][..], |lst| &lst[..]);
-        for child in children {
-            let name_str = &**child.node_name;
-            ctx.emit_error(DecodeError::unexpected(
-                child,
+
+        let children = node.children();
+        if matches!(cmd_type, CommandType::Normal | CommandType::Sh) {
+            for unwanted_child in children {
+                let name_str = &**unwanted_child.node_name;
+                ctx.emit_error(DecodeError::unexpected(
+                unwanted_child,
                 "node",
                 format!("unexpected node `{0}`", name_str.escape_default(),),
             ));
+            }
         }
-        Ok(Command { sh, args })
+
+        match cmd_type {
+            CommandType::Normal => Ok(Command::Normal(args)),
+            CommandType::Sh => Ok(Command::Sh(args)),
+            CommandType::Niri => {
+                let mut children = node.children();
+                if let Some(child) = children.next() {
+                    for unwanted_child in children {
+                        ctx.emit_error(DecodeError::unexpected(
+                            unwanted_child,
+                            "node",
+                            "only one action is allowed when niri=true",
+                        ));
+                    }
+                    let action =
+                        niri_config::binds::Action::decode_node(child, ctx)?;
+                    match config_to_ipc_action(action, child) {
+                        Ok(action) => Ok(Command::Niri(action)),
+                        Err(e) => {
+                            ctx.emit_error(e);
+                            Ok(Command::None)
+                        }
+                    }
+                } else {
+                    Err(DecodeError::missing(
+                        node,
+                        "expected a niri action for this bind",
+                    ))
+                }
+            }
+        }
     }
 }
 
@@ -1451,7 +1518,7 @@ impl ColorVars {
     }
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
-        match knus::parse::<ColorVars>(filename, text) {
+        match knuffel::parse::<ColorVars>(filename, text) {
             Ok(colors) => {
                 debug!("Successfully parsed colors");
                 Ok(colors)
@@ -1479,7 +1546,7 @@ impl RawConfig {
     }
 
     pub fn parse(filename: &str, text: &str) -> miette::Result<Self> {
-        match knus::parse::<RawConfig>(filename, text) {
+        match knuffel::parse::<RawConfig>(filename, text) {
             Ok(config) => {
                 debug!("Successfully parsed config");
                 Ok(config)
@@ -1664,13 +1731,13 @@ impl From<Color> for ConfigColor {
     }
 }
 
-impl<S> knus::DecodeScalar<S> for ConfigColor
+impl<S> knuffel::DecodeScalar<S> for ConfigColor
 where
-    S: knus::traits::ErrorSpan,
+    S: knuffel::traits::ErrorSpan,
 {
     fn type_check(
-        type_name: &Option<knus::span::Spanned<knus::ast::TypeName, S>>,
-        ctx: &mut knus::decode::Context<S>,
+        type_name: &Option<knuffel::span::Spanned<knuffel::ast::TypeName, S>>,
+        ctx: &mut knuffel::decode::Context<S>,
     ) {
         if let Some(type_name) = &type_name {
             ctx.emit_error(DecodeError::unexpected(
@@ -1682,11 +1749,11 @@ where
     }
 
     fn raw_decode(
-        value: &knus::span::Spanned<Literal, S>,
-        _ctx: &mut knus::decode::Context<S>,
+        value: &knuffel::span::Spanned<Literal, S>,
+        _ctx: &mut knuffel::decode::Context<S>,
     ) -> Result<Self, DecodeError<S>> {
         match **value {
-            knus::ast::Literal::String(ref s) => {
+            knuffel::ast::Literal::String(ref s) => {
                 if s.starts_with('$') {
                     Ok(ConfigColor::Variable(s.to_string()))
                 } else {

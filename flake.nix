@@ -68,7 +68,6 @@
 
       dlopenLibraries =
         pkgs: with pkgs; [
-          libxkbcommon
           vulkan-loader
           wayland
         ];
@@ -103,6 +102,8 @@
             buildInputs = with pkgs; [
               openssl
               pipewire
+              libxkbcommon
+              libinput
             ];
 
             packages = with pkgs; [
