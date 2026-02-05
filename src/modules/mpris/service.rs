@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use ::image as image_rs;
 use base64::Engine;
 use iced::{
     Color, Subscription, Task,
-    advanced::graphics::image::image_rs,
     futures::{
         StreamExt,
         channel::mpsc::Sender as IcedSender,

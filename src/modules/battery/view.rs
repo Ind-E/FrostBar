@@ -2,7 +2,7 @@ use std::any::Any;
 
 use iced::{
     Length,
-    widget::{Column, Container, Text, container},
+    widget::{self, Column, Container, Text},
 };
 use tracing::warn;
 
@@ -14,7 +14,7 @@ use crate::{
 extern crate starship_battery as battery;
 
 pub struct BatteryView {
-    pub id: container::Id,
+    pub id: widget::Id,
     config: config::Battery,
     pub position: BarPosition,
 }
@@ -64,7 +64,7 @@ impl ViewTrait<Modules> for BatteryView {
     fn tooltip<'a>(
         &'a self,
         modules: &'a Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         if *id != self.id {
             return None;
@@ -103,7 +103,7 @@ impl ViewTrait<Modules> for BatteryView {
 impl BatteryView {
     pub fn new(config: config::Battery, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
             config,
             position,
         }
