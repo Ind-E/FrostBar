@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{
     ffi::OsStr,
     fs::{self, File},
@@ -1757,7 +1758,7 @@ where
                 if s.starts_with('$') {
                     Ok(ConfigColor::Variable(s.to_string()))
                 } else {
-                    let color = Color::parse(s).ok_or_else(|| {
+                    let color = Color::from_str(s).map_err(|_| {
                         DecodeError::unsupported(value, "invalid hex literal, should be in the form \"#rrggbb[aa]\" or \"#rgb[a]\"")
                     })?;
                     Ok(ConfigColor::Literal(color))

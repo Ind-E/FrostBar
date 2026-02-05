@@ -72,7 +72,7 @@ impl ViewTrait<Modules> for SystemTrayView {
     fn tooltip<'a>(
         &'a self,
         modules: &'a Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         let tray = &modules.systray;
         for (item_id, view) in &self.tray_item_views {
@@ -88,7 +88,7 @@ impl ViewTrait<Modules> for SystemTrayView {
     fn menu<'a>(
         &'a self,
         modules: &'a Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         let tray = &modules.systray;
         for (item_id, view) in &self.tray_item_views {
@@ -119,14 +119,14 @@ impl ViewTrait<Modules> for SystemTrayView {
 }
 
 pub struct TrayItemView {
-    id: container::Id,
+    id: widget::Id,
 }
 
 #[profiling::all_functions]
 impl TrayItemView {
     pub fn new() -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
         }
     }
     pub fn view<'a>(
