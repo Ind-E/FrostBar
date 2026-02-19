@@ -5,7 +5,7 @@ use chrono::{DateTime, Local};
 use iced::{
     Color, Subscription, Task,
     mouse::ScrollDelta,
-    widget::{MouseArea, container, image},
+    widget::{self, MouseArea, image},
 };
 use label::LabelView;
 use mpris::{
@@ -175,14 +175,14 @@ impl Modules {
 
     pub fn render_tooltip_for_id<'a>(
         &'a self,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         self.views.iter().find_map(|view| view.tooltip(self, id))
     }
 
     pub fn render_menu_for_id<'a>(
         &'a self,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         self.views.iter().find_map(|view| view._menu(self, id))
     }
@@ -341,7 +341,7 @@ pub trait ViewTrait<M>: Any {
     fn tooltip<'a>(
         &'a self,
         _modules: &'a M,
-        _id: &container::Id,
+        _id: &widget::Id,
     ) -> Option<Element<'a>> {
         None
     }
@@ -349,7 +349,7 @@ pub trait ViewTrait<M>: Any {
     fn _menu<'a>(
         &'a self,
         _modules: &'a M,
-        _id: &container::Id,
+        _id: &widget::Id,
     ) -> Option<Element<'a>> {
         None
     }
@@ -363,7 +363,7 @@ pub trait ViewTrait<M>: Any {
 pub fn mouse_binds<'a>(
     element: impl Into<Element<'a>>,
     binds: &'a MouseBinds,
-    tooltip_id: Option<container::Id>,
+    tooltip_id: Option<widget::Id>,
 ) -> Element<'a> {
     let mut mouse_area = MouseArea::new(element);
 

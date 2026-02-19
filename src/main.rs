@@ -1,14 +1,15 @@
 use clap::Parser;
 use iced::{
     Alignment, Background, Color, Event, Font, Length, Pixels, Rectangle,
-    Settings, Size, Subscription, Task, Theme,
+    Subscription, Task, Theme,
     border::rounded,
     font::{Family, Weight},
     padding::{left, top},
     theme,
-    widget::{Column, Container, MouseArea, Row, container, stack},
+    widget::{self, Column, Container, MouseArea, Row, container, selector::Target, stack},
     window::Id,
 };
+use iced_layershell::settings::{LayerShellSettings, StartMode};
 use itertools::Itertools;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, error, info};
@@ -39,7 +40,7 @@ use crate::{
     },
     utils::{
         log::{LogManager, get_default_filter, notification},
-        window::{open_dummy_window, open_tooltip_window, open_window},
+        window::{open_tooltip_window, open_window},
     },
 };
 
@@ -71,11 +72,11 @@ static GLOBAL: tracy_client::ProfiledAllocator<std::alloc::System> =
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-pub fn main() -> iced::Result {
+pub fn main() -> Result<(), iced_layershell::Error> {
     #[cfg(feature = "tracy")]
     tracy_client::Client::start();
 
-    iced::daemon(
+    iced_layershell::daemon(
         || {
             let cli = Cli::parse();
 
@@ -116,6 +117,7 @@ pub fn main() -> iced::Result {
 
             Bar::new(config, color_vars, config_path)
         },
+        Bar::namespace,
         Bar::update,
         Bar::view,
     )
@@ -123,8 +125,12 @@ pub fn main() -> iced::Result {
     .style(Bar::style)
     .title(Bar::title)
     .theme(Bar::theme)
-    .settings(Settings {
+    .settings(iced_layershell::Settings {
         id: Some(BAR_NAMESPACE.to_string()),
+            layer_settings: LayerShellSettings {
+                start_mode: StartMode::Background,
+                ..Default::default()
+            },
         fonts: vec![FIRA_CODE_BYTES.into()],
         default_font: FIRA_CODE,
         default_text_size: Pixels(16.0),
@@ -141,16 +147,17 @@ pub enum MouseEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TooltipId {
-    pub id: container::Id,
+    pub id: widget::Id,
     pub bounds: Option<Rectangle>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MenuId {
-    pub id: container::Id,
+    pub id: widget::Id,
     pub bounds: Option<Rectangle>,
 }
 
+#[iced_layershell::to_layer_message(multi)]
 #[derive(Debug, Clone)]
 pub enum Message {
     IcedEvent(Event),
@@ -160,21 +167,19 @@ pub enum Message {
     Command(CommandSpec),
     NoOp,
 
-    OpenTooltip(container::Id),
+    OpenTooltip(widget::Id),
     TooltipPositionMeasured(TooltipId),
-    CloseTooltip(container::Id),
+    CloseTooltip(widget::Id),
 
-    // OpenMenu(container::Id),
+    // OpenMenu(widget::Id),
     // ActivateMenu(String),
     // MenuPositionMeasured(MenuId),
-    // CloseMenu(container::Id),
+    // CloseMenu(widget::Id),
     Module(ModuleMsg),
 }
 
 pub struct Bar {
-    id: Option<Id>,
-    dummy_id: Id,
-    monitor_size: Option<Size>,
+    id: Id,
     config: Config,
     color_vars: ColorVars,
     path: ConfigPath,
@@ -201,12 +206,10 @@ impl Bar {
         let mut modules = Modules::new();
         modules.update_from_config(&mut config, &icon_cache);
 
-        let (dummy_id, open_dummy) = open_dummy_window();
+        let (id, open_task) = open_window(&config.layout);
 
         let bar = Self {
-            id: None,
-            monitor_size: None,
-            dummy_id,
+            id,
             modules,
             icon_cache,
             config,
@@ -218,14 +221,18 @@ impl Bar {
             active_menu_id: None,
         };
 
-        (bar, Task::batch(vec![open_dummy]))
+        (bar, open_task)
     }
 
-    fn title(&self, _id: Id) -> String {
-        String::from(BAR_NAMESPACE)
+    fn title(&self, id: Id) -> Option<String> {
+        if self.id == id {
+            Some(String::from(BAR_NAMESPACE))
+        } else {
+            None
+        }
     }
 
-    pub fn namespace(&self) -> String {
+    pub fn namespace() -> String {
         String::from(BAR_NAMESPACE)
     }
 
@@ -239,22 +246,21 @@ impl Bar {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::IcedEvent(event) => {
-                if let Event::Window(iced::window::Event::Opened {
-                    position: _,
-                    size,
-                }) = event
-                    && self.id.is_none()
-                {
-                    self.monitor_size = Some(size);
-                    debug!("measured monitor {size:?}");
-
-                    let (id, open_task) =
-                        open_window(&self.config.layout, size);
-                    self.id = Some(id);
-
-                    let close_task = iced::window::close(self.dummy_id);
-                    return Task::batch([open_task, close_task]);
-                }
+                // if let Event::Window(iced::window::Event::Opened {
+                //     position: _,
+                //     size,
+                // }) = event
+                //     && self.id.is_none()
+                // {
+                //     self.monitor_size = Some(size);
+                //     debug!("measured monitor {size:?}");
+                //
+                //     let (id, open_task) = open_window(&self.config.layout);
+                //     self.id = Some(id);
+                //
+                //     let close_task = iced::window::close(self.dummy_id);
+                //     return Task::batch([open_task, close_task]);
+                // }
 
                 if let Event::Mouse(iced::mouse::Event::ButtonPressed(_)) =
                     event
@@ -315,12 +321,17 @@ impl Bar {
             //     }
             // }
             Message::OpenTooltip(id) => {
-                return container::visible_bounds(id.clone()).map(
-                    move |bounds| {
-                        Message::TooltipPositionMeasured(TooltipId {
-                            id: id.clone(),
-                            bounds,
-                        })
+                return widget::selector::find(id.clone()).map(
+                    move |target| {
+                        if let Some(Target::Container { visible_bounds, .. }) = target {
+                            Message::TooltipPositionMeasured(TooltipId {
+                                id: id.clone(),
+                                bounds: visible_bounds
+                            })
+                        } else {
+                            error!("failed to find tooltip");
+                            Message::NoOp
+                        }
                     },
                 );
             }
@@ -481,6 +492,22 @@ impl Bar {
             }
 
             Message::NoOp => {}
+
+            Message::AnchorChange { .. } |
+            Message::SetInputRegion { .. } |
+            Message::AnchorSizeChange { .. } |
+            Message::LayerChange { .. } |
+            Message::MarginChange { .. } |
+            Message::SizeChange { .. } |
+            Message::ExclusiveZoneChange { .. } |
+            Message::VirtualKeyboardPressed { .. } |
+            Message::NewLayerShell { .. } |
+            Message::NewBaseWindow { .. } |
+            Message::NewPopUp { .. } |
+            Message::NewMenu { .. } |
+            Message::NewInputPanel { .. } |
+            Message::RemoveWindow(_) |
+            Message::ForgetLastOutput => unreachable!()
         }
 
         Task::none()
@@ -693,7 +720,7 @@ impl Bar {
     // }
 
     pub fn view(&self, id: Id) -> Element<'_> {
-        if Some(id) == self.id {
+        if id == self.id {
             self.view_bar()
         } else if Some(id) == self.tooltip_window_id
             && let Some(tooltip_id) = &self.active_tooltip_id
@@ -706,6 +733,7 @@ impl Bar {
         //     self.view_menu(menu_id)
         // }
         else {
+            debug!("viewing nothing??");
             Column::new().into()
         }
     }
@@ -731,14 +759,11 @@ impl Bar {
                 if self.config.layout == new_config.layout {
                     self.config = new_config;
                     self.modules.synchronize_views();
-                } else if let Some(id) = self.id {
+                } else {
                     self.config = new_config;
-                    let close = iced::window::close(id);
-                    let (id, open) = open_window(
-                        &self.config.layout,
-                        self.monitor_size.unwrap(),
-                    );
-                    self.id = Some(id);
+                    let close = iced::window::close(self.id);
+                    let (id, open) = open_window(&self.config.layout);
+                    self.id = id;
                     self.modules.synchronize_views();
                     return Task::batch([close, open]);
                 }

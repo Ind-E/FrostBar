@@ -5,9 +5,7 @@ use iced::{
     mouse::Interaction,
     padding::{left, top},
     widget::{
-        Column, Container, Image, MouseArea, Row, Svg, Text,
-        container::{self},
-        text::Shaping,
+        self, Column, Container, Image, MouseArea, Row, Svg, Text, text::Shaping
     },
 };
 use itertools::Itertools;
@@ -114,7 +112,7 @@ impl ViewTrait<Modules> for NiriView {
     fn tooltip<'a>(
         &'a self,
         modules: &'a Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         let service = modules.niri.as_ref().expect("niri should not be None");
         for (ws_id, ws_view) in &self.workspace_views {
@@ -261,14 +259,14 @@ impl WorkspaceView {
 
 #[derive(Debug, Eq, PartialEq)]
 struct WindowView {
-    id: container::Id,
+    id: widget::Id,
 }
 
 #[profiling::all_functions]
 impl WindowView {
     fn new() -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
         }
     }
 

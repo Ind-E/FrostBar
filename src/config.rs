@@ -3,7 +3,7 @@ use std::{
     fs::{self, File},
     io::Write,
     ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, str::FromStr,
 };
 
 use iced::{Background, Color, border, color, widget::container};
@@ -1757,7 +1757,7 @@ where
                 if s.starts_with('$') {
                     Ok(ConfigColor::Variable(s.to_string()))
                 } else {
-                    let color = Color::parse(s).ok_or_else(|| {
+                    let color = Color::from_str(s).map_err(|_| {
                         DecodeError::unsupported(value, "invalid hex literal, should be in the form \"#rrggbb[aa]\" or \"#rgb[a]\"")
                     })?;
                     Ok(ConfigColor::Literal(color))

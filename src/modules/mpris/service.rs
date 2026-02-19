@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use base64::Engine;
 use iced::{
     Color, Subscription, Task,
-    advanced::graphics::image::image_rs,
     futures::{
         StreamExt,
         channel::mpsc::Sender as IcedSender,
@@ -11,6 +10,7 @@ use iced::{
     },
     widget::image,
 };
+use ::image as image_rs;
 use tokio_stream::StreamMap;
 use tracing::{debug, error};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};

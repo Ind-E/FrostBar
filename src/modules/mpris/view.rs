@@ -4,8 +4,7 @@ use iced::{
     Length,
     mouse::{Interaction, ScrollDelta},
     widget::{
-        Column, Container, Image, MouseArea, Row, Text, container,
-        text::Shaping,
+        self, Column, Container, Image, MouseArea, Row, Text, text::Shaping
     },
 };
 use rustc_hash::FxHashMap;
@@ -78,7 +77,7 @@ impl ViewTrait<Modules> for MprisView {
     fn tooltip<'a>(
         &'a self,
         modules: &'a Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         let service = modules.mpris.as_ref().expect("mpris should not be None");
         self.player_views.iter().find_map(|(player_name, view)| {
@@ -128,13 +127,13 @@ impl MprisView {
 
 #[derive(Clone, Debug)]
 pub struct MprisPlayerView {
-    pub id: container::Id,
+    pub id: widget::Id,
 }
 
 impl MprisPlayerView {
     fn new() -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
         }
     }
 }
