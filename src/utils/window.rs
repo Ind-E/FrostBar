@@ -1,118 +1,73 @@
-use iced::{
-    Size,
-    window::settings::{
-        Anchor, KeyboardInteractivity, Layer, LayerShellSettings,
-        PlatformSpecific,
+use iced_layershell::{
+    actions::IcedNewPopupSettings,
+    reexport::{
+        Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings,
+        OutputOption,
     },
 };
 
-use crate::{BAR_NAMESPACE, Message, config};
-
-pub fn open_dummy_window() -> (iced::window::Id, iced::Task<Message>) {
-    let (id, open_task) = iced::window::open(iced::window::Settings {
-        transparent: true,
-        platform_specific: PlatformSpecific {
-            layer_shell: LayerShellSettings {
-                layer: Some(Layer::Top),
-                anchor: Some(
-                    Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
-                ),
-                input_region: Some((0, 0, 0, 0)),
-                keyboard_interactivity: Some(KeyboardInteractivity::None),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        exit_on_close_request: false,
-        ..Default::default()
-    });
-
-    (id, open_task.map(|_| Message::NoOp))
-}
+use crate::{config, Message, BAR_NAMESPACE};
 
 #[profiling::function]
 pub fn open_window(
     layout: &config::Layout,
-    monitor_size: iced::Size,
 ) -> (iced::window::Id, iced::Task<Message>) {
-    let size = match layout.anchor {
-        config::Anchor::Left | config::Anchor::Right => {
-            Size::new(layout.width as f32, 0.0)
-        }
-        config::Anchor::Top | config::Anchor::Bottom => {
-            Size::new(0.0, layout.width as f32)
-        }
-    };
-
-    let anchor = Some(match layout.anchor {
-        config::Anchor::Left => Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM,
-        config::Anchor::Right => Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
-        config::Anchor::Top => Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
-        config::Anchor::Bottom => Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+    let size = Some(match layout.anchor {
+        config::Anchor::Left | config::Anchor::Right => (layout.width, 0),
+        config::Anchor::Top | config::Anchor::Bottom => (0, layout.width),
     });
+
+    let anchor = match layout.anchor {
+        config::Anchor::Left => Anchor::Left | Anchor::Top | Anchor::Bottom,
+        config::Anchor::Right => Anchor::Right | Anchor::Top | Anchor::Bottom,
+        config::Anchor::Top => Anchor::Top | Anchor::Left | Anchor::Right,
+        config::Anchor::Bottom => Anchor::Bottom | Anchor::Left | Anchor::Right,
+    };
 
     // top, right, bottom, left
     let margin = Some((layout.gaps, layout.gaps, layout.gaps, layout.gaps));
 
-    // x, y, width, height
-    let input_region = Some(match layout.anchor {
-        config::Anchor::Left | config::Anchor::Right => {
-            (0, 0, layout.width as i32, monitor_size.height as i32)
-        }
-        config::Anchor::Top | config::Anchor::Bottom => {
-            (0, 0, monitor_size.width as i32, layout.width as i32)
-        }
-    });
-
-    let layer = Some(match layout.layer {
+    let layer = match layout.layer {
         config::Layer::Background => Layer::Background,
         config::Layer::Bottom => Layer::Bottom,
         config::Layer::Top => Layer::Top,
         config::Layer::Overlay => Layer::Overlay,
-    });
+    };
 
-    let (id, open_task) = iced::window::open(iced::window::Settings {
-        size,
-        decorations: false,
-        minimizable: false,
-        transparent: true,
-        platform_specific: PlatformSpecific {
-            layer_shell: LayerShellSettings {
-                anchor,
-                margin,
-                input_region,
-                layer,
-                exclusive_zone: Some(layout.width as i32 + layout.gaps),
-                keyboard_interactivity: Some(KeyboardInteractivity::None),
-                namespace: Some(String::from(BAR_NAMESPACE)),
-                ..Default::default()
-            },
-            ..Default::default()
+    let id = iced::window::Id::unique();
+
+    let msg = Message::NewLayerShell {
+        settings: NewLayerShellSettings {
+            size,
+            layer,
+            anchor,
+            exclusive_zone: Some(layout.width as i32 + layout.gaps),
+            margin,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            output_option: OutputOption::None,
+            events_transparent: false,
+            namespace: Some(BAR_NAMESPACE.to_string()),
         },
-        exit_on_close_request: false,
-        ..Default::default()
-    });
+        id,
+    };
 
-    (id, open_task.map(|_| Message::NoOp))
+    let task = iced::Task::done(msg);
+
+    (id, task)
 }
 
 pub fn open_tooltip_window() -> (iced::window::Id, iced::Task<Message>) {
-    let (id, open_task) = iced::window::open(iced::window::Settings {
-        transparent: true,
-        platform_specific: PlatformSpecific {
-            layer_shell: LayerShellSettings {
-                layer: Some(Layer::Top),
-                anchor: Some(
-                    Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT,
-                ),
-                keyboard_interactivity: Some(KeyboardInteractivity::None),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        exit_on_close_request: false,
-        ..Default::default()
-    });
+    let id = iced::window::Id::unique();
 
-    (id, open_task.map(|_| Message::NoOp))
+    let msg = Message::NewPopUp {
+        settings: IcedNewPopupSettings {
+            size: (400, 400),
+            position: (0, 0),
+        },
+        id,
+    };
+
+    let task = iced::Task::done(msg);
+
+    (id, task)
 }

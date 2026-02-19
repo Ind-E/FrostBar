@@ -1,18 +1,19 @@
 use std::any::Any;
 
 use iced::{
+    widget::{self, text, Container, Text},
     Length,
-    widget::{Container, Text, container, text},
 };
 
 use crate::{
-    Element, config,
-    modules::{BarPosition, Modules, ViewTrait, mouse_binds},
+    config,
+    modules::{mouse_binds, BarPosition, Modules, ViewTrait},
     utils::style::container_style,
+    Element,
 };
 
 pub struct TimeView {
-    pub id: container::Id,
+    pub id: widget::Id,
     config: config::Time,
     pub position: BarPosition,
     current_time: String,
@@ -46,7 +47,7 @@ impl ViewTrait<Modules> for TimeView {
     fn tooltip<'a>(
         &'a self,
         _service: &Modules,
-        id: &container::Id,
+        id: &widget::Id,
     ) -> Option<Element<'a>> {
         if *id != self.id {
             return None;
@@ -71,7 +72,7 @@ impl ViewTrait<Modules> for TimeView {
 impl TimeView {
     pub fn new(config: config::Time, position: BarPosition) -> Self {
         Self {
-            id: container::Id::unique(),
+            id: widget::Id::unique(),
             config,
             position,
             current_time: String::new(),
