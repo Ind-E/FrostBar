@@ -4,21 +4,23 @@ use std::{
     error::Error,
     io::Cursor,
     sync::{
-        Arc, Condvar, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
+        Arc, Condvar, Mutex, OnceLock,
     },
     thread,
     time::Duration,
 };
 
 use pipewire as pw;
-use pw::{properties::properties, spa};
-use spa::pod::Pod;
+use pw::{
+    properties::properties,
+    spa::{self, pod::Pod},
+};
 use tracing::{debug, error, warn};
 
 use super::{
     ring_buffer::RingBuffer,
-    util::{DEFAULT_SAMPLE_RATE, bytes_per_sample, convert_samples_to_f32},
+    util::{bytes_per_sample, convert_samples_to_f32, DEFAULT_SAMPLE_RATE},
 };
 
 const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;
@@ -206,16 +208,15 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
     let context = pw::context::ContextRc::new(&mainloop, None)?;
     let core = context.connect_rc(None)?;
 
-    let mut props = properties! {
+    let props = properties! {
         *pw::keys::MEDIA_TYPE => "Audio",
         *pw::keys::MEDIA_CATEGORY => "Capture",
         *pw::keys::MEDIA_ROLE => "Music",
         *pw::keys::APP_NAME => "FrostBar",
+        *pw::keys::STREAM_CAPTURE_SINK => "true",
         *pw::keys::NODE_LATENCY => format!("{}/{}", DESIRED_LATENCY_FRAMES, DEFAULT_SAMPLE_RATE),
         *pw::keys::NODE_PASSIVE => "true",
     };
-
-    props.insert(*pw::keys::STREAM_CAPTURE_SINK, "true");
 
     let stream = pw::stream::StreamBox::new(&core, "FrostBar Capture", props)?;
 
