@@ -130,6 +130,8 @@ impl NiriService {
 
     pub fn subscription() -> Subscription<Message> {
         Subscription::run(|| {
+            #[cfg(feature = "tracy")]
+            let _ = tracy_client::span!("niri sub");
             iced::stream::channel(100, |mut output: IcedSender<NiriEvent>| async move {
                 let (request_tx, mut request_rx) = mpsc::channel(32);
 

@@ -2,15 +2,15 @@ use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
 
 use async_channel::Receiver as AsyncChannel;
 use iced::{
-    Color, Subscription,
-    advanced::subscription::{EventStream, Hasher, Recipe, from_recipe},
+    advanced::subscription::{from_recipe, EventStream, Hasher, Recipe},
     futures::{self, StreamExt as _},
+    Color, Subscription,
 };
 use tracing::debug;
 
 use super::fft::{Fft, MILLIS_PER_FRAME};
 use super::pipewire::{meter_tap, pw_monitor};
-use crate::{Message, modules::ModuleMsg};
+use crate::{modules::ModuleMsg, Message};
 
 pub struct AudioVisualizerService {
     audio_stream: Arc<AsyncChannel<Vec<f32>>>,
@@ -46,6 +46,8 @@ impl AudioVisualizerService {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
+        #[cfg(feature = "tracy")]
+        let _ = tracy_client::span!("pipewire sub");
         let audio_sub = from_recipe(AudioStreamRecipe {
             audio_stream: self.audio_stream.clone(),
         })
