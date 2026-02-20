@@ -5,7 +5,8 @@ use iced::{
     mouse::Interaction,
     padding::{left, top},
     widget::{
-        self, Column, Container, Image, MouseArea, Row, Svg, Text, text::Shaping
+        self, Column, Container, Image, MouseArea, Row, Svg, Text,
+        text::Shaping,
     },
 };
 use itertools::Itertools;

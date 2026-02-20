@@ -6,7 +6,7 @@ use iced_layershell::{
     },
 };
 
-use crate::{config, Message, BAR_NAMESPACE};
+use crate::{BAR_NAMESPACE, Message, config};
 
 #[profiling::function]
 pub fn open_window(

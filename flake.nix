@@ -106,10 +106,6 @@
               libinput
             ];
 
-            packages = with pkgs; [
-              tokio-console
-            ];
-
             env.RUSTFLAGS = RUSTFLAGS pkgs;
           };
         }

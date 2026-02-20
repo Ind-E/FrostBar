@@ -1,16 +1,15 @@
 use std::any::Any;
 
 use iced::{
-    widget::{self, Column, Container, Text},
     Length,
+    widget::{self, Column, Container, Text},
 };
 use tracing::warn;
 
 use crate::{
-    config,
-    modules::{mouse_binds, BarPosition, Modules, ViewTrait},
+    Element, config,
+    modules::{BarPosition, Modules, ViewTrait, mouse_binds},
     utils::style::container_style,
-    Element,
 };
 extern crate starship_battery as battery;
 

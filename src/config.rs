@@ -3,7 +3,8 @@ use std::{
     fs::{self, File},
     io::Write,
     ops::{Deref, DerefMut},
-    path::{Path, PathBuf}, str::FromStr,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use iced::{Background, Color, border, color, widget::container};

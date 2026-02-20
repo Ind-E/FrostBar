@@ -1,18 +1,17 @@
-use std::{cmp::Ordering, io};
+use std::cmp::Ordering;
 
+use asynchronous_codec::{Framed, LinesCodec};
+use iced::futures::FutureExt;
 use iced::{
     Subscription,
     futures::{
-        SinkExt as _, StreamExt as _, channel::mpsc::Sender as IcedSender,
+        self, SinkExt as _, StreamExt as _,
+        channel::mpsc::Sender as IcedSender, pin_mut,
     },
 };
 use niri_ipc::{Action, Event, Request, WindowLayout};
 use rustc_hash::FxHashMap;
-use tokio::{
-    net::UnixStream,
-    sync::mpsc::{self},
-};
-use tokio_util::codec::{Framed, LinesCodec};
+use smol::{channel, net::unix::UnixStream};
 use tracing::{error, info};
 
 use crate::{
@@ -99,7 +98,7 @@ impl From<WindowLayout> for Layout {
 
 #[derive(Debug, Clone)]
 pub enum NiriEvent {
-    Ready(mpsc::Sender<Request>),
+    Ready(channel::Sender<Request>),
     /// There was a change to niri's state
     Event(Result<Event, String>),
     /// The ui wants to send a message to niri
@@ -112,7 +111,7 @@ pub struct NiriService {
     pub hovered_workspace_id: Option<u64>,
     pub focused_window_id: Option<u64>,
     pub icon_cache: IconCache,
-    pub sender: Option<mpsc::Sender<Request>>,
+    pub sender: Option<channel::Sender<Request>>,
 }
 
 #[profiling::all_functions]
@@ -133,7 +132,7 @@ impl NiriService {
             #[cfg(feature = "tracy")]
             let _ = tracy_client::span!("niri sub");
             iced::stream::channel(100, |mut output: IcedSender<NiriEvent>| async move {
-                let (request_tx, mut request_rx) = mpsc::channel(32);
+                let (request_tx, request_rx) = channel::bounded(16);
 
                 let socket_path = match std::env::var("NIRI_SOCKET") {
                     Ok(path) => path,
@@ -160,7 +159,7 @@ impl NiriService {
                 };
 
                 let event_stream_request = serde_json::to_string(&Request::EventStream).unwrap();
-                if let Err(e) = event_stream_socket.send(event_stream_request).await {
+                if let Err(e) = event_stream_socket.send(event_stream_request + "\n").await {
                     error!("failed to start niri event stream: {e}");
                     return;
                 }
@@ -192,9 +191,14 @@ impl NiriService {
                     error!("niri: {e}");
                 }
 
+                let event_stream = event_stream_socket.fuse();
+                pin_mut!(event_stream);
+
                 loop {
-                    tokio::select! {
-                        maybe_line = event_stream_socket.next() => {
+                    let recv_request = request_rx.recv().fuse();
+                    pin_mut!(recv_request);
+                    futures::select! {
+                        maybe_line = event_stream.next() => {
                             match maybe_line {
                                 Some(Ok(line)) => {
                                     let event: Result<Event, _> = serde_json::from_str(&line);
@@ -216,10 +220,11 @@ impl NiriService {
                             }
                         }
 
-                        Some(request) = request_rx.recv() => {
+                        request = recv_request => {
+                            let Ok(request) = request else { continue; };
                             match serde_json::to_string(&request) {
                                 Ok(json) => {
-                                    if let Err(e) = ui_socket.send(json).await {
+                                    if let Err(e) = ui_socket.send(json + "\n").await {
                                         error!("failed to send request to niri: {e}");
                                     } else if let Some(Err(e)) = ui_socket.next().await {
                                         error!("niri: {e}");
@@ -228,6 +233,7 @@ impl NiriService {
                                 Err(e) => error!("failed to serialize request: {e}"),
                             }
                         }
+
                     }
                 }
 
@@ -387,7 +393,7 @@ impl NiriService {
 
 async fn setup_async_socket(
     path: &str,
-) -> io::Result<Framed<UnixStream, LinesCodec>> {
+) -> Result<Framed<UnixStream, LinesCodec>, std::io::Error> {
     let stream = UnixStream::connect(path).await?;
-    Ok(Framed::new(stream, LinesCodec::new()))
+    Ok(Framed::new(stream, LinesCodec))
 }

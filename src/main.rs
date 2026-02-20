@@ -6,15 +6,16 @@ use iced::{
     font::{Family, Weight},
     padding::{left, top},
     theme,
-    widget::{self, Column, Container, MouseArea, Row, container, selector::Target, stack},
+    widget::{
+        self, Column, Container, MouseArea, Row, container, selector::Target,
+        stack,
+    },
     window::Id,
 };
 use iced_layershell::settings::{LayerShellSettings, StartMode};
 use itertools::Itertools;
-use tokio::process::Command as TokioCommand;
+use smol::process::Command as TokioCommand;
 use tracing::{debug, error, info};
-#[cfg(feature = "console")]
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::{
     fmt::{self},
@@ -99,12 +100,6 @@ pub fn main() -> Result<(), iced_layershell::Error> {
                 .with(stderr_layer)
                 .with(file_layer);
 
-            #[cfg(feature = "console")]
-            let registry =
-                registry.with(console_subscriber::spawn().with_filter(
-                    EnvFilter::new("trace,tokio=trace,runtime=trace"),
-                ));
-
             registry.init();
 
             let (config, color_vars, config_path) =
@@ -127,10 +122,10 @@ pub fn main() -> Result<(), iced_layershell::Error> {
     .theme(Bar::theme)
     .settings(iced_layershell::Settings {
         id: Some(BAR_NAMESPACE.to_string()),
-            layer_settings: LayerShellSettings {
-                start_mode: StartMode::Background,
-                ..Default::default()
-            },
+        layer_settings: LayerShellSettings {
+            start_mode: StartMode::Background,
+            ..Default::default()
+        },
         fonts: vec![FIRA_CODE_BYTES.into()],
         default_font: FIRA_CODE,
         default_text_size: Pixels(16.0),
@@ -323,19 +318,19 @@ impl Bar {
             //     }
             // }
             Message::OpenTooltip(id) => {
-                return widget::selector::find(id.clone()).map(
-                    move |target| {
-                        if let Some(Target::Container { visible_bounds, .. }) = target {
-                            Message::TooltipPositionMeasured(TooltipId {
-                                id: id.clone(),
-                                bounds: visible_bounds
-                            })
-                        } else {
-                            error!("failed to find tooltip");
-                            Message::NoOp
-                        }
-                    },
-                );
+                return widget::selector::find(id.clone()).map(move |target| {
+                    if let Some(Target::Container { visible_bounds, .. }) =
+                        target
+                    {
+                        Message::TooltipPositionMeasured(TooltipId {
+                            id: id.clone(),
+                            bounds: visible_bounds,
+                        })
+                    } else {
+                        error!("failed to find tooltip");
+                        Message::NoOp
+                    }
+                });
             }
             Message::TooltipPositionMeasured(tooltip_id) => {
                 let old_id = self.tooltip_window_id.take();
@@ -495,21 +490,21 @@ impl Bar {
 
             Message::NoOp => {}
 
-            Message::AnchorChange { .. } |
-            Message::SetInputRegion { .. } |
-            Message::AnchorSizeChange { .. } |
-            Message::LayerChange { .. } |
-            Message::MarginChange { .. } |
-            Message::SizeChange { .. } |
-            Message::ExclusiveZoneChange { .. } |
-            Message::VirtualKeyboardPressed { .. } |
-            Message::NewLayerShell { .. } |
-            Message::NewBaseWindow { .. } |
-            Message::NewPopUp { .. } |
-            Message::NewMenu { .. } |
-            Message::NewInputPanel { .. } |
-            Message::RemoveWindow(_) |
-            Message::ForgetLastOutput => unreachable!()
+            Message::AnchorChange { .. }
+            | Message::SetInputRegion { .. }
+            | Message::AnchorSizeChange { .. }
+            | Message::LayerChange { .. }
+            | Message::MarginChange { .. }
+            | Message::SizeChange { .. }
+            | Message::ExclusiveZoneChange { .. }
+            | Message::VirtualKeyboardPressed { .. }
+            | Message::NewLayerShell { .. }
+            | Message::NewBaseWindow { .. }
+            | Message::NewPopUp { .. }
+            | Message::NewMenu { .. }
+            | Message::NewInputPanel { .. }
+            | Message::RemoveWindow(_)
+            | Message::ForgetLastOutput => unreachable!(),
         }
 
         Task::none()

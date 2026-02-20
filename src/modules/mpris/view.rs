@@ -4,7 +4,7 @@ use iced::{
     Length,
     mouse::{Interaction, ScrollDelta},
     widget::{
-        self, Column, Container, Image, MouseArea, Row, Text, text::Shaping
+        self, Column, Container, Image, MouseArea, Row, Text, text::Shaping,
     },
 };
 use rustc_hash::FxHashMap;

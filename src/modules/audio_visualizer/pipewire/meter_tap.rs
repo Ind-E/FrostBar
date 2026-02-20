@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use async_channel::{Receiver as AsyncReceiver, Sender as AsyncSender};
+use smol::channel::{self, Receiver as AsyncReceiver, Sender as AsyncSender};
 use parking_lot::RwLock;
 use tracing::{error, info, warn};
 
@@ -56,7 +56,7 @@ pub fn current_format() -> MeterFormat {
 pub fn audio_sample_stream() -> Arc<AsyncReceiver<Vec<f32>>> {
     AUDIO_STREAM
         .get_or_init(|| {
-            let (sender, receiver) = async_channel::bounded(CHANNEL_CAPACITY);
+            let (sender, receiver) = channel::bounded(CHANNEL_CAPACITY);
             spawn_forwarder(sender, pw_monitor::capture_buffer_handle());
             Arc::new(receiver)
         })

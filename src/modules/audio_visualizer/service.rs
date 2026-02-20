@@ -1,6 +1,6 @@
 use std::{fmt, hash::Hasher as _, sync::Arc, time::Duration};
 
-use async_channel::Receiver as AsyncChannel;
+use smol::channel::Receiver as AsyncReceiver;
 use iced::{
     advanced::subscription::{from_recipe, EventStream, Hasher, Recipe},
     futures::{self, StreamExt as _},
@@ -13,7 +13,7 @@ use super::pipewire::{meter_tap, pw_monitor};
 use crate::{modules::ModuleMsg, Message};
 
 pub struct AudioVisualizerService {
-    audio_stream: Arc<AsyncChannel<Vec<f32>>>,
+    audio_stream: Arc<AsyncReceiver<Vec<f32>>>,
     fft: Fft,
     sample_buffer: Vec<f32>,
     last_sample: Vec<f32>,
@@ -102,7 +102,7 @@ impl AudioVisualizerService {
 
 #[derive(Clone)]
 struct AudioStreamRecipe<T> {
-    audio_stream: Arc<AsyncChannel<T>>,
+    audio_stream: Arc<AsyncReceiver<T>>,
 }
 
 #[profiling::all_functions]

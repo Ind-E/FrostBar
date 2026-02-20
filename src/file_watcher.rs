@@ -108,7 +108,7 @@ pub fn watch_config(path: ConfigPath) -> Subscription<Message> {
             |mut output: Sender<CheckResult>| async move {
                 let mut watcher = FileWatcher::new(&path);
                 loop {
-                    tokio::time::sleep(POLLING_INTERVAL).await;
+                    smol::Timer::after(POLLING_INTERVAL).await;
 
                     let event = watcher.check();
 

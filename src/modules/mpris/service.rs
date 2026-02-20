@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
+use ::image as image_rs;
 use base64::Engine;
 use iced::{
     Color, Subscription, Task,
     futures::{
-        StreamExt,
+        self, StreamExt,
         channel::mpsc::Sender as IcedSender,
-        stream::{BoxStream, select_all},
+        stream::{BoxStream, SelectAll, select_all},
     },
     widget::image,
 };
-use ::image as image_rs;
-use tokio_stream::StreamMap;
+use isahc::AsyncReadResponseExt;
 use tracing::{debug, error};
-use zbus::{Connection, Proxy, zvariant::OwnedValue};
+use zbus::{Connection, Proxy, conn::Builder, zvariant::OwnedValue};
 
 use super::mpris_player::PlayerProxy;
 use crate::{
@@ -38,13 +38,29 @@ impl MprisService {
             #[cfg(feature = "tracy")]
             let _ = tracy_client::span!("mpris sub");
             iced::stream::channel(100, |mut output: IcedSender<MprisEvent>| async move {
-            let connection = match Connection::session().await {
-                Ok(c) => c,
+            let connection = match Builder::session() {
+                Ok(builder) =>
+                match builder.internal_executor(false).build().await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("mpris zbus builder error: {e}");
+                        return;
+                    }
+                },
                 Err(e) => {
-                    error!("mpris stream error: {e}");
+                    error!("mpris zbus session error: {e}");
                     return;
                 }
             };
+
+            let conn = connection.clone();
+            // for some reason this doesn't work if it's named _ instead of _task??
+            let _task = smol::spawn(async move {
+                loop {
+                    conn.executor().tick().await;
+                }
+            });
+
 
             let dbus_proxy = Proxy::new(
                 &connection,
@@ -53,19 +69,18 @@ impl MprisService {
             "org.freedesktop.DBus",
             ).await.unwrap();
 
-            let mut player_streams = StreamMap::new();
+            let mut player_streams = SelectAll::new();
 
             if let Ok(names) = dbus_proxy.call_method("ListNames", &()).await &&
                 let Ok(names) = names.body().deserialize::<Vec<String>>() {
                 for name in names {
-                    let name1 = name.clone();
                     if name.starts_with(MPRIS_PREFIX) {
                         if let Err(e) = output.try_send(get_initial_player_state(&connection, &name).await) {
                             error!("mpris: {e}");
                         }
 
                         if let Ok(stream) = create_player_stream(&connection, name).await {
-                            player_streams.insert(name1, stream.fuse());
+                            player_streams.push(stream);
                         }
                     }
                 }
@@ -74,7 +89,7 @@ impl MprisService {
             let mut name_owner_stream = dbus_proxy.receive_signal("NameOwnerChanged").await.unwrap().fuse();
 
             loop {
-                tokio::select! {
+                futures::select! {
                     signal = name_owner_stream.next() => {
                         if let Some(signal) = signal
                             && let Ok((player_name, old, new)) = signal.body().deserialize::<(String, String, String)>()
@@ -85,9 +100,8 @@ impl MprisService {
                                     error!( "mpris: {e}");
                                 }
 
-                                let name1 = player_name.clone();
                                 if let Ok(stream) = create_player_stream(&connection, player_name).await {
-                                    player_streams.insert(name1, stream.fuse());
+                                    player_streams.push(stream);
                                 }
                             } else if new.is_empty() && !old.is_empty()
                                 && let Err(e) = output.try_send( MprisEvent::PlayerVanished { player_name }) {
@@ -96,12 +110,8 @@ impl MprisService {
                         }
                     },
 
-                    event_result = player_streams.next(), if !player_streams.is_empty() => {
-                        if let Some((pname, Ok(event))) = event_result {
-                            if let MprisEvent::PlayerVanished {ref player_name} = event
-                                &&  *player_name == pname {
-                                    player_streams.remove(&pname);
-                                }
+                    event_result = player_streams.next() => {
+                        if let Some(Ok(event)) = event_result {
                             if let Err(e) = output.try_send(event) {
                                 error!("mpris: {e}");
                             }
@@ -293,16 +303,24 @@ impl MprisPlayer {
                         return PlayerArt::None;
                     }
                 };
-            let gradient = image_rs::load_from_memory(&image_bytes)
+            let Some(rgba) = image_rs::load_from_memory(&image_bytes)
                 .ok()
-                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-            let handle = image::Handle::from_bytes(image_bytes);
+                .map(|img| img.into_rgba8())
+            else {
+                return PlayerArt::None;
+            };
+            let gradient = extract_gradient(&rgba, 12);
+            let handle = image::Handle::from_rgba(
+                rgba.width(),
+                rgba.height(),
+                rgba.into_raw(),
+            );
             PlayerArt::Sync(Some((handle, gradient)))
         } else if let Some(url) = art_url.strip_prefix("file://") {
             let handle = image::Handle::from_path(url);
             let gradient = image_rs::open(url)
                 .ok()
-                .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
+                .and_then(|img| extract_gradient(&img.to_rgba8(), 12));
             PlayerArt::Sync(Some((handle, gradient)))
         } else if art_url.starts_with("https://")
             || art_url.starts_with("http://")
@@ -310,7 +328,7 @@ impl MprisPlayer {
             let name = self.name.clone();
             let task = iced::Task::perform(
                 async move {
-                    let response = match reqwest::get(&art_url).await {
+                    let mut response = match isahc::get_async(&art_url).await {
                         Ok(res) => res,
                         Err(e) => {
                             error!("Failed to fetch album art: {e}");
@@ -327,10 +345,16 @@ impl MprisPlayer {
                         }
                     };
 
-                    let gradient = image_rs::load_from_memory(&image_bytes)
+                    let rgba = image_rs::load_from_memory(&image_bytes)
                         .ok()
-                        .and_then(|img| extract_gradient(&img.to_rgb8(), 12));
-                    let handle = image::Handle::from_bytes(image_bytes);
+                        .map(|img| img.into_rgba8())?;
+                    let gradient = extract_gradient(&rgba, 12);
+                    let handle = image::Handle::from_rgba(
+                        rgba.width(),
+                        rgba.height(),
+                        rgba.into_raw(),
+                    );
+
                     Some((handle, gradient))
                 },
                 |art| modules::ModuleMsg::PlayerArtUpdate(name, art),
@@ -478,12 +502,12 @@ fn lerp_color(c1: Color, c2: Color, factor: f32) -> Color {
 
 #[profiling::function]
 fn extract_gradient(
-    buffer: &image_rs::ImageBuffer<image_rs::Rgb<u8>, Vec<u8>>,
+    buffer: &image_rs::ImageBuffer<image_rs::Rgba<u8>, Vec<u8>>,
     bars: usize,
 ) -> Option<Vec<Color>> {
     match color_thief::get_palette(
         buffer.as_raw(),
-        color_thief::ColorFormat::Rgb,
+        color_thief::ColorFormat::Rgba,
         10,
         3,
     ) {
