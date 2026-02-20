@@ -35,8 +35,9 @@ impl MprisService {
 
     pub fn subscription() -> iced::Subscription<Message> {
         Subscription::run(|| {
+            #[cfg(feature = "tracy")]
+            let _ = tracy_client::span!("mpris sub");
             iced::stream::channel(100, |mut output: IcedSender<MprisEvent>| async move {
-            profiling::register_thread!("mpris watcher");
             let connection = match Connection::session().await {
                 Ok(c) => c,
                 Err(e) => {

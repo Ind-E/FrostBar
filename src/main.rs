@@ -244,6 +244,8 @@ impl Bar {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        #[cfg(feature = "tracy")]
+        let _span = tracy_client::span!("iced_update");
         match message {
             Message::IcedEvent(event) => {
                 // if let Event::Window(iced::window::Event::Opened {
@@ -720,6 +722,8 @@ impl Bar {
     // }
 
     pub fn view(&self, id: Id) -> Element<'_> {
+        #[cfg(feature = "tracy")]
+        tracy_client::frame_mark();
         if id == self.id {
             self.view_bar()
         } else if Some(id) == self.tooltip_window_id
