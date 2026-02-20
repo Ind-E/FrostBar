@@ -14,7 +14,7 @@ where
 
     match action {
         ConfigAction::Quit(skip_confirmation) => {
-             Ok(IpcAction::Quit { skip_confirmation })
+            Ok(IpcAction::Quit { skip_confirmation })
         }
         ConfigAction::PowerOffMonitors => Ok(IpcAction::PowerOffMonitors {}),
         ConfigAction::PowerOnMonitors => Ok(IpcAction::PowerOnMonitors {}),
@@ -33,23 +33,20 @@ where
                 path,
             })
         }
-        ConfigAction::ScreenshotWindow(write_to_disk, show_pointer, path) => {
+        ConfigAction::ScreenshotWindow(write_to_disk, path) => {
             Ok(IpcAction::ScreenshotWindow {
                 id: None,
                 write_to_disk,
-                show_pointer,
                 path,
             })
         }
         ConfigAction::ScreenshotWindowById {
             id,
             write_to_disk,
-            show_pointer,
             path,
         } => Ok(IpcAction::ScreenshotWindow {
             id: Some(id),
             write_to_disk,
-            show_pointer,
             path,
         }),
         ConfigAction::ToggleKeyboardShortcutsInhibit => {
@@ -476,9 +473,6 @@ where
         ConfigAction::ClearDynamicCastTarget => {
             Ok(IpcAction::ClearDynamicCastTarget {})
         }
-        ConfigAction::StopCast(session_id) => {
-            Ok(IpcAction::StopCast { session_id })
-        }
         ConfigAction::ToggleOverview => Ok(IpcAction::ToggleOverview {}),
         ConfigAction::OpenOverview => Ok(IpcAction::OpenOverview {}),
         ConfigAction::CloseOverview => Ok(IpcAction::CloseOverview {}),
@@ -492,7 +486,10 @@ where
             Ok(IpcAction::UnsetWindowUrgent { id })
         }
         ConfigAction::LoadConfigFile => Ok(IpcAction::LoadConfigFile {}),
-        other => Err(DecodeError::unsupported(span, format!("action `{:?}` not supported by niri ipc", other))),
+        other => Err(DecodeError::unsupported(
+            span,
+            format!("action `{:?}` not supported by niri ipc", other),
+        )),
     }
 }
 

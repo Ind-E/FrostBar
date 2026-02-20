@@ -48,8 +48,8 @@ itertools = { version = "0.14.0", default-features = false, features = [
 ] }
 linicon = "2.3.0"
 miette = { version = "5.10.0", features = ["fancy-no-backtrace"] }
-niri-config = { git = "https://github.com/YaLTeR/niri/", version = "=25.11.0" }
-niri-ipc = { git = "https://github.com/YaLTeR/niri/", version = "=25.11.0" }
+niri-config = { git = "https://github.com/niri-wm/niri", tag = "v25.11" }
+niri-ipc = { git = "https://github.com/niri-wm/niri", tag = "v25.11" }
 notify-rust = "4.11.7"
 owo-colors = "4.2.2"
 parking_lot = "0.12.5"
