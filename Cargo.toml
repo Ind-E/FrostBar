@@ -69,7 +69,10 @@ tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 tokio-util = { version = "0.7.18", features = ["codec"] }
-image = { version = "0.25.9", default-features = false, features = ["png"] }
+image = { version = "0.25.9", default-features = false, features = [
+    "png",
+    "jpeg",
+] }
 zbus.workspace = true
 
 profiling = { version = "1.0.17" }

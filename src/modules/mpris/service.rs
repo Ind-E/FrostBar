@@ -360,7 +360,7 @@ async fn get_initial_player_state(
     name: &str,
 ) -> MprisEvent {
     let proxy = PlayerProxy::new(connection, name).await.unwrap();
-    let status = proxy.playback_status().await.unwrap();
+    let status = proxy.playback_status().await.unwrap_or_else(|_| "unknown".to_string());
     let metadata = proxy.metadata().await.unwrap();
     MprisEvent::PlayerAppeared {
         player_name: name.to_string(),
