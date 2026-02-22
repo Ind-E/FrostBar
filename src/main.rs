@@ -242,6 +242,10 @@ impl Bar {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        tracing::debug!("{}", {
+            let s = format!("{message:?}");
+            s.chars().take(50).collect::<String>()
+        });
         #[cfg(feature = "tracy")]
         let _span = tracy_client::span!("iced_update");
         match message {

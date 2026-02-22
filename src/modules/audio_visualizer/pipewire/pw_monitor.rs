@@ -267,11 +267,15 @@ fn run_monitor_source() -> Result<(), Box<dyn Error + Send + Sync>> {
                 }
 
                 if let Some(samples) = captured {
-                    capture_buffer.try_push(CapturedAudio {
-                        samples,
-                        channels: state.channels,
-                        sample_rate: state.sample_rate,
-                    });
+                    let is_silent =
+                        samples.iter().all(|&s| s.abs() <= f32::EPSILON);
+                    if !is_silent {
+                        capture_buffer.try_push(CapturedAudio {
+                            samples,
+                            channels: state.channels,
+                            sample_rate: state.sample_rate,
+                        });
+                    }
                 }
 
                 let chunk_mut = data.chunk_mut();
