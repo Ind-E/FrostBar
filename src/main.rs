@@ -7,7 +7,7 @@ use iced::{
     padding::{left, top},
     theme,
     widget::{
-        self, Column, Container, MouseArea, Row, container, selector::Target,
+        self, Column, Container, Row, container, selector::Target,
         stack,
     },
     window::Id,
@@ -242,7 +242,7 @@ impl Bar {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        tracing::debug!("{}", {
+        tracing::trace!("{}", {
             let s = format!("{message:?}");
             s.chars().take(50).collect::<String>()
         });
@@ -673,12 +673,7 @@ impl Bar {
             iced::widget::pin(container).x(bounds.x)
         };
 
-        MouseArea::new(
-            Container::new(pin).width(Length::Fill).height(Length::Fill),
-        )
-        .on_move(|_| Message::CloseTooltip(tooltip_id.id.clone()))
-        .on_press(Message::CloseTooltip(tooltip_id.id.clone()))
-        .into()
+        Container::new(pin).width(Length::Fill).height(Length::Fill).into()
     }
 
     // #[inline(always)]
@@ -724,6 +719,8 @@ impl Bar {
     // }
 
     pub fn view(&self, id: Id) -> Element<'_> {
+        #[cfg(feature = "tracy")]
+        let _span = tracy_client::span!("iced_view");
         #[cfg(feature = "tracy")]
         tracy_client::frame_mark();
         if id == self.id {

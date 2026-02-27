@@ -282,7 +282,7 @@ impl WindowView {
                 {
                     app_id
                 } else {
-                    "N/A"
+                    "?"
                 },
             )
             .shaping(Shaping::Advanced)
@@ -320,7 +320,7 @@ impl WindowView {
                         {
                             app_id
                         } else {
-                            "N/A"
+                            "?"
                         }
                         .chars()
                         .take(2)

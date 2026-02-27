@@ -1,9 +1,5 @@
-use iced_layershell::{
-    actions::IcedNewPopupSettings,
-    reexport::{
-        Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings,
-        OutputOption,
-    },
+use iced_layershell::reexport::{
+    Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
 };
 
 use crate::{config, Message, BAR_NAMESPACE};
@@ -59,10 +55,12 @@ pub fn open_window(
 pub fn open_tooltip_window() -> (iced::window::Id, iced::Task<Message>) {
     let id = iced::window::Id::unique();
 
-    let msg = Message::NewPopUp {
-        settings: IcedNewPopupSettings {
-            size: (400, 400),
-            position: (0, 0),
+    let msg = Message::NewLayerShell {
+        settings: NewLayerShellSettings {
+            anchor: Anchor::all(),
+            events_transparent: true,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            ..Default::default()
         },
         id,
     };
