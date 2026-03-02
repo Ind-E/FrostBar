@@ -30,7 +30,6 @@ chrono = { version = "0.4.41", default-features = false, features = [
 clap = { version = "4.5.54", features = ["derive"] }
 color-thief = "0.2.2"
 dashmap = "6.1.0"
-freedesktop-desktop-entry = { version = "0.8.1", default-features = false }
 freedesktop-icons = "0.4.0"
 iced = { version = "0.14.0", default-features = false, features = [
     "advanced",
@@ -50,7 +49,7 @@ itertools = { version = "0.14.0", default-features = false, features = [
 knus = "3.3.1"
 linicon = "2.3.0"
 miette = { version = "7.6.0", features = ["fancy-no-backtrace"] }
-niri-ipc = { git = "https://github.com/YaLTeR/niri/", version = "=25.11.0" }
+niri-ipc = { git = "https://github.com/YaLTeR/niri/", tag = "v25.11" }
 notify-rust = "4.11.7"
 owo-colors = "4.2.2"
 parking_lot = "0.12.5"
@@ -78,6 +77,7 @@ zbus.workspace = true
 profiling = { version = "1.0.17" }
 console-subscriber = { version = "0.5.0", optional = true }
 tracy-client = { version = "0.18.4" }
+memchr = "2.8.0"
 
 
 [profile.dev.package."*"]
@@ -99,7 +99,6 @@ license = "GPL-3.0"
 # frostbar_tray = { version = "*", path = "frostbar_tray" }
 
 tracing = "0.1.44"
-serde = "1.0.228"
 tokio = { version = "1.49.0", features = ["macros"] }
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "=0.3.19", default-features = false, features = [
@@ -123,3 +122,4 @@ cast_precision_loss = "allow"
 unreadable_literal = "allow"
 too_many_lines = "allow"
 unnecessary_wraps = "allow"
+missing_errors_doc = "allow"

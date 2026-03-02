@@ -588,17 +588,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bstr"
-version = "1.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
-dependencies = [
- "memchr",
- "regex-automata 0.4.13",
- "serde",
-]
-
-[[package]]
 name = "built"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1613,20 +1602,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "freedesktop-desktop-entry"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28273c5c6b97a5f07724f6652f064c0c7f637f9aa5e7c09c83bc3bc4ad4ea245"
-dependencies = [
- "bstr",
- "log",
- "memchr",
- "thiserror 2.0.18",
- "unicase",
- "xdg 3.0.0",
-]
-
-[[package]]
 name = "freedesktop-icons"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1637,7 +1612,7 @@ dependencies = [
  "once_cell",
  "thiserror 1.0.69",
  "tracing",
- "xdg 2.5.2",
+ "xdg",
 ]
 
 [[package]]
@@ -1661,7 +1636,6 @@ dependencies = [
  "color-thief",
  "console-subscriber",
  "dashmap",
- "freedesktop-desktop-entry",
  "freedesktop-icons",
  "iced",
  "iced_layershell",
@@ -1669,6 +1643,7 @@ dependencies = [
  "itertools 0.14.0",
  "knus",
  "linicon",
+ "memchr",
  "miette",
  "niri-ipc",
  "notify-rust",
@@ -3230,9 +3205,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.7.5"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
+checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "memmap2"
@@ -3435,7 +3410,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 [[package]]
 name = "niri-ipc"
 version = "25.11.0"
-source = "git+https://github.com/YaLTeR/niri/#b35bcae35b3f9665043c335e55ed5828af77db85"
+source = "git+https://github.com/YaLTeR/niri/?tag=v25.11#b35bcae35b3f9665043c335e55ed5828af77db85"
 dependencies = [
  "serde",
  "serde_json",
@@ -5871,12 +5846,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unicase"
-version = "2.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b844d17643ee918803943289730bec8aac480150456169e647ed0b576ba539"
-
-[[package]]
 name = "unicode-bidi"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7103,12 +7072,6 @@ name = "xdg"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
-
-[[package]]
-name = "xdg"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb433233f2df9344722454bc7e96465c9d03bff9d77c248f9e7523fe79585b5"
 
 [[package]]
 name = "xkbcommon-dl"

@@ -1,10 +1,10 @@
+use std::fs;
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
 
 use dashmap::DashMap;
-use freedesktop_desktop_entry::{DesktopEntry, default_paths};
 use iced::widget::{
     image::{self},
     svg,
@@ -35,17 +35,73 @@ pub fn find_icon_path(app_id: &str) -> Option<PathBuf> {
     icon_path_from_name(&icon_name)
 }
 
-#[profiling::function]
 fn from_desktop_file(app_id: &str) -> Option<String> {
-    for path in default_paths() {
-        let desktop_file_path = path.join(format!("{app_id}.desktop"));
+    let app_id_lower = app_id.to_lowercase();
 
-        if let Ok(entry) =
-            DesktopEntry::from_path(&desktop_file_path, None::<&[&str]>)
-        {
-            return entry.icon().map(ToString::to_string);
+    let mut search_dirs = Vec::new();
+
+    if let Ok(data_home) = std::env::var("XDG_DATA_HOME") {
+        if !data_home.is_empty() {
+            search_dirs.push(data_home);
+        }
+    } else if let Ok(home) = std::env::var("HOME") {
+        search_dirs.push(format!("{home}/.local/share"));
+    }
+
+    let xdg_data_dirs = std::env::var("XDG_DATA_DIRS")
+        .unwrap_or_else(|_| "/usr/local/share:/usr/share".to_string());
+
+    search_dirs.extend(xdg_data_dirs.split(':').map(ToString::to_string));
+
+    for dir in search_dirs {
+        let path = PathBuf::from(dir).join("applications");
+
+        let Ok(mut entries) = fs::read_dir(&path) else {
+            continue;
+        };
+
+        while let Some(Ok(entry)) = entries.next() {
+            let file_name_os = entry.file_name();
+            let file_name_lossy = file_name_os.to_string_lossy();
+
+            if !file_name_lossy.ends_with(".desktop") {
+                continue;
+            }
+
+            let file_name_lower = file_name_lossy.to_lowercase();
+            let clean_name = file_name_lower.strip_suffix(".desktop").unwrap();
+            let clean_name = clean_name.rsplit('.').next().unwrap_or(clean_name);
+
+            if file_name_lower.contains(&app_id_lower)
+                || app_id_lower.contains(clean_name)
+            {
+                let Ok(contents) = fs::read_to_string(entry.path()) else {
+                    continue;
+                };
+
+                for line in contents.lines() {
+                    let line = line.trim();
+                    if line.is_empty()
+                        || line.starts_with('#')
+                        || line.starts_with('[')
+                    {
+                        continue;
+                    }
+
+                    let line_bytes = line.as_bytes();
+
+                    if let Some(delimiter) = memchr::memchr(b'=', line_bytes) {
+                        let key = &line[..delimiter];
+                        if key == "Icon" {
+                            let value = &line[delimiter + 1..];
+                            return Some(value.to_string());
+                        }
+                    }
+                }
+            }
         }
     }
+
     None
 }
 
