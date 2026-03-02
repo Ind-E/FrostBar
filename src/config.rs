@@ -323,12 +323,28 @@ pub struct Layout {
     pub layer: Layer,
 }
 
+pub const fn splat_gaps(gaps: i32) -> (i32, i32, i32, i32) {
+    (gaps, gaps, gaps, gaps)
+}
+
 #[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
 pub enum Anchor {
     Left,
     Right,
     Top,
     Bottom,
+}
+
+impl From<Anchor> for iced_layershell::reexport::Anchor {
+    fn from(value: Anchor) -> Self {
+        use iced_layershell::reexport::Anchor as wAnchor;
+        match value {
+            Anchor::Left => wAnchor::Left | wAnchor::Top | wAnchor::Bottom,
+            Anchor::Right => wAnchor::Right | wAnchor::Top | wAnchor::Bottom,
+            Anchor::Top => wAnchor::Top | wAnchor::Left | wAnchor::Right,
+            Anchor::Bottom => wAnchor::Bottom | wAnchor::Left | wAnchor::Right,
+        }
+    }
 }
 
 impl Anchor {
@@ -339,6 +355,13 @@ impl Anchor {
     pub fn top_left(self) -> bool {
         matches!(self, Anchor::Left | Anchor::Top)
     }
+
+    pub const fn calc_size(self, width: u32) -> (u32, u32) {
+        match self {
+            Anchor::Left | Anchor::Right => (width, 0),
+            Anchor::Top | Anchor::Bottom => (0, width),
+        }
+    }
 }
 
 #[derive(knus::DecodeScalar, Debug, Clone, Copy, PartialEq)]
@@ -347,6 +370,18 @@ pub enum Layer {
     Bottom,
     Top,
     Overlay,
+}
+
+impl From<Layer> for iced_layershell::reexport::Layer {
+    fn from(value: Layer) -> Self {
+        use iced_layershell::reexport::Layer as wLayer;
+        match value {
+            Layer::Background => wLayer::Background,
+            Layer::Bottom => wLayer::Bottom,
+            Layer::Top => wLayer::Top,
+            Layer::Overlay => wLayer::Overlay,
+        }
+    }
 }
 
 impl Default for Layout {

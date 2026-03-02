@@ -1,34 +1,23 @@
 use iced_layershell::reexport::{
-    Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
+    Anchor, KeyboardInteractivity, NewLayerShellSettings, OutputOption,
 };
 
-use crate::{BAR_NAMESPACE, Message, config};
+use crate::{
+    BAR_NAMESPACE, Message,
+    config::{self, splat_gaps},
+};
 
 #[profiling::function]
 pub fn open_window(
     layout: &config::Layout,
 ) -> (iced::window::Id, iced::Task<Message>) {
-    let size = Some(match layout.anchor {
-        config::Anchor::Left | config::Anchor::Right => (layout.width, 0),
-        config::Anchor::Top | config::Anchor::Bottom => (0, layout.width),
-    });
-
-    let anchor = match layout.anchor {
-        config::Anchor::Left => Anchor::Left | Anchor::Top | Anchor::Bottom,
-        config::Anchor::Right => Anchor::Right | Anchor::Top | Anchor::Bottom,
-        config::Anchor::Top => Anchor::Top | Anchor::Left | Anchor::Right,
-        config::Anchor::Bottom => Anchor::Bottom | Anchor::Left | Anchor::Right,
-    };
+    let size = Some(layout.anchor.calc_size(layout.width));
 
     // top, right, bottom, left
-    let margin = Some((layout.gaps, layout.gaps, layout.gaps, layout.gaps));
+    let margin = Some(splat_gaps(layout.gaps));
 
-    let layer = match layout.layer {
-        config::Layer::Background => Layer::Background,
-        config::Layer::Bottom => Layer::Bottom,
-        config::Layer::Top => Layer::Top,
-        config::Layer::Overlay => Layer::Overlay,
-    };
+    let layer = layout.layer.into();
+    let anchor = layout.anchor.into();
 
     let id = iced::window::Id::unique();
 

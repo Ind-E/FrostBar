@@ -155,7 +155,9 @@ impl Modules {
                 self.niri.as_ref().map(|_| NiriService::subscription()),
                 (self.battery.is_some() || self.time.is_some())
                     .then(TimeService::subscription),
-                self.audio_visualizer.as_ref().map(|v| v.subscription()),
+                self.audio_visualizer
+                    .as_ref()
+                    .map(AudioVisualizerService::subscription),
             ]
             .into_iter()
             .flatten(),

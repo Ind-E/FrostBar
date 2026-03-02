@@ -116,7 +116,7 @@ impl CaptureBuffer {
 
     #[cfg(test)]
     fn capacity(&self) -> usize {
-        self.inner.lock().map(|guard| guard.capacity()).unwrap_or(0)
+        self.inner.lock().map_or(0, |guard| guard.capacity())
     }
 
     pub fn dropped_frames(&self) -> u64 {

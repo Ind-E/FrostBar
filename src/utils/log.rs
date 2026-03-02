@@ -26,7 +26,7 @@ pub struct LogManager {
 impl LogManager {
     pub fn init() -> Self {
         let state_dir = std::env::var("XDG_STATE_HOME")
-            .map(|state| PathBuf::from(state))
+            .map(PathBuf::from)
             .map_or_else(
                 |_| {
                     let home =

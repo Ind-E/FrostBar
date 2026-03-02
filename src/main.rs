@@ -28,7 +28,7 @@ use zbus::Connection;
 
 use crate::{
     cli::{Cli, handle_subcommand},
-    config::{Anchor, ColorVars, Config, MediaControl, RawConfig},
+    config::{Anchor, ColorVars, Config, MediaControl, RawConfig, splat_gaps},
     file_watcher::{CheckResult, CheckType, ConfigPath, watch_config},
     icon_cache::IconCache,
     modules::{
@@ -765,12 +765,9 @@ impl Bar {
                     self.config = new_config;
                     self.modules.synchronize_views();
                 } else {
-                    self.config = new_config;
-                    let close = iced::window::close(self.id);
-                    let (id, open) = open_window(&self.config.layout);
-                    self.id = id;
+                    let task = self.update_layout(new_config);
                     self.modules.synchronize_views();
-                    return Task::batch([close, open]);
+                    return task;
                 }
             }
             Err(e) => {
@@ -781,5 +778,42 @@ impl Bar {
             }
         }
         Task::none()
+    }
+
+    fn update_layout(&mut self, new_config: Config) -> Task<Message> {
+        let old_layout = &self.config.layout;
+        let new_layout = &new_config.layout;
+
+        let mut tasks = Vec::new();
+
+        if old_layout.layer != new_layout.layer {
+            tasks.push(Task::done(Message::LayerChange {
+                id: self.id,
+                layer: new_layout.layer.into(),
+            }));
+        }
+
+        if old_layout.anchor != new_layout.anchor {
+            tasks.push(Task::done(Message::AnchorChange {
+                id: self.id,
+                anchor: new_layout.anchor.into(),
+            }));
+        }
+
+        if old_layout.width != new_layout.width {
+            tasks.push(Task::done(Message::SizeChange {
+                id: self.id,
+                size: new_layout.anchor.calc_size(new_layout.width),
+            }));
+        }
+
+        if old_layout.gaps != new_layout.gaps {
+            tasks.push(Task::done(Message::MarginChange {
+                id: self.id,
+                margin: splat_gaps(new_layout.gaps),
+            }));
+        }
+        self.config = new_config;
+        Task::batch(tasks)
     }
 }
