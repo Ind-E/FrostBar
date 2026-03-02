@@ -25,7 +25,7 @@
         }:
         rustPlatform.buildRustPackage {
           pname = "frostbar";
-          inherit ((fromTOML (builtins.readFile ./Cargo.toml)).package) version;
+          inherit ((fromTOML (builtins.readFile ./Cargo.toml)).workspace.package) version;
 
           strictDeps = true;
 

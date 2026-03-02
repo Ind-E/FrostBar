@@ -1,16 +1,15 @@
 use std::any::Any;
 
 use iced::{
-    widget::{self, text, Container, Text},
     Length,
+    widget::{self, Container, Text, text},
 };
 
 use super::mouse_binds;
 use crate::{
-    config,
+    Element, config,
     modules::{BarPosition, Modules, ViewTrait},
     utils::style::container_style,
-    Element,
 };
 
 pub struct LabelView {

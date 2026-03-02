@@ -2,7 +2,7 @@ use iced_layershell::reexport::{
     Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
 };
 
-use crate::{config, Message, BAR_NAMESPACE};
+use crate::{BAR_NAMESPACE, Message, config};
 
 #[profiling::function]
 pub fn open_window(

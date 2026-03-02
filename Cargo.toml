@@ -19,7 +19,7 @@ console = ["console-subscriber"]
 comet = ["iced/debug"]
 
 [dependencies]
-frostbar_tray.workspace = true
+# frostbar_tray.workspace = true
 async-channel = "2.5.0"
 base64 = "0.22.1"
 chrono = { version = "0.4.41", default-features = false, features = [
@@ -88,7 +88,7 @@ overflow-checks = false
 
 [workspace]
 resolver = "3"
-members = ["frostbar_tray"]
+# members = ["frostbar_tray"]
 
 [workspace.package]
 version = "0.0.2"
@@ -96,7 +96,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [workspace.dependencies]
-frostbar_tray = { version = "*", path = "frostbar_tray" }
+# frostbar_tray = { version = "*", path = "frostbar_tray" }
 
 tracing = "0.1.44"
 serde = "1.0.228"

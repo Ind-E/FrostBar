@@ -4,8 +4,8 @@ use std::{
     error::Error,
     io::Cursor,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Condvar, Mutex, OnceLock,
+        atomic::{AtomicU64, Ordering},
     },
     thread,
     time::Duration,
@@ -20,7 +20,7 @@ use tracing::{debug, error, warn};
 
 use super::{
     ring_buffer::RingBuffer,
-    util::{bytes_per_sample, convert_samples_to_f32, DEFAULT_SAMPLE_RATE},
+    util::{DEFAULT_SAMPLE_RATE, bytes_per_sample, convert_samples_to_f32},
 };
 
 const MONITOR_PREFERRED_SAMPLE_RATE: u32 = DEFAULT_SAMPLE_RATE as u32;

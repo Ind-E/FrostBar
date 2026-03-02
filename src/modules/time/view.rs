@@ -1,15 +1,14 @@
 use std::any::Any;
 
 use iced::{
-    widget::{self, text, Container, Text},
     Length,
+    widget::{self, Container, Text, text},
 };
 
 use crate::{
-    config,
-    modules::{mouse_binds, BarPosition, Modules, ViewTrait},
+    Element, config,
+    modules::{BarPosition, Modules, ViewTrait, mouse_binds},
     utils::style::container_style,
-    Element,
 };
 
 pub struct TimeView {

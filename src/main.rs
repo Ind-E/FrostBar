@@ -7,8 +7,7 @@ use iced::{
     padding::{left, top},
     theme,
     widget::{
-        self, Column, Container, Row, container, selector::Target,
-        stack,
+        self, Column, Container, Row, container, selector::Target, stack,
     },
     window::Id,
 };
@@ -673,7 +672,10 @@ impl Bar {
             iced::widget::pin(container).x(bounds.x)
         };
 
-        Container::new(pin).width(Length::Fill).height(Length::Fill).into()
+        Container::new(pin)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 
     // #[inline(always)]

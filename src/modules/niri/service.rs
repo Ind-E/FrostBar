@@ -377,15 +377,7 @@ impl NiriService {
             Event::WindowFocusChanged { id } => {
                 self.focused_window_id = id;
             }
-            Event::WorkspaceUrgencyChanged { .. }
-            | Event::WorkspaceActiveWindowChanged { .. }
-            | Event::WindowUrgencyChanged { .. }
-            | Event::KeyboardLayoutsChanged { .. }
-            | Event::KeyboardLayoutSwitched { .. }
-            | Event::OverviewOpenedOrClosed { .. }
-            | Event::ConfigLoaded { .. }
-            | Event::WindowFocusTimestampChanged { .. }
-            | Event::ScreenshotCaptured { .. } => {}
+            _ => (),
         }
         ModuleAction::None
     }

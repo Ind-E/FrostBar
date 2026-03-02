@@ -1663,7 +1663,6 @@ dependencies = [
  "dashmap",
  "freedesktop-desktop-entry",
  "freedesktop-icons",
- "frostbar_tray",
  "iced",
  "iced_layershell",
  "image",
@@ -1690,19 +1689,6 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "tracy-client",
- "zbus",
-]
-
-[[package]]
-name = "frostbar_tray"
-version = "0.0.2"
-dependencies = [
- "futures-lite",
- "serde",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
  "zbus",
 ]
 

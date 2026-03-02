@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use ::image as image_rs;
 use base64::Engine;
 use iced::{
     Color, Subscription, Task,
@@ -10,7 +11,6 @@ use iced::{
     },
     widget::image,
 };
-use ::image as image_rs;
 use tokio_stream::StreamMap;
 use tracing::{debug, error};
 use zbus::{Connection, Proxy, zvariant::OwnedValue};
@@ -360,7 +360,10 @@ async fn get_initial_player_state(
     name: &str,
 ) -> MprisEvent {
     let proxy = PlayerProxy::new(connection, name).await.unwrap();
-    let status = proxy.playback_status().await.unwrap_or_else(|_| "unknown".to_string());
+    let status = proxy
+        .playback_status()
+        .await
+        .unwrap_or_else(|_| "unknown".to_string());
     let metadata = proxy.metadata().await.unwrap();
     MprisEvent::PlayerAppeared {
         player_name: name.to_string(),
